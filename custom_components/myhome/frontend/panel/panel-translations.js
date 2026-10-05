@@ -371,6 +371,9 @@ export const translations = {
     wiz_T446: "The connection to Home Assistant was interrupted: reconnecting.",
     wiz_T447: "Calibration details",
     wiz_T448: "Close details",
+    wiz_T449: "Filter: {filter} ({count})",
+    wiz_T450: "Sort:",
+    wiz_T451: "Filter the covers",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1205,6 +1208,9 @@ export const translations = {
     wiz_T446: "Connessione con Home Assistant interrotta: riconnessione in corso.",
     wiz_T447: "Dettagli della calibrazione",
     wiz_T448: "Chiudi dettagli",
+    wiz_T449: "Filtro: {filter} ({count})",
+    wiz_T450: "Ordina:",
+    wiz_T451: "Filtra le tapparelle",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

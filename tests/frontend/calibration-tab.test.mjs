@@ -738,20 +738,37 @@ test("a running cover stays on top whatever the column and the order", async () 
   }
 });
 
-test("on phones one Sort by control offers the six column and order choices", async () => {
-  const { tab } = await mount({ language: "it" });
-  const pick = (value) => { const select = tab.querySelector(".cal-sort-bar select"); select.value = value; select.dispatchEvent(new Event("change", { bubbles: true })); };
-  assert.equal(tab.querySelectorAll(".cal-sort-bar select").length, 1);
-  assert.match(tab.querySelector(".cal-sort-bar").textContent, /Ordina per:/);
-  assert.deepEqual([...tab.querySelector(".cal-sort-bar select").options].map((option) => option.textContent),
+test("on phones the list has one row of two drop-downs: the filter opens a sheet, the order has six choices", async () => {
+  const { tab, panel } = await mount({ language: "it" });
+  const compact = tab.querySelector(".cal-tab-compact");
+  assert.equal(tab.querySelector(".cal-list ~ .cal-sort-bar, .cal-sort-bar"), null, "no separate Sort by pill in the list");
+  const pick = (value) => { const select = tab.querySelector(".cal-tab-compact select"); select.value = value; select.dispatchEvent(new Event("change", { bubbles: true })); };
+  assert.equal(compact.querySelector(".cal-compact-sort > span").textContent, "Ordina:");
+  assert.deepEqual([...compact.querySelector("select").options].map((option) => option.textContent),
     ["Tapparella ↑", "Tapparella ↓", "Stato ↑", "Stato ↓", "Profilo ↑", "Profilo ↓"]);
   pick("status:asc");
   assert.deepEqual(order(tab), ["bedroom", "kitchen_two", "living_one", "living_two"]);
   pick("status:desc");
   assert.deepEqual(order(tab), ["living_two", "kitchen_two", "living_one", "bedroom"]);
-  assert.equal(tab.querySelector('.cal-sort-bar select[data-sort="order"]').value, "status:desc");
-  // The headers show the same choice.
-  assert.equal(tab.querySelector('.cal-list-head [data-id="status"] ha-icon').getAttribute("icon"), "mdi:arrow-down");
+  assert.equal(tab.querySelector('.cal-tab-compact select[data-sort="order"]').value, "status:desc");
+  assert.equal(tab.querySelector('.cal-list-head [data-id="status"] ha-icon').getAttribute("icon"), "mdi:arrow-down", "the headers show the same choice");
+  // The filter: «Filtro: Tutte (4)», then a sheet with the four filters and their counts.
+  const button = () => tab.querySelector(".cal-compact-filter");
+  assert.equal(button().textContent.trim(), "Filtro: Tutte (4)");
+  assert.equal(button().getAttribute("aria-haspopup"), "dialog");
+  button().click(); await tick();
+  const sheet = panel.shadowRoot.querySelector("dialog.cal-filter-sheet");
+  assert.ok(sheet?.open);
+  assert.equal(sheet.querySelector("h2").textContent, "Filtra le tapparelle");
+  assert.equal(sheet.querySelector(".cal-sheet-close").getAttribute("aria-label"), "Chiudi");
+  assert.deepEqual([...sheet.querySelectorAll(".cal-filter-option")].map((option) => [option.querySelector("input").checked, option.textContent]),
+    [[true, "Tutte (4)"], [false, "Da misurare (1)"], [false, "Calibrate (3)"], [false, "Con profilo (2)"]]);
+  const radio = sheet.querySelector('input[value="to_measure"]');
+  radio.checked = true; radio.dispatchEvent(new Event("change", { bubbles: true })); await tick();
+  assert.equal(panel.shadowRoot.querySelector("dialog.cal-filter-sheet"), null, "a choice closes the sheet");
+  assert.deepEqual(order(tab), ["bedroom"]);
+  assert.equal(button().textContent.trim(), "Filtro: Da misurare (1)");
+  assert.equal(tab.querySelector('.cal-chip[data-id="to_measure"]').getAttribute("aria-pressed"), "true", "the desktop chips follow");
 });
 
 test("the column headers are buttons reached from the keyboard", async () => {

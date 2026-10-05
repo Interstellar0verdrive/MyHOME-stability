@@ -646,6 +646,7 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-tab-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .cal-tab-filters { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; }
 .cal-tab-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.cal-tab-compact { display: none; }
 /* Filter chips with a count (Figma chip 509:23167): the count badge takes the chip's colour at 12 %. The maintainer's
    category chips are left as they are. */
 .cal-chip { gap: 6px; min-height: 0; padding: 6px 10px; border: 1px solid var(--panel-border); border-radius: 16px;
@@ -706,7 +707,29 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   .cal-tab-actions button:not(.primary) { background: transparent; }
   .cal-tab-filters { justify-content: start; }
   .cal-tab-summary { order: -1; flex-basis: 100%; margin: 0; }
+  /* T-01c M: chips and Sort by give way to one row of two 44 px drop-downs. */
+  .cal-tab-filters .cal-tab-chips { display: none; }
+  .cal-tab-compact { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; flex-basis: 100%; }
 }
+.cal-compact-filter, .cal-compact-sort { box-sizing: border-box; display: flex; align-items: center; gap: 4px; min-width: 0; min-height: 44px; margin: 0;
+  padding: 0 8px 0 12px; border: 1px solid var(--panel-border); border-radius: 10px; background: var(--panel-surface);
+  color: var(--primary-text-color, #182b37); font-size: 14px; font-weight: 400; }
+.cal-compact-filter { justify-content: space-between; }
+.cal-compact-filter > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-compact-filter ha-icon { --mdc-icon-size: 20px; flex: none; color: var(--panel-text-2); }
+.cal-compact-sort { flex-direction: row; white-space: nowrap; }
+.cal-compact-sort > span { flex: none; }
+.cal-compact-sort select { flex: 1; min-width: 0; width: auto; min-height: 42px; padding: 0 18px 0 0;
+  background-position: calc(100% - 9px) 50%, calc(100% - 4px) 50%; border: 0; background-color: transparent;
+  color: inherit; font-size: 14px; text-overflow: ellipsis; }
+/* The filter sheet (T-01c M): title and ✕ on one line, one 48 px radio row per filter. */
+.cal-filter-sheet .dialog-head { align-items: center; padding: 16px 8px 4px 20px; border-bottom: 0; }
+.cal-filter-sheet .dialog-head-text { flex: 1; }
+.cal-filter-sheet .cal-sheet-close { width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0; justify-content: center; }
+.cal-filter-sheet .cal-sheet-close ha-icon { --mdc-icon-size: 24px; }
+.cal-filter-sheet .cal-filter-options { gap: 0; padding: 0 20px 16px; }
+.cal-filter-option { display: flex; flex-direction: row; align-items: center; gap: 12px; min-height: 48px; font-size: 15px; font-weight: 400; color: var(--primary-text-color, #182b37); cursor: pointer; }
+.cal-filter-option input { width: 20px; height: 20px; min-height: 0; margin: 0; accent-color: var(--panel-accent); }
 .cal-row { border-top: 1px solid var(--panel-border); }
 .cal-row:first-of-type, .cal-list-head + .cal-row { border-top: 0; }
 .cal-row-main { cursor: pointer; transition: background var(--panel-ease); }
