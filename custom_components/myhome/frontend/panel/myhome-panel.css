@@ -638,6 +638,9 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .catalogue-candidate p { margin: 4px 0; }
 
 /* ---------- WHO 2 · Calibration tab ---------- */
+/* M5-1: the tab's own width decides its layout, not the window's (Home Assistant's sidebar takes ~256 px: a 1390 px
+   window leaves the tab ~1130 px). Below 768 px of window the wizard and the details go full screen. */
+#cover-calibration-tab { container: caltab / inline-size; }
 .cal-tab { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
 .cal-tab h3 { margin: 0; font-size: 18px; }
 .cal-tab-title { margin-bottom: -8px !important; }
@@ -705,11 +708,20 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   .cal-tab-actions { flex-direction: column-reverse; flex-wrap: nowrap; }
   .cal-tab-actions button { width: 100%; min-height: 48px; justify-content: center; font-size: 14px; }
   .cal-tab-actions button:not(.primary) { background: transparent; }
+}
+/* M5-1, the one breakpoint of the lists: below 1200 px the Calibration list, A-01's list and the sequence's list are
+   cards (they scale), with the compact filter and order row; from 1200 px the desktop table. */
+@container caltab (max-width: 1199px) {
   .cal-tab-filters { justify-content: start; }
   .cal-tab-summary { order: -1; flex-basis: 100%; margin: 0; }
   /* T-01c M: chips and Sort by give way to one row of two 44 px drop-downs. */
   .cal-tab-filters .cal-tab-chips { display: none; }
   .cal-tab-compact { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; flex-basis: 100%; }
+  /* The address keeps «Address: 86»; A and PL return at 1200 px. */
+  .cal-row-address-ap { display: none; }
+  /* A-01 and the sequence: the profile as a chip under the status, the table's Profile column being gone. */
+  .cal-batch-row:has(.cal-batch-profile .cal-profile-chip) { grid-template-areas: "lead name" "lead status" "lead profile"; }
+  .cal-batch-row .cal-batch-profile:has(.cal-profile-chip) { display: block; grid-area: profile; }
 }
 /* M4-3: rings only for the keyboard, drawn on the wrapper of a borderless select; no grey flash on a tap. */
 .cal-tab, .wiz, dialog.cal-dialog { -webkit-tap-highlight-color: transparent; }
@@ -787,7 +799,7 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-block-action button:not(.primary):hover { background: var(--panel-accent-soft); }
 /* As in the design, the action spans the whole width of its block. */
 .cal-block-action > button { width: 100%; justify-content: center; }
-@media (max-width: 1023px) {
+@container caltab (max-width: 1199px) {
   /* T-01 M: every cover is a card of its own, 12 px apart. First line: chevron, icon, name block and ⋮ at the top
      right; second line: status and profile on the left, Measure/Refine on the right. */
   .cal-list { border: 0; border-radius: 0; background: transparent; }
@@ -832,7 +844,7 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-page .cal-details-grid > section + section { margin-inline: -16px; padding-inline: 16px; border-top: 1px solid var(--panel-border); }
 .cal-page .cal-details-grid h4 { margin: 0 0 12px; padding: 0; border: 0; font-size: 15px; font-weight: 600; color: var(--primary-text-color, #182b37); }
 .cal-page .cal-details-grid .cal-note { max-width: none; }
-@media (min-width: 1024px) { .cal-page { display: none; } }
+@container caltab (min-width: 1200px) { .cal-page { display: none; } }
 .cal-tab-back { justify-self: start; }
 .cal-dialog-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; padding-block: 18px 4px; }
 .cal-dialog-body > p { margin: 0; }
@@ -901,7 +913,7 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   /* GM2: the reading field takes the content's width (more specific than the base rule, which comes later). */
   .wiz-main .wiz-field { max-width: none; }
 }
-@media (min-width: 1024px) {
+@container caltab (min-width: 1200px) {
   /* One column grid for header, rows and expanded details: [chevron+icon] | cover | status | profile | actions. The
      details' three blocks sit under the cover, status and profile columns. Equal tracks for cover, status and profile
      give the design's 350 : 270 : 270 at a 1168 px list (lead and gap included in the first); the actions column has
@@ -946,7 +958,7 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   .cal-batch-status { grid-area: auto; grid-column: 3; grid-row: 1; }
   .cal-batch-profile { display: block; grid-column: 4; grid-row: 1; font-size: 13px; }
 }
-@media (min-width: 1280px) {
+@container caltab (min-width: 1200px) {
   /* Room and bus address on one line under the cover name. */
   .cal-row-name > .muted { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 }
@@ -961,7 +973,7 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .wiz-pick-notes { grid-column: 1 / -1; display: grid; gap: 6px; padding-bottom: 4px; }
 .wiz-pick-notes .cal-note { max-width: none; }
 .wiz-pick-empty { margin: 0; padding: 12px; }
-@media (min-width: 1024px) {
+@container caltab (min-width: 1200px) {
   .wiz-pick-list { --cal-gap: 20px; --cal-lead-box: calc(20px + 32px + var(--cal-lead-gap));
     --cal-cols: var(--cal-lead) minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); }
   .wiz-pick-list .cal-list-head > span:last-child { display: none; }
@@ -1157,7 +1169,7 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-illustration { display: block; max-width: 100%; height: auto; margin: 0; }
 /* M2-7: A-07 has a drawing of its own on phones; only one of the two is shown. */
 .wiz-illustration.wiz-ill-phone { display: none; }
-@media (max-width: 1023px) {
+@media (max-width: 767px) {
   .wiz-illustration.wiz-ill-wide { display: none; }
   .wiz-illustration.wiz-ill-phone { display: block; }
 }
@@ -1166,14 +1178,27 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
   --wiz-ill-cover-slats: #BDBDBD; --wiz-ill-cover-last-slat: #939393; --wiz-ill-text: #141414; --wiz-ill-text-2: #5E5E5E; --wiz-ill-accent: #009AC7; }
 .wiz[data-theme="dark"] { --wiz-ill-surface: #1C1C1C; --wiz-ill-cover-skeleton: #242424; --wiz-ill-text-on-accent: #FFFFFF; --wiz-ill-cover-border: #606060;
   --wiz-ill-cover-slats: #6D6D6D; --wiz-ill-cover-last-slat: #535353; --wiz-ill-text: #E1E1E1; --wiz-ill-text-2: #9B9B9B; --wiz-ill-accent: #009AC7; }
-@media (min-width: 1024px) {
+/* M5-1, the wizard's layouts: from 1200 px steps | content | actions; from 768 px the steps strip on top (PASSI) and
+   content | actions; below 768 px full screen with the bottom bar. */
+@container caltab (min-width: 768px) and (max-width: 1199px) {
+  .wiz-columns { grid-template-columns: minmax(0, 1fr) 280px; min-height: 420px; }
+  .wiz-actions { border-inline-start: 1px solid var(--panel-border); }
+}
+@container caltab (max-width: 1199px) {
+  .wiz-compact { display: flex; align-items: center; gap: 10px; padding: 8px 16px; background: var(--panel-surface-2); border-bottom: 1px solid var(--panel-border); font-size: 13px; }
+  .wiz-compact-line { flex: 1; }
+  .wiz-dot { width: 14px; height: 14px; border-radius: 50%; box-sizing: border-box; }
+  .wiz-steps-button { min-height: 32px; padding: 4px 12px; border-radius: 999px; border-color: var(--panel-accent); color: var(--panel-accent); font-weight: 600; text-transform: uppercase; font-size: 12px; }
+  .wiz-steps { display: none; }
+}
+@container caltab (min-width: 1200px) {
   .wiz-columns { grid-template-columns: 240px minmax(0, 1fr) 300px; min-height: 420px; }
   /* 1 px dividers between the side columns and the centre (none on the phone, where the columns stack). */
   .wiz-steps { border-inline-end: 1px solid var(--panel-border); }
   .wiz-actions { border-inline-start: 1px solid var(--panel-border); }
   .wiz-sheet { display: none !important; }
 }
-@media (max-width: 1023px) {
+@media (max-width: 767px) {
   /* The whole window, even when an ancestor of Home Assistant holds a transform (fixed then follows it). */
   .wiz { position: fixed; inset: 0; z-index: 8; display: flex; flex-direction: column; height: 100vh; height: 100dvh; border: 0; border-radius: 0; }
   .wiz-frame { display: flex; flex-direction: column; min-height: 0; height: 100%; }
@@ -1183,12 +1208,7 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
   /* M2-1: every ✕ of a title bar or sheet is a 44 px touch target with a 24 px icon. */
   .wiz-x, .wiz-sheet-close, .cal-page-close { width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0; justify-content: center; }
   .wiz-x ha-icon, .wiz-sheet-close ha-icon, .cal-page-close ha-icon { --mdc-icon-size: 24px; }
-  .wiz-compact { display: flex; align-items: center; gap: 10px; padding: 8px 16px; background: var(--panel-surface-2); border-bottom: 1px solid var(--panel-border); font-size: 13px; }
-  .wiz-compact-line { flex: 1; }
-  .wiz-dot { width: 14px; height: 14px; border-radius: 50%; box-sizing: border-box; }
-  .wiz-steps-button { min-height: 32px; padding: 4px 12px; border-radius: 999px; border-color: var(--panel-accent); color: var(--panel-accent); font-weight: 600; text-transform: uppercase; font-size: 12px; }
   .wiz-columns { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-  .wiz-steps { display: none; }
   /* The content scrolls between the phase strip and the action bar: min-height 0 lets it shrink (without it the column
      grew past the bar and showed a scrollbar that scrolled nothing). */
   .wiz-main { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 16px;

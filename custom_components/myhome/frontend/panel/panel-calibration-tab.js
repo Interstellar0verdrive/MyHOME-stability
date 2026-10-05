@@ -90,7 +90,8 @@ export class CalibrationTab {
       this._overscroll = null;
     }
     // M4-4: on a phone the full-screen wizard holds the page under it still; only its content area scrolls.
-    const phone = typeof matchMedia === "function" && matchMedia("(max-width: 1023px)").matches;
+    // Full screen only below 768 px (M5-1); from 768 px the wizard sits in the page.
+    const phone = typeof matchMedia === "function" && matchMedia("(max-width: 767px)").matches;
     if (hold && phone && this._context?.host && !this._fullHold) this._fullHold = holdScroll(this._context.host);
     else if (!hold && this._fullHold) { this._fullHold(); this._fullHold = null; }
   }
@@ -480,7 +481,10 @@ export class CalibrationTab {
     const address = item.entity?.address, { t } = this._context;
     if (!address?.raw) return "";
     const fields = [[t("address"), address.raw], ...(address.a != null && address.pl != null ? [["A", address.a], ["PL", address.pl]] : [])];
-    return `<span class="cal-row-address"> · ${fields.map(([label, value]) => `<span><span class="cal-row-address-label">${esc(label)}:</span> <span class="cal-row-address-value">${esc(value)}</span></span>`).join(" · ")}</span>`;
+    // M5-1: below 1200 px only «Address: 86»; A and PL in their own span, shown from 1200 px.
+    const part = ([label, value]) => `<span><span class="cal-row-address-label">${esc(label)}:</span> <span class="cal-row-address-value">${esc(value)}</span></span>`;
+    const [first, ...rest] = fields;
+    return `<span class="cal-row-address"> · ${part(first)}${rest.length ? `<span class="cal-row-address-ap"> · ${rest.map(part).join(" · ")}</span>` : ""}</span>`;
   }
 
   _area(item) { return item.area; }
@@ -505,8 +509,13 @@ export class CalibrationTab {
           ${this._details(item, busy, language, addressDetails)}</div></div>`;
   }
 
-  /** Phones open the details as a page; wider windows keep them in the row. */
-  _phone() { return typeof matchMedia === "function" && matchMedia("(max-width: 1023px)").matches; }
+  /** Below 1200 px (the cards, M5-1) the details open as a page; the desktop table keeps them in the row. */
+  _phone() {
+    if (typeof matchMedia !== "function") return false;
+    // The tab's own width (the cards' container query), or a phone window.
+    const width = this._context?.host?.getBoundingClientRect?.().width || 0;
+    return matchMedia("(max-width: 767px)").matches || (width > 0 ? width < 1200 : matchMedia("(max-width: 1199px)").matches);
+  }
 
   _closePage() {
     const key = this._page;

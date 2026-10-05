@@ -801,7 +801,7 @@ test("on the phone the run's ① and ② stack, never side by side", async () =>
 
 test("1 px dividers separate the side columns from the centre on the wide layout only", async () => {
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
-  const wide = css.slice(css.indexOf("@media (min-width: 1024px) {\n  .wiz-columns"));
+  const wide = css.slice(css.indexOf("@container caltab (min-width: 1200px) {\n  .wiz-columns"));
   assert.match(wide.slice(0, wide.indexOf("\n}")), /\.wiz-steps \{ border-inline-end: 1px solid var\(--panel-border\); \}[\s\S]*\.wiz-actions \{ border-inline-start: 1px solid var\(--panel-border\); \}/);
 });
 
@@ -1900,7 +1900,7 @@ test("A-07 carries its phone drawing beside the wide one; the stylesheet shows o
   host.innerHTML = illustrationMarkup("lift-zoom", "Step diagram", (value) => value);
   assert.equal(host.querySelectorAll("svg").length, 1, "other drawings are one SVG");
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
-  assert.match(css, /@media \(max-width: 1023px\) \{\s*\.wiz-illustration\.wiz-ill-wide \{ display: none; \}/);
+  assert.match(css, /@media \(max-width: 767px\) \{\s*\.wiz-illustration\.wiz-ill-wide \{ display: none; \}/);
 });
 
 test("our texts name the shell's tabs with the shell's own labels, and never call a window a dialog in Italian", async () => {

@@ -959,3 +959,16 @@ test("the stylesheet's braces balance (a stray one silently drops every rule aft
   for (const char of css) { if (char === "{") depth += 1; else if (char === "}") { depth -= 1; assert.ok(depth >= 0, "no closing brace without its opening one"); } }
   assert.equal(depth, 0);
 });
+
+test("one breakpoint for the lists (1200 px of the tab itself) and the wizard's three layouts, no ad-hoc ones (M5-1)", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  const calibration = css.slice(css.indexOf("/* ---------- WHO 2 · Calibration tab ---------- */"));
+  assert.match(calibration, /#cover-calibration-tab \{ container: caltab \/ inline-size; \}/, "the tab's width decides, not the window's");
+  const widths = [...calibration.matchAll(/@(media|container caltab) ([^{]+)\{/g)].flatMap(([, kind, query]) =>
+    [...query.matchAll(/(min|max)-width: (\d+)px/g)].map(([, edge, px]) => `${kind === "media" ? "window" : "tab"} ${edge}-${px}`));
+  assert.deepEqual([...new Set(widths)].sort(), ["tab max-1199", "tab min-1200", "tab min-768", "window max-1023", "window max-767", "window min-1024"],
+    "the tab at 1200 (lists, wizard) and 768 (wizard's two columns); the window at 768 (full screen) and 1024 (the tab's buttons, dialogs)");
+  const { tab } = await mount();
+  const address = row(tab, "cover.kitchen_two").querySelector(".cal-row-address");
+  assert.equal(address.querySelector(".cal-row-address-ap").textContent, " · A: 9 · PL: 1", "A and PL apart, hidden below 1200 px");
+});
