@@ -352,11 +352,10 @@ export class CalibrationTab {
       : `<span class="muted" aria-label="${esc(t("calTabProfileNone"))}">—</span>`;
     const rows = visible.map((item) => {
       const key = JSON.stringify([item.entry.entry_id, item.cover.entity_id]), chosen = key === selected;
-      const room = [item.area, gateways.length > 1 ? item.entry.title : ""].filter(Boolean).join(" · ");
       return `<label class="cal-batch-row wiz-pick-row${chosen ? " is-selected" : ""}" data-entity="${esc(item.cover.entity_id)}">
         <span class="cal-batch-lead"><input type="radio" name="cover" value="${esc(key)}" ${chosen ? "checked" : ""}>
           <span class="cal-row-icon" aria-hidden="true"><ha-icon icon="mdi:window-shutter"></ha-icon></span></span>
-        <span class="cal-row-name"><strong>${esc(item.name)}</strong><span class="muted">${esc(room)}${this._address(item)}</span></span>
+        <span class="cal-row-name"><strong>${esc(item.name)}</strong><span class="muted">${this._subline([item.area, gateways.length > 1 ? item.entry.title : ""], item.entity)}</span></span>
         <span class="cal-batch-status"><span class="badge cal-badge" data-status="${item.status}">${esc(t(`calTabStatus_${item.status}`))}</span></span>
         <span class="cal-batch-profile">${profile(item)}</span>
         ${chosen && notes.length ? `<span class="wiz-pick-notes">${notes.map((note) => `<span class="cal-note${note.tone === "warning" ? " is-warning" : ""}">${esc(note.text)}</span>`).join("")}</span>` : ""}</label>`;
@@ -463,7 +462,7 @@ export class CalibrationTab {
       <div class="cal-row-main">
         <button type="button" class="cal-row-toggle" data-action="cal-tab-toggle" data-id="${esc(key)}" aria-expanded="${expanded}" aria-controls="${esc(id)}">
           <span class="cal-row-lead" aria-hidden="true"><ha-icon class="cal-row-chevron" icon="mdi:chevron-right"></ha-icon><span class="cal-row-icon"><ha-icon icon="mdi:window-shutter"></ha-icon></span></span>
-          <span class="cal-row-name"><strong>${esc(item.name)}</strong><span class="muted">${esc([this._area(item), gateways.length > 1 ? item.entry.title : ""].filter(Boolean).join(" · "))}${this._address(item)}</span><span class="cal-row-last-inline">${esc(last || t("wiz_T418"))}</span></span></button>
+          <span class="cal-row-name"><strong>${esc(item.name)}</strong><span class="muted">${this._subline([this._area(item), gateways.length > 1 ? item.entry.title : ""], item.entity)}</span><span class="cal-row-last-inline">${esc(last || t("wiz_T418"))}</span></span></button>
         <span class="cal-row-status">${badge}</span>
         <span class="cal-row-profile">${profile}</span>
         <span class="cal-row-actions">${action}
@@ -479,15 +478,26 @@ export class CalibrationTab {
     </div>`;
   }
 
-  /** "· Address: 86 · A: 8 · PL: 6" with the device cards' style: grey labels, dark values. */
+  /** "Address: 86 · A: 8 · PL: 6" with the device cards' style: grey labels, dark values. */
   _address(item) {
     const address = item.entity?.address, { t } = this._context;
     if (!address?.raw) return "";
     const fields = [[t("address"), address.raw], ...(address.a != null && address.pl != null ? [["A", address.a], ["PL", address.pl]] : [])];
-    // M5-1: on the cards (tab under 820 px) only «Address: 86»; A and PL in their own span.
+    // On the cards only «Address: 86»; A and PL in their own span.
     const part = ([label, value]) => `<span><span class="cal-row-address-label">${esc(label)}:</span> <span class="cal-row-address-value">${esc(value)}</span></span>`;
     const [first, ...rest] = fields;
-    return `<span class="cal-row-address"> · ${part(first)}${rest.length ? `<span class="cal-row-address-ap"> · ${rest.map(part).join(" · ")}</span>` : ""}</span>`;
+    return `${part(first)}${rest.length ? `<span class="cal-row-address-ap"> · ${rest.map(part).join(" · ")}</span>` : ""}`;
+  }
+
+  /**
+   * The line under a cover's name (responsive map §3.3): room, gateway, bus address as units. It wraps only between
+   * units (the «·» stays with the unit before it) and the address never breaks: two lines rather than «…».
+   */
+  _subline(before, entity, after = []) {
+    const address = this._address({ entity });
+    const pieces = [...before.filter(Boolean).map((unit) => ["cal-row-unit", esc(unit)]), ...(address ? [["cal-row-address", address]] : []),
+      ...after.filter(Boolean).map((unit) => ["cal-row-unit", esc(unit)])];
+    return pieces.map(([kind, html], index) => `<span class="${kind}">${html}${index < pieces.length - 1 ? " ·" : ""}</span>`).join(" ");
   }
 
   _area(item) { return item.area; }
@@ -506,7 +516,7 @@ export class CalibrationTab {
       : `<span class="badge cal-badge" data-status="${item.status}">${esc(t(`calTabStatus_${item.status}`))}</span>`;
     return `<div class="cal-page${session ? " is-running" : ""}" role="dialog" aria-modal="true" aria-labelledby="cal-page-name" data-entity="${esc(item.cover.entity_id)}">
         <div class="cal-page-head"><div class="cal-page-head-text"><h2 id="cal-page-name">${esc(item.name)}</h2>
-          <p class="muted">${esc([this._area(item), gateways.length > 1 ? item.entry.title : ""].filter(Boolean).join(" · "))}${this._address(item)}</p></div>
+          <p class="muted">${this._subline([this._area(item), gateways.length > 1 ? item.entry.title : ""], item.entity)}</p></div>
           <button type="button" class="icon-button cal-page-close" data-action="cal-tab-page-close" aria-label="${esc(t("wiz_T448"))}" title="${esc(t("wiz_T448"))}"><ha-icon icon="mdi:close" aria-hidden="true"></ha-icon></button></div>
         <div class="cal-page-body"><div class="cal-page-title"><h3>${esc(t("wiz_T447"))}</h3>${badge}</div>
           ${this._details(item, busy, language, addressDetails)}</div></div>`;
@@ -975,7 +985,7 @@ export class CalibrationTab {
         <span class="cal-batch-lead"><input type="checkbox" value="${esc(target.entity_id)}" ${place >= 0 ? "checked" : ""} ${target.reason ? "disabled" : ""}>
           <span class="cal-batch-order" aria-hidden="true">${place >= 0 ? place + 1 : ""}</span>
           <span class="cal-row-icon" aria-hidden="true"><ha-icon icon="mdi:window-shutter"></ha-icon></span></span>
-        <span class="cal-row-name"><strong>${esc(target.name)}</strong><span class="muted">${esc(target.area)}${this._address({ entity: target.entity })}${target.reason ? ` · ${esc(t(`profileError_${target.reason}`))}` : ""}</span></span>
+        <span class="cal-row-name"><strong>${esc(target.name)}</strong><span class="muted">${this._subline([target.area], target.entity, target.reason ? [t(`profileError_${target.reason}`)] : [])}</span></span>
         <span class="cal-batch-status">${statusBadge(target.item)}</span>
         <span class="cal-batch-profile">${profile(target.item)}</span></label>`;
     }).join("");

@@ -14,6 +14,12 @@ const { LiveCalibrationGateway, PreviewCalibrationGateway } = gateways;
 const { illustrationMarkup, ILLUSTRATIONS } = illustration;
 
 /** "Label: value" as the tab's blocks show facts: the label regular, the value bold. */
+/** A cover's room, gateway and bus address: one string, and its units for the header (responsive map §3.3). */
+const subline = (lead, bus) => {
+  const units = lead.filter(Boolean);
+  return { address: [...units, bus].filter(Boolean).join(" · "), units: { lead: units, bus } };
+};
+
 function factMarkup(line) {
   const index = line.indexOf(": ");
   return index < 0 ? esc(line) : `${esc(line.slice(0, index))}: <strong>${esc(line.slice(index + 2))}</strong>`;
@@ -150,9 +156,10 @@ export class CalibrationWizard {
       status: item.status, last: item.last,
       profile: item.profile, followers, followProfile: followed?.name ?? null,
       // G4-1: as the list rows: room first (and the gateway when there are several), then the bus address; no WHO.
-      address: [item.area, new Set(this._covers().map((entry) => entry.entry.entry_id)).size > 1 ? item.entry.title : "",
-        ...(address ? [`${this._context.t("address")}: ${address.raw ?? this._context.t("addressUnknown")}`,
-          ...(address.a != null && address.pl != null ? [`A: ${address.a}`, `PL: ${address.pl}`] : [])] : [])].filter(Boolean).join(" · ") };
+      // The units apart too (responsive map §3.3): the header wraps between them, never inside the address.
+      ...subline([item.area, new Set(this._covers().map((entry) => entry.entry.entry_id)).size > 1 ? item.entry.title : ""],
+        address ? [`${this._context.t("address")}: ${address.raw ?? this._context.t("addressUnknown")}`,
+          ...(address.a != null && address.pl != null ? [`A: ${address.a}`, `PL: ${address.pl}`] : [])].join(" · ") : "") };
   }
 
   /** A drop-down entry: "Name · Room · Address: 86 · A: 8 · PL: 6", and the gateway when there are several. */
@@ -230,7 +237,7 @@ export class CalibrationWizard {
       this._frame.innerHTML = `
         <header class="wiz-head">
           ${screen.back ? `<button type="button" class="icon-button wiz-back" data-wiz="back" aria-label="${esc(t("wiz_T403"))}" title="${esc(t("wiz_T403"))}"><ha-icon icon="mdi:arrow-left" aria-hidden="true"></ha-icon></button>` : ""}
-          <div class="wiz-head-text"><h3 id="wiz-cover" class="wiz-cover">${esc(screen.header.title)}</h3><p class="muted wiz-head-sub"${screen.header.subtitle ? "" : " hidden"}>${esc(screen.header.subtitle || "")}</p></div>
+          <div class="wiz-head-text"><h3 id="wiz-cover" class="wiz-cover">${esc(screen.header.title)}</h3><p class="muted wiz-head-sub" hidden></p></div>
           ${screen.discard ? `<button type="button" class="wiz-discard" data-wiz="exit">${esc(t("wizDiscard"))}</button>` : ""}
           <button type="button" class="icon-button wiz-x" data-wiz="${screen.discard ? "exit" : "close"}" aria-label="${esc(screen.discard ? t("wizDiscard") : t("wiz_T158"))}" title="${esc(screen.discard ? t("wizDiscard") : t("wiz_T158"))}"><ha-icon icon="mdi:close" aria-hidden="true"></ha-icon></button>
         </header>
@@ -357,7 +364,11 @@ export class CalibrationWizard {
     const head = root.querySelector(".wiz-cover"), sub = root.querySelector(".wiz-head-sub");
     if (head && head.textContent !== screen.header.title) head.textContent = screen.header.title;
     if (sub) {
-      if (sub.textContent !== (screen.header.subtitle || "")) sub.textContent = screen.header.subtitle || "";
+      // A cover's line as units (room, gateway, the address that never breaks); any other subtitle as plain text.
+      const units = screen.header.units;
+      const html = units ? [...units.lead.map((unit) => ["cal-row-unit", esc(unit)]), ...(units.bus ? [["cal-row-address", esc(units.bus)]] : [])]
+        .map(([kind, part], index, all) => `<span class="${kind}">${part}${index < all.length - 1 ? " ·" : ""}</span>`).join(" ") : esc(screen.header.subtitle || "");
+      if (sub._html !== html) { sub.innerHTML = html; sub._html = html; }
       sub.hidden = !screen.header.subtitle;
       sub.classList.toggle("wiz-head-placeholder", !!screen.header.placeholder);
     }

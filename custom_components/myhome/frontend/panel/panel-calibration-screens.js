@@ -94,7 +94,7 @@ export function buildScreen(ctx) {
   const name = cover?.name || "";
   const values = { cover: name, profile: cover?.profile?.name ?? "" };
   const screen = {
-    code: "", header: { title: name || t("wiz_T001"), subtitle: cover?.address || "" }, discard: true, preview,
+    code: "", header: { title: name || t("wiz_T001"), subtitle: cover?.address || "", units: cover?.units || null }, discard: true, preview,
     title: "", subline: "", body: "", help: null, note: null, results: null, stopwatch: null, wait: null, illustration: null, choice: null, picker: null, field: null, box: null, table: null,
     technical: null, profileBlock: null, saveInfo: null, precision: null, status: [], notices: [], actions: [], readOnly: null, phase: "intro",
     caption: caption(t, path, scope, cover),
@@ -119,8 +119,10 @@ export function buildScreen(ctx) {
     Object.assign(screen, { code: "A-01", phase: "intro", title: t("wiz_T003"), body: t("wiz_T004"),
       picker: { selected: picked ? local.coverKey : "", filter: local.pickFilter || "all", notes },
       actions: [{ id: "choose", label: t("wiz_T006"), kind: "primary", disabled: !ctx.covers?.length || !picked }] });
-    // Until a cover is picked the subtitle says so; then it names the cover with its room and address.
-    screen.header = { title: t("wiz_T001"), subtitle: picked ? picked.label : t("wiz_T392"), placeholder: !picked };
+    // Until a cover is picked the subtitle says so; then its room and address (its name is in the chosen row, not
+    // repeated here: responsive map §3.3).
+    screen.header = picked ? { title: t("wiz_T001"), subtitle: cover?.address || "", units: cover?.units || null }
+      : { title: t("wiz_T001"), subtitle: t("wiz_T392"), placeholder: true };
     return finish();
   }
   if (stage === "path") {

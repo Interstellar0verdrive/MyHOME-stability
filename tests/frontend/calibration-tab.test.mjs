@@ -631,7 +631,13 @@ test("a click anywhere on a row opens and closes its details, never from its but
 test("each row names its room and bus address as the device cards do", async () => {
   const { tab } = await mount({ language: "it" });
   const address = row(tab, "cover.living_one").querySelector(".cal-row-address");
-  assert.equal(address.textContent.replace(/\s+/g, " ").trim(), "· Indirizzo: 91 · A: 9 · PL: 1");
+  assert.equal(address.textContent.replace(/\s+/g, " ").trim(), "Indirizzo: 91 · A: 9 · PL: 1");
+  // Responsive map §3.3: units that wrap only between them, the «·» with the unit before it; no «…» anywhere.
+  assert.deepEqual([...row(tab, "cover.living_one").querySelectorAll(".cal-row-name > .muted > span")].map((unit) => [unit.className, unit.textContent]),
+    [["cal-row-unit", "Living room ·"], ["cal-row-address", "Indirizzo: 91 · A: 9 · PL: 1"]]);
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.cal-row-address \{ white-space: nowrap; \}/);
+  assert.doesNotMatch(css, /\.cal-row-name > \.muted \{[^}]*ellipsis/);
   assert.deepEqual([...address.querySelectorAll(".cal-row-address-label")].map((item) => item.textContent), ["Indirizzo:", "A:", "PL:"]);
   assert.match(row(tab, "cover.living_one").querySelector(".cal-row-name .muted").textContent, /^Living room · Indirizzo/);
 });

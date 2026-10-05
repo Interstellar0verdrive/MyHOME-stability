@@ -74,7 +74,9 @@ test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothin
   assert.ok(subtitle().classList.contains("wiz-head-placeholder"));
   assert.equal(button("choose").disabled, true, "Continue waits for a choice");
   await pickCover("cover.living_one");
-  assert.equal(subtitle().textContent, "Living room shutter 1 · Living room · Address: 91 · A: 9 · PL: 1", "the picked cover with its room and address");
+  assert.equal(subtitle().textContent, "Living room · Address: 91 · A: 9 · PL: 1", "the picked cover's room and address, its name only in its row");
+  assert.deepEqual([...subtitle().children].map((unit) => [unit.className, unit.textContent]), [["cal-row-unit", "Living room ·"], ["cal-row-address", "Address: 91 · A: 9 · PL: 1"]],
+    "units that wrap only between them (responsive map §3.3)");
   assert.equal(subtitle().classList.contains("wiz-head-placeholder"), false);
   assert.equal(wiz().querySelector(".wiz-pick-row.is-selected").dataset.entity, "cover.living_one");
   assert.equal(wiz().querySelector(".wiz-pick-notes"), null, "a never measured cover without a profile has no note");
@@ -1848,7 +1850,7 @@ test("opened on a given cover, the wizard already has it chosen; from the tab's 
   tabView._openWizard({ start: "choose", item: tabView._covers().find((item) => item.cover.entity_id === "cover.living_three") }); await tick();
   assert.equal(code(), "A-01");
   assert.equal(wiz().querySelector('.wiz-picker input[name="cover"]:checked').value, JSON.stringify(["one", "cover.living_three"]));
-  assert.equal(wiz().querySelector(".wiz-head .muted").textContent, "Living room shutter 3 · Living room · Address: 91 · A: 9 · PL: 1");
+  assert.equal(wiz().querySelector(".wiz-head .muted").textContent, "Living room · Address: 91 · A: 9 · PL: 1");
   assert.equal(button("choose").disabled, false);
 });
 
