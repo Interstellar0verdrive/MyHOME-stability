@@ -2061,3 +2061,18 @@ test("«Start over» after an ended session carries nothing of the old measureme
   const lift = [...wiz().querySelectorAll(".wiz-steps li li")].find((item) => item.textContent.startsWith("Stacco"));
   assert.match(lift.textContent, /s · —$/, "no gap in the stepper before this session's reading");
 });
+
+test("two minutes before the idle expiry a waiting screen warns, counting the minutes down (M3)", () => {
+  const t = (key) => translations.it[key] || key;
+  const now = Date.parse("2026-10-05T13:00:00Z");
+  const at = (seconds, extra = {}) => buildScreen({ t, language: "it", stage: "session", path: "A", local: { ackLift: true, ackAscent: true }, now, cover: { name: "Cucina 2" },
+    view: { mode: "geometry", step: "opening", phase: "briefing", values: {}, samples: {}, readings: {}, slats: true, owner: true, sequence: 9, recoverable: true, attached: true,
+      idle_expires_at: new Date(now + seconds * 1000).toISOString(), ...extra } });
+  const warning = (screen) => screen.notices.find((notice) => /scade fra/.test(notice.text));
+  assert.equal(warning(at(300)), undefined, "five minutes left: nothing yet");
+  assert.deepEqual(warning(at(110)), { tone: "warning", result: true,
+    text: "La sessione scade fra 2 min se non prosegui: la tapparella verrà liberata e le misure andranno perse." });
+  assert.match(warning(at(50)).text, /fra 1 min/);
+  assert.equal(warning(at(-5)), undefined, "past the deadline the backend's own end decides");
+  assert.equal(warning(at(60, { phase: "opening" })), undefined, "not while the cover moves");
+});

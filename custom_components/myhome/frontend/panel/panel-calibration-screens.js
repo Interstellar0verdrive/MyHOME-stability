@@ -38,6 +38,8 @@ export const MOVING = (view) => !!view && !MOTOR_STOPPED(view)
   && (["opening", "closing", "geometry_wait_stop", "positioning"].includes(view.phase) || view.phase?.startsWith("starting_"));
 
 const ENDED = ["interrupted", "cancelled", "expired"];
+/** How long before the session's idle expiry the wizard warns (M3). */
+export const LEASE_WARNING_MS = 120000;
 
 /** Texts with a count: the zero and one forms of the sheet's plural texts (PROVVISORIO rows T305–T317). */
 const PLURALS = { wiz_T110: ["wiz_T305", "wiz_T306"], wiz_T112: ["wiz_T307", null], wiz_T165: ["wiz_T308", "wiz_T309"],
@@ -856,6 +858,12 @@ function finalize(screen, ctx) {
   }
   // Alone in a wait, Stop is the red filled button of the mockups; beside a step's buttons it stays a red link.
   if (screen.wait && screen.actions.length === 1 && screen.actions[0].id === "stop") screen.actions[0] = { ...screen.actions[0], kind: "danger" };
+  // The backend hands the cover back after a stretch without any step (600 s after a movement; heartbeats do not
+  // extend it). Two minutes before, a screen that waits for the user says so, counting the minutes down.
+  if (view && !view.preview && view.idle_expires_at && !status.expired && !ENDED.includes(view.phase) && !MOVING(view)) {
+    const left = Date.parse(view.idle_expires_at) - (ctx.now ?? Date.now());
+    if (left > 0 && left <= LEASE_WARNING_MS) screen.notices.unshift({ tone: "warning", result: true, text: fill(t("wiz_T462"), { minutes: Math.max(1, Math.ceil(left / 60000)) }) });
+  }
   if (status.lost && !status.expired && view && !ENDED.includes(view.phase)) {
     // A missed heartbeat (the phone put the page aside, the connection dropped for a moment) is a calm status while the
     // panel reconnects; a lost presence for any other reason stays an error.

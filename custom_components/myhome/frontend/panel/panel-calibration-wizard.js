@@ -66,6 +66,7 @@ export class CalibrationWizard {
   }
 
   close() {
+    clearInterval(this._leaseTimer); this._leaseTimer = null;
     if (this._onVisible) document.removeEventListener("visibilitychange", this._onVisible);
     this._onVisible = null;
     this._moreObserver?.disconnect();
@@ -183,7 +184,7 @@ export class CalibrationWizard {
     return buildScreen({ t, language, path: local.path, scope: local.scope, stage: local.stage, local, cover,
       covers: this._covers().map((item) => ({ key: key(item), label: this._coverLabel(item), status: item.status, last: item.last })),
       profiles: this._profiles(), followed, followerNames: cover ? names(cover.followers, language) : "",
-      view: gateway?.view || null, status: gateway?.status || {}, elapsed: gateway?.elapsed() ?? null, runPosition: local.run?.position ?? null,
+      view: gateway?.view || null, status: gateway?.status || {}, elapsed: gateway?.elapsed() ?? null, runPosition: local.run?.position ?? null, now: Date.now(),
       preview: !!gateway?.preview, supports: (target) => gateway ? gateway.supports(target) : false });
   }
 
@@ -691,10 +692,20 @@ export class CalibrationWizard {
     };
     this._gateway = kind === "live" ? new LiveCalibrationGateway({ onChange })
       : new PreviewCalibrationGateway({ onChange, plan, values, ...(this._stageMs != null ? { stageMs: this._stageMs } : {}) });
+    if (kind === "live") this._watchLease();
     return this._gateway;
   }
 
-  _dropGateway() { this._gateway?.close(); this._gateway = null; }
+  _dropGateway() { clearInterval(this._leaseTimer); this._leaseTimer = null; this._gateway?.close(); this._gateway = null; }
+
+  /** The idle expiry warning counts down without any message from Home Assistant: redraw it every 15 s. */
+  _watchLease() {
+    clearInterval(this._leaseTimer);
+    this._leaseTimer = setInterval(() => {
+      if (!this._root || !this._gateway?.view?.idle_expires_at) return;
+      const screen = this._screen(); if (screen.code !== this._renderedCode) this._render(); else this._patch(screen);
+    }, 15000);
+  }
 
   _liveContext() {
     const item = this._item(), { hass, t } = this._context, generation = this._generation;

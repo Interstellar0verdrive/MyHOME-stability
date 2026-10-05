@@ -383,6 +383,8 @@ export const translations = {
     wiz_T458: "You entered {n} cm: below 1 cm the edge counts as still resting, so the run is repeated.",
     wiz_T459: "Stopping…",
     wiz_T460: "The cover did not confirm the stop: restart the measurement.",
+    wiz_T461: "Interrupted · {phase} {n} of {total}",
+    wiz_T462: "The session expires in {minutes} min unless you continue: the cover will be released and the measurements lost.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1228,6 +1230,8 @@ export const translations = {
     wiz_T458: "Hai indicato {n} cm: sotto 1 cm il bordo conta come ancora appoggiato, quindi la corsa viene ripetuta.",
     wiz_T459: "Arresto in corso…",
     wiz_T460: "La tapparella non ha confermato l'arresto: ricomincia la misurazione.",
+    wiz_T461: "Interrotta · {phase} {n} di {total}",
+    wiz_T462: "La sessione scade fra {minutes} min se non prosegui: la tapparella verrà liberata e le misure andranno perse.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",
