@@ -705,7 +705,9 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   background: var(--panel-surface); font-size: 13px; color: var(--panel-text-2); }
 .cal-sort-pill select { min-height: 34px; padding-inline-start: 0; border: 0; border-radius: 999px; background-color: transparent;
   color: var(--primary-text-color, #182b37); font-weight: 500; }
-@media (max-width: 1023px) {
+/* D17: the two buttons stack, at full width, only when the tab itself is narrow; side by side otherwise (a landscape
+   phone keeps them on one row). */
+@container caltab (max-width: 599px) {
   /* T-01 M: the two buttons at full width, «Misura una tapparella» (primary) first; the summary above the chips. */
   .cal-tab-head { flex-direction: column; align-items: stretch; gap: 12px; }
   .cal-tab-intro { flex: none; }
@@ -713,15 +715,15 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   .cal-tab-actions button { width: 100%; min-height: 48px; justify-content: center; font-size: 14px; }
   .cal-tab-actions button:not(.primary) { background: transparent; }
 }
-/* M5-1, the one breakpoint of the lists: below 820 px of tab the Calibration list, A-01's list and the sequence's list are
-   cards (they scale), with the compact filter and order row; from 1200 px the desktop table. */
-@container caltab (max-width: 819px) {
+/* The one breakpoint of the Calibration list (responsive map): below 880 px of tab (a 1184 px window with Home
+   Assistant's sidebar) one column of cards, with the compact filter and order row; from 880 px the table. */
+@container caltab (max-width: 879px) {
   .cal-tab-filters { justify-content: start; }
   .cal-tab-summary { order: -1; flex-basis: 100%; margin: 0; }
   /* T-01c M: chips and Sort by give way to one row of two 44 px drop-downs. */
   .cal-tab-filters .cal-tab-chips { display: none; }
   .cal-tab-compact { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; flex-basis: 100%; }
-  /* The address keeps «Address: 86»; A and PL return at 1200 px. */
+  /* The address keeps «Address: 86»; A and PL return with the table. */
   .cal-row-address-ap { display: none; }
   /* A-01 and the sequence: the profile as a chip under the status, the table's Profile column being gone. */
   .cal-batch-row:has(.cal-batch-profile .cal-profile-chip) { grid-template-areas: "lead name" "lead status" "lead profile"; }
@@ -740,6 +742,8 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-compact-sort select { flex: 1; min-width: 0; width: auto; min-height: 42px; padding: 0 18px 0 0;
   background-position: calc(100% - 9px) 50%, calc(100% - 4px) 50%; border: 0; background-color: transparent;
   color: inherit; font-size: 14px; text-overflow: ellipsis; }
+/* D16: below 380 px of tab one drop-down per row, so «Ordina: Tapparella ↑» is never cut. */
+@container caltab (max-width: 379px) { .cal-tab-compact, .cal-batch-wiz .cal-tab-compact { grid-template-columns: minmax(0, 1fr); } }
 .cal-row { border-top: 1px solid var(--panel-border); }
 .cal-row:first-of-type, .cal-list-head + .cal-row { border-top: 0; }
 .cal-row-main { cursor: pointer; transition: background var(--panel-ease); }
@@ -803,7 +807,7 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-block-action button:not(.primary):hover { background: var(--panel-accent-soft); }
 /* As in the design, the action spans the whole width of its block. */
 .cal-block-action > button { width: 100%; justify-content: center; }
-@container caltab (max-width: 819px) {
+@container caltab (max-width: 879px) {
   /* T-01 M: every cover is a card of its own, 12 px apart. First line: chevron, icon, name block and ⋮ at the top
      right; second line: status and profile on the left, Measure/Refine on the right. */
   .cal-list { border: 0; border-radius: 0; background: transparent; }
@@ -848,7 +852,7 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-page .cal-details-grid > section + section { margin-inline: -16px; padding-inline: 16px; border-top: 1px solid var(--panel-border); }
 .cal-page .cal-details-grid h4 { margin: 0 0 12px; padding: 0; border: 0; font-size: 15px; font-weight: 600; color: var(--primary-text-color, #182b37); }
 .cal-page .cal-details-grid .cal-note { max-width: none; }
-@container caltab (min-width: 820px) { .cal-page { display: none; } }
+@container caltab (min-width: 880px) { .cal-page { display: none; } }
 .cal-tab-back { justify-self: start; }
 .cal-dialog-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; padding-block: 18px 4px; }
 .cal-dialog-body > p { margin: 0; }
@@ -889,7 +893,7 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   .cal-batch-sticky { position: sticky; top: 76px; }
 }
 /* On cards the place in the sequence goes to the row's right edge; no gap is left between circle and icon. */
-@container caltab (max-width: 819px) {
+@container caltab (max-width: 879px) {
   .cal-batch-wiz .cal-batch-row { position: relative; padding-inline-end: 44px; }
   .cal-batch-wiz .cal-batch-order { position: absolute; inset-inline-end: 12px; top: 50%; transform: translateY(-50%); }
 }
@@ -929,7 +933,7 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   /* GM2: the reading field takes the content's width (more specific than the base rule, which comes later). */
   .wiz-main .wiz-field { max-width: none; }
 }
-@container caltab (min-width: 820px) {
+@container caltab (min-width: 880px) {
   /* One column grid for header, rows and expanded details: [chevron+icon] | cover | status | profile | actions. The
      details' three blocks sit under the cover, status and profile columns. Equal tracks for cover, status and profile
      give the design's 350 : 270 : 270 at a 1168 px list (lead and gap included in the first); the actions column has
@@ -939,7 +943,7 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
      lead gap, so the lead overflows into the column gap and column 2 starts at the name. */
   .cal-list { --cal-lead-gap: 12px; --cal-lead-box: calc(18px + var(--cal-lead-gap) + 40px); --cal-gap: 32px;
     --cal-lead: calc(var(--cal-lead-box) + var(--cal-lead-gap) - var(--cal-gap));
-    --cal-cols: var(--cal-lead) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 158px; }
+    --cal-cols: var(--cal-lead) minmax(220px, 1.6fr) minmax(150px, 1fr) minmax(110px, 1fr) 158px; }
   .cal-list-head, .cal-row-main, .cal-row-details { display: grid; grid-template-columns: var(--cal-cols); grid-template-areas: none;
     column-gap: var(--cal-gap); padding-inline: 12px; }
   .cal-list-head, .cal-row-main { align-items: center; }
@@ -974,7 +978,7 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   .cal-batch-status { grid-area: auto; grid-column: 3; grid-row: 1; }
   .cal-batch-profile { display: block; grid-column: 4; grid-row: 1; font-size: 13px; }
 }
-@container caltab (min-width: 820px) {
+@container caltab (min-width: 880px) {
   /* Room and bus address on one line under the cover name. */
   .cal-row-name > .muted { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 }
@@ -989,7 +993,7 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .wiz-pick-notes { grid-column: 1 / -1; display: grid; gap: 6px; padding-bottom: 4px; }
 .wiz-pick-notes .cal-note { max-width: none; }
 .wiz-pick-empty { margin: 0; padding: 12px; }
-@container caltab (min-width: 820px) {
+@container caltab (min-width: 880px) {
   .wiz-pick-list { --cal-gap: 20px; --cal-lead-box: calc(20px + 32px + var(--cal-lead-gap));
     --cal-cols: var(--cal-lead) minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); }
   .wiz-pick-list .cal-list-head > span:last-child { display: none; }

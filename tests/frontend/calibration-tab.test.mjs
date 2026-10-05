@@ -962,17 +962,17 @@ test("the stylesheet's braces balance (a stray one silently drops every rule aft
   assert.equal(depth, 0);
 });
 
-test("one breakpoint for the lists (1200 px of the tab itself) and the wizard's three layouts, no ad-hoc ones (M5-1)", async () => {
+test("one breakpoint for the list (880 px of the tab itself) and the wizard's three layouts, no ad-hoc ones (M5-1, responsive map)", async () => {
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   const calibration = css.slice(css.indexOf("/* ---------- WHO 2 · Calibration tab ---------- */"));
   assert.match(calibration, /#cover-calibration-tab \{ container: caltab \/ inline-size; \}/, "the tab's width decides, not the window's");
   const widths = [...calibration.matchAll(/@(media|container caltab|container wizmain) ([^{]+)\{/g)].flatMap(([, kind, query]) =>
     [...query.matchAll(/(min|max)-width: (\d+)px/g)].map(([, edge, px]) => `${kind === "media" ? "window" : kind.endsWith("wizmain") ? "content" : "tab"} ${edge}-${px}`));
-  assert.deepEqual([...new Set(widths)].sort(), ["content max-719", "tab max-819", "tab max-999", "tab min-1000", "tab min-820", "window max-1023", "window max-719", "window min-1024", "window min-720"],
-    "the tab at 820 (lists) and 1000 (wizard: three columns); the wizard's content at 720 (its lists); the window at 720 (full screen) and 1024 (buttons, dialogs)");
+  assert.deepEqual([...new Set(widths)].sort(), ["content max-719", "tab max-379", "tab max-599", "tab max-879", "tab max-999", "tab min-1000", "tab min-880", "window max-1023", "window max-719", "window min-1024", "window min-720"],
+    "the tab at 880 (list), 600 (header buttons), 380 (drop-downs) and 1000 (wizard: three columns); the wizard's content at 720 (its lists); the window at 720 (full screen) and 1024 (dialogs)");
   const { tab } = await mount();
   const address = row(tab, "cover.kitchen_two").querySelector(".cal-row-address");
-  assert.equal(address.querySelector(".cal-row-address-ap").textContent, " · A: 9 · PL: 1", "A and PL apart, hidden below 1200 px");
+  assert.equal(address.querySelector(".cal-row-address-ap").textContent, " · A: 9 · PL: 1", "A and PL apart, hidden on the cards");
 });
 
 test("the sequence's status and Start stay in view while the list scrolls; on cards the place sits at the row's edge (M5-2)", async () => {
