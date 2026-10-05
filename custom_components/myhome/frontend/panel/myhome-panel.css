@@ -783,6 +783,8 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   .cal-row-action { grid-area: action; justify-self: end; }
   .cal-menu-wrap { grid-area: menu; align-self: start; justify-self: end; }
   .cal-row-last-inline { display: block; color: var(--panel-text-2); }
+  /* M2-3: a card opens a page, it does not unfold: no chevron. */
+  .cal-row-chevron { display: none; }
 }
 /* T-05 M: a cover's details as a page over the list (phones only; wider windows open the row). */
 .cal-page { position: fixed; inset: 0; z-index: 8; display: flex; flex-direction: column; height: 100vh; height: 100dvh;
