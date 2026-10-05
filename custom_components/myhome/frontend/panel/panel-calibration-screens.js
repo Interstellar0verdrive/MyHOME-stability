@@ -216,8 +216,8 @@ export function buildScreen(ctx) {
         // G2-3: how to tell, closed by default, right after the question.
         help: { summary: t("wiz_T456"), text: t("wiz_T457") },
         options: [{ value: "yes", label: t("wiz_T198") }, { value: "no", label: t("wiz_T199") }] },
-      // Times only has no question but still speaks of slats: the same explanation, closed, after the text.
-      help: timesOnly ? { summary: t("wiz_T456"), text: t("wiz_T457") } : null,
+      // M5-5: times only has no slats question and says nothing about slats.
+      help: null,
       // Readings only run as a preview: said before it starts.
       // No "Cancel" (T025) here or on A-16: it did what the header's "Abandon the calibration" does.
       actions: [{ id: "begin", label: t("wiz_T024"), kind: "primary", ...(pointsOnly ? { note: t("wiz_T318") } : {}) }] });

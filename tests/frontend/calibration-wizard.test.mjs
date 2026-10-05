@@ -1925,7 +1925,7 @@ test("a cover that follows a profile without a measured travel says the values a
   assert.match(buildScreen({ t, language: "it", stage: "current", path: "C", cover: cover(110) }).body, /^Cucina 2 segue il profilo «alte», adattato alla sua corsa del telo di 110 cm/);
 });
 
-test("how to tell the slats is a closed toggle right after the question (A-03), and after the text where there is no question (C-35)", async () => {
+test("how to tell the slats is a closed toggle right after the question (A-03); times only (C-35) says nothing about slats", async () => {
   const { wiz, code, startFor } = await mount();
   await startFor("cover.living_one");
   assert.equal(code(), "A-03");
@@ -1940,8 +1940,8 @@ test("how to tell the slats is a closed toggle right after the question (A-03), 
   const t = (key) => translations.en[key] || key;
   const timesOnly = buildScreen({ t, stage: "before", path: "C", scope: "times_only", cover: { name: "Kitchen 2", travel_cm: 110 } });
   assert.equal(timesOnly.choice, null);
-  assert.deepEqual(timesOnly.help, { summary: translations.en.wiz_T456, text: translations.en.wiz_T457 });
-  assert.doesNotMatch(timesOnly.body, /horizontal strips/);
+  assert.equal(timesOnly.help, null, "times only: no slats help (M5-5)");
+  assert.doesNotMatch(timesOnly.body, /slats|horizontal strips/, "nor any word about slats");
 });
 
 test("a lift-off gap under 1 cm repeats the run and the repeat says which value and why (G2-9)", async () => {
