@@ -917,3 +917,19 @@ test("focus rings are for the keyboard only; a touch choice lets the drop-down g
     assert.notEqual(root.activeElement, select);
   } finally { globalThis.matchMedia = original; }
 });
+
+test("on phones the full-screen wizard holds the page under it and lets it go when it closes (M4-4)", async () => {
+  const original = globalThis.matchMedia;
+  globalThis.matchMedia = (query) => ({ matches: query.includes("max-width") && !query.includes("reduced-motion") });
+  try {
+    const { tab, panel } = await mount();
+    document.body.style.overflow = "";
+    tab.querySelector('[data-action="cal-tab-measure"]').click(); await tick();
+    assert.equal(panel._calibrationTab._mode.kind, "wizard");
+    assert.equal(document.documentElement.style.overflow, "hidden");
+    assert.equal(document.body.style.overflow, "hidden");
+    panel._calibrationTab._backToList(); await tick();
+    assert.equal(document.documentElement.style.overflow, "");
+    assert.equal(document.body.style.overflow, "");
+  } finally { globalThis.matchMedia = original; }
+});

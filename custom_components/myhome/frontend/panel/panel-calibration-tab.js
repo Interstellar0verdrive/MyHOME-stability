@@ -1,3 +1,18 @@
+/**
+ * Hold the page still: `overflow: hidden` on `html`, `body` and every scrolling ancestor of `host` (through shadow roots);
+ * the returned function puts their own values and scroll back (iOS may move the scroll when overflow changes).
+ */
+function holdScroll(host) {
+  const held = [];
+  const hold = (element) => { if (element?.style) { held.push([element, element.style.overflow, element.scrollTop]); element.style.overflow = "hidden"; } };
+  hold(document.documentElement); hold(document.body);
+  for (let node = host; node; node = node.parentElement || node.getRootNode?.().host) {
+    if (node === document.documentElement || node === document.body) continue;
+    if (/(auto|scroll)/.test(node.ownerDocument.defaultView.getComputedStyle(node).overflowY)) hold(node);
+  }
+  return () => { for (const [element, value, top] of held.reverse()) { element.style.overflow = value; if (element.scrollTop !== top) element.scrollTop = top; } };
+}
+
 /** WHO 2 "Calibration" view: what each timed cover uses, its measurement state and the ways to measure it. */
 const asset = (name) => { const url = new URL(name, import.meta.url); url.search = new URL(import.meta.url).search; return url.href; };
 const [{ escapeHtml: esc }, model, text, { CoverCalibration }, { CalibrationWizard }, { ProfileCatalogueEditor }, { morph }] = await Promise.all([
@@ -74,6 +89,10 @@ export class CalibrationTab {
       for (const [element, value] of this._overscroll) element.style.overscrollBehaviorY = value;
       this._overscroll = null;
     }
+    // M4-4: on a phone the full-screen wizard holds the page under it still; only its content area scrolls.
+    const phone = typeof matchMedia === "function" && matchMedia("(max-width: 1023px)").matches;
+    if (hold && phone && this._context?.host && !this._fullHold) this._fullHold = holdScroll(this._context.host);
+    else if (!hold && this._fullHold) { this._fullHold(); this._fullHold = null; }
   }
 
   /** Replace the wizard (tests use a faster preview); `null` leaves only sessions and groups. */
@@ -732,22 +751,13 @@ export class CalibrationTab {
       more();
     }
     if (!(typeof matchMedia === "function" && matchMedia("(max-width: 1023px)").matches)) return;
-    const held = [];
-    // The scroll of each held element is noted and put back on release (iOS may move it when overflow changes).
-    const hold = (element) => { if (element?.style) { held.push([element, element.style.overflow, element.scrollTop]); element.style.overflow = "hidden"; } };
-    hold(document.documentElement); hold(document.body);
-    for (let node = this._context.host; node; node = node.parentElement || node.getRootNode?.().host) {
-      if (node === document.documentElement || node === document.body) continue;
-      const style = node.ownerDocument.defaultView.getComputedStyle(node);
-      if (/(auto|scroll)/.test(style.overflowY)) hold(node);
-    }
-    this._held = held;
+    this._held = holdScroll(this._context.host);
   }
 
   _releasePage() {
     this._sheetObserver?.disconnect();
     this._sheetObserver = null;
-    for (const [element, value, top] of this._held || []) { element.style.overflow = value; if (element.scrollTop !== top) element.scrollTop = top; }
+    this._held?.();
     this._held = null;
   }
 
