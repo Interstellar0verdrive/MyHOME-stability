@@ -877,6 +877,18 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-batch-wiz .wiz-main { display: grid; gap: 14px; align-content: start; }
 .cal-batch-wiz .wiz-main > * { margin: 0; }
 .cal-batch-wiz .wiz-actions { align-content: start; }
+.cal-batch-sticky { display: grid; gap: 10px; }
+/* M5-2: with columns, the status and Start stay in view while the list scrolls (sticky inside the wizard: the wizard
+   clips instead of hiding its overflow, so it is not a scroll box of its own). */
+.wiz.cal-batch-wiz { overflow: clip; }
+@container caltab (min-width: 768px) {
+  .cal-batch-sticky { position: sticky; top: 76px; }
+}
+/* On cards the place in the sequence goes to the row's right edge; no gap is left between circle and icon. */
+@container caltab (max-width: 1199px) {
+  .cal-batch-wiz .cal-batch-row { position: relative; padding-inline-end: 44px; }
+  .cal-batch-wiz .cal-batch-order { position: absolute; inset-inline-end: 12px; top: 50%; transform: translateY(-50%); }
+}
 .cal-batch-wiz .cal-batch-summary { margin: 0; font-size: 14px; font-weight: 500; text-align: center; }
 .cal-batch-wiz .cal-tab-compact { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
 .cal-batch-note p { margin: 0; }

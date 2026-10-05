@@ -309,8 +309,8 @@ export const translations = {
     wiz_T384: "{count} covers selected",
     wiz_T385: "1 cover selected",
     wiz_T386: "No cover selected",
-    wiz_T387: "Choose the covers to calibrate: they will be calibrated one after the other, in the order you select them, with nothing to press during the runs.",
-    wiz_T388: "The sequence uses the **automatic calibration**: each cover will open, close and open again by itself, and the times will be read from the stop reported by the actuator.\n\n**It needs actuators that report the real stop**: if yours do not, use the **guided calibration**, one cover at a time. Cancel or a measurement error will discard the whole unsaved sequence.",
+    wiz_T387: "Choose the covers to calibrate: they will be calibrated one after the other, in the order you select them, by themselves, with nothing to press during the runs.",
+    wiz_T388: "**It needs actuators that report the real stop**: if yours do not, use the guided calibration, one cover at a time. Cancelling or a measurement error discards the whole unsaved sequence.",
     wiz_T389: "{count} timed covers · at most {max} per sequence",
     wiz_T390: "Back to the list",
     wiz_T391: "None",
@@ -410,6 +410,7 @@ export const translations = {
     wiz_T485: "{count} selected",
     wiz_T486: "1 selected",
     wiz_T487: "None selected",
+    wiz_T488: "Up to {max} covers per sequence",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1183,8 +1184,8 @@ export const translations = {
     wiz_T384: "{count} tapparelle selezionate",
     wiz_T385: "1 tapparella selezionata",
     wiz_T386: "Nessuna tapparella selezionata",
-    wiz_T387: "Scegli le tapparelle da calibrare: si calibreranno una dopo l'altra, nell'ordine in cui le selezioni, senza niente da premere durante le corse.",
-    wiz_T388: "La sequenza usa la **calibrazione automatica**: ogni tapparella si aprirà, si chiuderà e si riaprirà da sola, e i tempi verranno letti dall'arresto segnalato dall'attuatore.\n\n**Servono attuatori che segnalino l'arresto reale**: se i tuoi non lo fanno, usa la **calibrazione guidata**, una tapparella alla volta. Annulla o un errore di misura scarteranno l'intera sequenza non salvata.",
+    wiz_T387: "Scegli le tapparelle da calibrare: si calibreranno una dopo l'altra, nell'ordine in cui le selezioni, da sole, senza premere nulla durante le corse.",
+    wiz_T388: "**Servono attuatori che segnalino l'arresto reale**: se i tuoi non lo fanno, usa la calibrazione guidata, una tapparella alla volta. Annullare o un errore di misura scartano l'intera sequenza non salvata.",
     wiz_T389: "{count} tapparelle a tempo · massimo {max} per sequenza",
     wiz_T390: "Torna all'elenco",
     wiz_T391: "Nessuna",
@@ -1284,6 +1285,7 @@ export const translations = {
     wiz_T485: "{count} selezionate",
     wiz_T486: "1 selezionata",
     wiz_T487: "Nessuna selezionata",
+    wiz_T488: "Massimo {max} tapparelle per sequenza",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

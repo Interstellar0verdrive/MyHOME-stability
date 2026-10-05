@@ -464,15 +464,15 @@ test("several covers in sequence are chosen in a view of the tab, not a dialog, 
   assert.equal(root.querySelector("#dialog-host dialog"), null, "no dialog");
   assert.equal(tab.querySelector(".cal-list-rows"), null, "the selection replaces the list");
   assert.equal(tab.querySelector(".cal-batch .wiz-cover").textContent, "Calibrazione in sequenza");
-  assert.equal(tab.querySelector(".cal-batch .wiz-head-sub").textContent, "4 tapparelle a tempo · massimo 20 per sequenza");
+  assert.equal(tab.querySelector(".cal-batch .wiz-head-sub").textContent, "Massimo 20 tapparelle per sequenza", "no count (M5-2)");
   assert.equal(tab.querySelector(".cal-batch .wiz-title").textContent, "Quali tapparelle vuoi calibrare?");
+  assert.equal(tab.querySelector(".cal-batch .wiz-body").textContent,
+    "Scegli le tapparelle da calibrare: si calibreranno una dopo l'altra, nell'ordine in cui le selezioni, da sole, senza premere nulla durante le corse.");
   const note = tab.querySelector(".cal-batch-note");
-  assert.deepEqual([...note.querySelectorAll("p")].map((paragraph) => paragraph.textContent.split(" ").slice(0, 2).join(" ")),
-    ["La sequenza", "Servono attuatori"], "two paragraphs");
-  assert.match(note.querySelectorAll("p")[1].textContent, /una tapparella alla volta\. Annulla o un errore di misura scarteranno l'intera sequenza non salvata\.$/);
-  assert.deepEqual([...note.querySelectorAll("strong")].map((bold) => bold.textContent),
-    ["calibrazione automatica", "Servono attuatori che segnalino l'arresto reale", "calibrazione guidata"]);
-  assert.ok(note.classList.contains("is-warning"), "the warning variant of the note, as in T-06");
+  assert.equal(note.textContent, "Servono attuatori che segnalino l'arresto reale: se i tuoi non lo fanno, usa la calibrazione guidata, una tapparella alla volta. Annullare o un errore di misura scartano l'intera sequenza non salvata.",
+    "the yellow note only around the actuators");
+  assert.deepEqual([...note.querySelectorAll("strong")].map((bold) => bold.textContent), ["Servono attuatori che segnalino l'arresto reale"]);
+  assert.ok(note.classList.contains("is-warning"));
   assert.doesNotMatch(note.textContent, /\*\*/);
   assert.deepEqual([...tab.querySelectorAll(".cal-batch-row .cal-row-name strong")].map((item) => item.textContent),
     ["Bedroom", "Kitchen shutter 2", "Living room shutter 1", "Living room shutter 2"], "inventory names, sorted by name");
@@ -971,4 +971,13 @@ test("one breakpoint for the lists (1200 px of the tab itself) and the wizard's 
   const { tab } = await mount();
   const address = row(tab, "cover.kitchen_two").querySelector(".cal-row-address");
   assert.equal(address.querySelector(".cal-row-address-ap").textContent, " · A: 9 · PL: 1", "A and PL apart, hidden below 1200 px");
+});
+
+test("the sequence's status and Start stay in view while the list scrolls; on cards the place sits at the row's edge (M5-2)", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.wiz\.cal-batch-wiz \{ overflow: clip; \}/, "not a scroll box of its own, or sticky would not stick");
+  assert.match(css, /@container caltab \(min-width: 768px\) \{\s*\.cal-batch-sticky \{ position: sticky; top: 76px; \}/);
+  assert.match(css, /\.cal-batch-wiz \.cal-batch-order \{ position: absolute; inset-inline-end: 12px;/);
+  const { tab } = await openBatch();
+  assert.ok(tab.querySelector(".cal-batch .wiz-actions > .cal-batch-sticky > .cal-batch-summary"));
 });

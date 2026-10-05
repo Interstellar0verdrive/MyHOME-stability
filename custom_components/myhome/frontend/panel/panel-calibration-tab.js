@@ -967,7 +967,7 @@ export class CalibrationTab {
       <div class="wiz-frame">
         <header class="wiz-head">
           <button type="button" class="icon-button wiz-back" data-action="cal-tab-batch-back" aria-label="${esc(t("wiz_T403"))}" title="${esc(t("wiz_T403"))}"><ha-icon icon="mdi:arrow-left" aria-hidden="true"></ha-icon></button>
-          <div class="wiz-head-text"><h3 class="wiz-cover">${esc(t("wiz_T364"))}</h3><p class="muted wiz-head-sub">${esc(fill(t("wiz_T389"), { count: targets.length, max }))}</p></div>
+          <div class="wiz-head-text"><h3 class="wiz-cover">${esc(t("wiz_T364"))}</h3><p class="muted wiz-head-sub">${esc(fill(t("wiz_T488"), { max }))}</p></div>
           <button type="button" class="wiz-discard" data-action="cal-tab-batch-back">${esc(t("wiz_T366"))}</button>
           <button type="button" class="icon-button wiz-x" data-action="cal-tab-batch-back" aria-label="${esc(t("wiz_T366"))}" title="${esc(t("wiz_T366"))}"><ha-icon icon="mdi:close" aria-hidden="true"></ha-icon></button>
         </header>
@@ -993,10 +993,10 @@ export class CalibrationTab {
               <div class="cal-batch-rows" role="group" aria-label="${esc(t("wiz_T364"))}">${rows}</div></div>
             <p class="error cal-batch-limit" role="alert">${count > max ? esc(`${t("calBatchLimit")}: ${max}`) : ""}</p>` : ""}
           </div>
-          <div class="wiz-actions cal-batch-actions">
+          <div class="wiz-actions cal-batch-actions"><div class="cal-batch-sticky">
             <p class="cal-batch-summary" role="status">${esc(summary)}</p>
             <button type="button" class="wiz-action primary" data-action="cal-tab-batch-start" ${count === 0 || count > max || batch.loading ? "disabled" : ""}>${esc(t("wiz_T365"))}</button>
-          </div>
+          </div></div>
         </div>
         <div class="wiz-sheet" role="dialog" aria-modal="true" aria-label="${esc(t("wiz_T274"))}" ${this._batchStepsOpen ? "" : "hidden"}><div class="wiz-sheet-card">
           <button type="button" class="icon-button wiz-sheet-close" data-action="cal-tab-batch-steps-close" aria-label="${esc(t("close"))}"><ha-icon icon="mdi:close" aria-hidden="true"></ha-icon></button>
