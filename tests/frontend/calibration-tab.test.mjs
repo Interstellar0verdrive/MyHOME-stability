@@ -871,6 +871,26 @@ test("a cover's details open in place outside the phone layout, a landscape phon
   assert.match(css, /\.cal-details-grid \{ display: grid; grid-template-columns: repeat\(auto-fit, minmax\(min\(240px, 100%\), 1fr\)\);/, "the card's blocks side by side");
 });
 
+test("the tab's dialogs are centred from 720 × 500 px of window and sheets below, a landscape phone included (responsive map, D14)", async () => {
+  const original = globalThis.matchMedia;
+  try {
+    for (const [width, height, sheet] of [[1100, 900, false], [900, 700, false], [720, 500, false], [844, 390, true], [390, 844, true]]) {
+      globalThis.matchMedia = viewport(width, height);
+      const { tab, panel } = await mount();
+      row(tab, "cover.living_one").querySelector('[data-action="cal-tab-menu"]').click(); await tick();
+      row(tab, "cover.living_one").querySelector('.cal-menu [data-action="cal-tab-assign"]').click(); await tick();
+      assert.ok(panel.shadowRoot.querySelector("dialog.cal-dialog")?.open);
+      assert.equal(document.documentElement.style.overflow === "hidden", sheet, `${width}×${height}: ${sheet ? "a sheet holds the page" : "centred"}`);
+      panel.shadowRoot.querySelector("dialog.cal-dialog .cal-dialog-cancel, dialog.cal-dialog .cal-dialog-close").click(); await tick();
+      document.documentElement.style.overflow = "";
+    }
+  } finally { globalThis.matchMedia = original; }
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /@media \(max-width: 719px\), \(max-height: 499px\) \{\s*\/\*[^*]*\*\/\s*dialog\.cal-dialog \{ width: 100%;/, "one rule for the sheets");
+  assert.match(css, /@media \(max-height: 499px\) and \(orientation: landscape\) \{\s*dialog\.cal-dialog \{ max-height: calc\(100vh - 16px\); max-height: calc\(100dvh - 16px\); \}/);
+  assert.doesNotMatch(css.slice(css.indexOf("/* ---------- WHO 2 · Calibration tab ---------- */")), /1023px|1024px/, "no window rule left at 1024 px");
+});
+
 test("on phones an open sheet holds the page under it and lets it go when it closes", async () => {
   const original = globalThis.matchMedia;
   globalThis.matchMedia = (query) => ({ matches: query.includes("max-width") || query.includes("reduced-motion") });
@@ -1004,8 +1024,8 @@ test("one breakpoint for the list (880 px of the tab itself) and the wizard's th
   const widths = [...calibration.matchAll(/@(media|container caltab|container wizbar) ([^{]+)\{/g)].flatMap(([, kind, query]) =>
     [...query.matchAll(/(min|max)-width: (\d+)px/g)].map(([, edge, px]) => `${kind === "media" ? "window" : kind.endsWith("wizbar") ? "bar" : "tab"} ${edge}-${px}`));
   assert.deepEqual([...new Set(widths)].sort(), ["bar min-560", "tab max-1099", "tab max-379", "tab max-599", "tab max-699", "tab max-879", "tab max-999", "tab min-1000", "tab min-700", "tab min-880",
-    "window max-1023", "window max-719", "window min-1024", "window min-720"],
-    "the tab at 880 (list), 1100 (details' blocks), 600 (header buttons), 380 (drop-downs), 700 and 1000 (wizard); the actions bar at 560; the window at 720 (phone) and 1024 (dialogs)");
+    "window max-719", "window min-720"],
+    "the tab at 880 (list), 1100 (details' blocks), 600 (header buttons), 380 (drop-downs), 700 and 1000 (wizard); the actions bar at 560; the window at 720 (phone, dialogs; with 500 px of height)");
   assert.doesNotMatch(calibration, /container: wizmain/, "the wizard's lists are cards at every width");
   const { tab } = await mount();
   const address = row(tab, "cover.kitchen_two").querySelector(".cal-row-address");

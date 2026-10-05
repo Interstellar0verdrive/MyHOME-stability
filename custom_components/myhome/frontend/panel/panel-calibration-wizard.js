@@ -4,9 +4,9 @@
  * `CalibrationGateway` (live session or local preview); it never builds a WebSocket message itself.
  */
 const asset = (name) => { const url = new URL(name, import.meta.url); url.search = new URL(import.meta.url).search; return url.href; };
-const [{ escapeHtml: esc }, text, screens, gateways, illustration, { morph }] = await Promise.all([
+const [{ escapeHtml: esc }, text, screens, gateways, illustration, { morph }, { layout }] = await Promise.all([
   import(asset("panel-dom.js")), import(asset("panel-calibration-text.js")), import(asset("panel-calibration-screens.js")),
-  import(asset("panel-calibration-gateway.js")), import(asset("panel-calibration-illustration.js")), import(asset("panel-calibration-morph.js")),
+  import(asset("panel-calibration-gateway.js")), import(asset("panel-calibration-illustration.js")), import(asset("panel-calibration-morph.js")), import(asset("panel-calibration-layout.js")),
 ]);
 const { rich, inline, names } = text;
 const { buildScreen, slug } = screens;
@@ -300,10 +300,9 @@ export class CalibrationWizard {
    * A sheet from the bottom slides down before it hides (it slides up when shown, by CSS). Without motion (reduced
    * motion, or no media queries) it hides at once.
    */
-  /** A confirmation hides at once on the wide layout; on the phone, where it is a sheet, it slides down first. */
+  /** A confirmation hides at once while centred; as a sheet (window under 720 × 500 px) it slides down first. */
   _hideDialog(dialog, done) {
-    const phone = typeof matchMedia === "function" && matchMedia("(max-width: 719px)").matches;
-    if (phone) { this._slideAway(dialog, done); return; }
+    if (layout.sheets()) { this._slideAway(dialog, done); return; }
     dialog.hidden = true;
     done?.();
   }

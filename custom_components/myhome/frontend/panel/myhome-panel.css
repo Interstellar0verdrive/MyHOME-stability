@@ -863,7 +863,9 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-tab-back { justify-self: start; }
 .cal-dialog-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; padding-block: 18px 4px; }
 .cal-dialog-body > p { margin: 0; }
-@media (max-width: 1023px) {
+/* Responsive map, one rule for every dialog of the tab and the wizard (profile, exit, Steps, Calibration in progress):
+   centred while the window is at least 720 × 500 px, a sheet from the bottom otherwise (D14). */
+@media (max-width: 719px), (max-height: 499px) {
   /* The tab's own dialogs (Assign/Change profile, sessions) as sheets from the bottom (T-09 M); the maintainer's dialogs
      are not touched. */
   dialog.cal-dialog { width: 100%; max-width: none; max-height: 90vh; margin: auto 0 0; border-radius: 18px 18px 0 0;
@@ -884,7 +886,7 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   dialog.cal-dialog[open] { animation: wiz-sheet-in 220ms cubic-bezier(.2, 0, 0, 1); }
   dialog.cal-dialog.is-leaving { animation: wiz-sheet-out 220ms cubic-bezier(.3, 0, 1, 1) forwards; }
 }
-@media (max-width: 1023px) and (prefers-reduced-motion: reduce) {
+@media (max-width: 719px) and (prefers-reduced-motion: reduce), (max-height: 499px) and (prefers-reduced-motion: reduce) {
   dialog.cal-dialog, .wiz-dialog, .wiz-dialog .wiz-dialog-card { animation: none !important; }
 }
 /* Sequence selection (T-06w, M4-5): a view with the wizard's chrome (the .wiz classes); its content keeps the list's
@@ -943,8 +945,8 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .wiz-main .cal-row-address-ap { display: none; }
 .cal-batch-limit:empty { display: none; }
 .cal-batch .cal-tab-intro { flex: none; }
-@media (max-width: 1023px) {
-  /* GM2: the reading field takes the content's width (more specific than the base rule, which comes later). */
+@media (max-width: 719px), (max-height: 499px) and (orientation: landscape) {
+  /* GM2: on the phone the reading field takes the content's width (more specific than the base rule, which comes later). */
   .wiz-main .wiz-field { max-width: none; }
 }
 @container caltab (min-width: 880px) {
@@ -1168,8 +1170,9 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 /* S-01…S-05: the motor's state as plain lines under the text. */
 .wiz-status p { margin: 0; line-height: 1.55; }
 .wiz-sheet, .wiz-dialog { position: fixed; inset: 0; z-index: 10; display: flex; background: rgb(0 0 0 / 40%); }
-.wiz-sheet { align-items: end; }
-.wiz-sheet-card { position: relative; width: 100%; max-height: 80vh; overflow: auto; padding: 18px 20px 24px; border-radius: 18px 18px 0 0; background: var(--panel-surface); }
+.wiz-sheet { align-items: center; justify-content: center; padding: 20px; }
+.wiz-sheet-card { position: relative; box-sizing: border-box; width: min(100%, 460px); max-height: calc(100dvh - 40px); overflow: auto; padding: 18px 20px 24px;
+  border-radius: 18px; background: var(--panel-surface); box-shadow: var(--panel-shadow-hover); }
 .wiz-sheet-close { position: absolute; top: 10px; inset-inline-end: 10px; }
 /* Sheets slide up from the bottom when shown and down when they leave (`is-leaving`, removed by the wizard after 220 ms). */
 @keyframes wiz-sheet-in { from { transform: translateY(100%); } to { transform: none; } }
@@ -1183,9 +1186,8 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 @keyframes wiz-scrim-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes wiz-scrim-out { from { opacity: 1; } to { opacity: 0; } }
 .wiz-sheet:not([hidden]) { animation: wiz-scrim-in 220ms ease-out; }
-.wiz-sheet:not([hidden]) .wiz-sheet-card { animation: wiz-sheet-in 220ms cubic-bezier(.2, 0, 0, 1); }
+.wiz-sheet:not([hidden]) .wiz-sheet-card { animation: dialog-in 200ms cubic-bezier(.2, .7, .2, 1); }
 .wiz-sheet.is-leaving { animation: wiz-scrim-out 220ms ease-in forwards; }
-.wiz-sheet.is-leaving .wiz-sheet-card { animation: wiz-sheet-out 220ms cubic-bezier(.3, 0, 1, 1) forwards; }
 @media (prefers-reduced-motion: reduce) { .wiz-sheet, .wiz-sheet .wiz-sheet-card { animation: none !important; } }
 .wiz-dialog { align-items: center; justify-content: center; padding: 20px; }
 .wiz-dialog-card { width: min(100%, 460px); padding: 22px; border-radius: 18px; background: var(--panel-surface); box-shadow: var(--panel-shadow-hover); }
@@ -1193,7 +1195,7 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-dialog-card .actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: end; margin-top: 16px; }
 /* "Calibration in progress": wide enough on desktop for its three buttons on one row (Figma S-08b, 592 px). */
 .wiz-nav-dialog .wiz-dialog-card { width: min(100%, 592px); box-sizing: border-box; }
-@media (min-width: 1024px) { .wiz-nav-dialog .wiz-dialog-card .actions { flex-wrap: nowrap; } }
+@media (min-width: 720px) and (min-height: 500px) { .wiz-nav-dialog .wiz-dialog-card .actions { flex-wrap: nowrap; } }
 /* S-08: "Exit without saving" as red text on the left, the primary on the right. */
 .wiz-leave { margin-inline-end: auto; color: var(--panel-error); border: 0; background: transparent; box-shadow: none; }
 .wiz-leave:hover { background: color-mix(in srgb, var(--panel-error) 8%, transparent); }
@@ -1247,7 +1249,6 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
   .wiz-frame { display: flex; flex-direction: column; min-height: 0; height: 100%; }
   .wiz-head { padding: calc(12px + var(--cal-safe-top)) calc(16px + var(--cal-safe-right)) 12px calc(16px + var(--cal-safe-left)); }
   .wiz-compact { padding-inline: calc(16px + var(--cal-safe-left)) calc(16px + var(--cal-safe-right)); }
-  .wiz-sheet .wiz-sheet-card { padding: 18px calc(20px + var(--cal-safe-right)) calc(24px + var(--cal-safe-bottom)) calc(20px + var(--cal-safe-left)); }
   .wiz-discard { display: none; }
   .wiz-x { display: inline-flex; }
   /* M2-1: every ✕ of a title bar or sheet is a 44 px touch target with a 24 px icon. */
@@ -1263,8 +1264,23 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
      text under it slid beneath the drawing. */
   .wiz-main > * { flex-shrink: 0; min-width: 0; }
   .wiz-actions { padding: 12px calc(16px + var(--cal-safe-right)) calc(12px + var(--cal-safe-bottom)) calc(16px + var(--cal-safe-left)); border-top: 1px solid var(--panel-border); background: var(--panel-surface); }
-  /* Confirmations (S-08, Calibration in progress) as sheets from the bottom (S-08 M): full width, rounded top, buttons
-     stacked full width with the primary first, over a darker blurred scrim; they slide up and down as the Steps sheet. */
+  /* A fade above the bar while the content goes on below it (`has-more`, set from the content's scroll). */
+  .wiz-actions { position: relative; }
+  .wiz-actions::before { content: ""; position: absolute; inset-inline: 0; bottom: calc(100% + 1px); height: 28px; pointer-events: none;
+    background: linear-gradient(to top, var(--panel-surface), transparent); opacity: 0; transition: opacity var(--panel-ease); }
+  .wiz-actions.has-more::before { opacity: 1; }
+  /* The actions stack, one per line, as in every phone mockup: ① and ② are never side by side. */
+  /* Stop (and the red links) as plain red text: no tint left by a tap (hover tints only with a real pointer), the bar's height. */
+  .wiz-action.stop, .wiz-action.link { min-height: 48px; background: transparent; }
+}
+/* The wizard's sheets: the Steps sheet and the confirmations (S-08, Calibration in progress) from the bottom on a phone or a
+   short window (S-08 M); centred cards otherwise. */
+@media (max-width: 719px), (max-height: 499px) {
+  .wiz-sheet { align-items: end; padding: 0; }
+  .wiz-sheet .wiz-sheet-card { width: 100%; border-radius: 18px 18px 0 0; box-shadow: none; }
+  .wiz-sheet .wiz-sheet-card { padding: 18px calc(20px + var(--cal-safe-right)) calc(24px + var(--cal-safe-bottom)) calc(20px + var(--cal-safe-left)); }
+  /* Full width, rounded top, buttons stacked full width with the primary first, over a darker blurred scrim; they slide
+     up and down. */
   /* M2-6: the wizard's sheets keep the scroll to themselves. */
   .wiz-dialog, .wiz-sheet { overscroll-behavior: contain; }
   .wiz-dialog .wiz-dialog-card, .wiz-sheet .wiz-sheet-card { max-height: 90vh; max-height: 90dvh; overflow-y: auto; overscroll-behavior: contain; }
@@ -1279,13 +1295,15 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
   .wiz-dialog:not([hidden]) .wiz-dialog-card { animation: wiz-sheet-in 220ms cubic-bezier(.2, 0, 0, 1); }
   .wiz-dialog.is-leaving { animation: wiz-scrim-out 220ms ease-in forwards; }
   .wiz-dialog.is-leaving .wiz-dialog-card { animation: wiz-sheet-out 220ms cubic-bezier(.3, 0, 1, 1) forwards; }
-  /* A fade above the bar while the content goes on below it (`has-more`, set from the content's scroll). */
-  .wiz-actions { position: relative; }
-  .wiz-actions::before { content: ""; position: absolute; inset-inline: 0; bottom: calc(100% + 1px); height: 28px; pointer-events: none;
-    background: linear-gradient(to top, var(--panel-surface), transparent); opacity: 0; transition: opacity var(--panel-ease); }
-  .wiz-actions.has-more::before { opacity: 1; }
-  /* The actions stack, one per line, as in every phone mockup: ① and ② are never side by side. */
-  /* Stop (and the red links) as plain red text: no tint left by a tap (hover tints only with a real pointer), the bar's height. */
-  .wiz-action.stop, .wiz-action.link { min-height: 48px; background: transparent; }
+  .wiz-sheet:not([hidden]) .wiz-sheet-card { animation: wiz-sheet-in 220ms cubic-bezier(.2, 0, 0, 1); }
+  .wiz-sheet.is-leaving .wiz-sheet-card { animation: wiz-sheet-out 220ms cubic-bezier(.3, 0, 1, 1) forwards; }
+}
+/* A landscape phone: the sheets take the whole height but 8 px above, their body scrolls and the buttons sit side by
+   side, so the content keeps its room (D14). */
+@media (max-height: 499px) and (orientation: landscape) {
+  dialog.cal-dialog { max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); }
+  .wiz-dialog .wiz-dialog-card, .wiz-sheet .wiz-sheet-card { max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); }
+  dialog.cal-dialog .dialog-foot, .wiz-dialog .actions { flex-direction: row; justify-content: end; }
+  dialog.cal-dialog .dialog-foot button, .wiz-dialog .actions button { flex: 1 1 0; width: auto; min-width: 0; }
 }
 .wiz-action-note { margin: -4px 8px 4px; font-size: 12px; line-height: 1.4; text-align: center; }

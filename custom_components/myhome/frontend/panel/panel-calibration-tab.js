@@ -18,7 +18,7 @@ const slides = () => typeof matchMedia === "function" && matchMedia("(max-width:
 
 /** WHO 2 "Calibration" view: what each timed cover uses, its measurement state and the ways to measure it. */
 const asset = (name) => { const url = new URL(name, import.meta.url); url.search = new URL(import.meta.url).search; return url.href; };
-const [{ escapeHtml: esc }, model, text, { CoverCalibration }, { CalibrationWizard }, { ProfileCatalogueEditor }, { morph }, { layout }] = await Promise.all([
+const [{ escapeHtml: esc }, model, text, { CoverCalibration }, { CalibrationWizard }, { ProfileCatalogueEditor }, { morph }, { layout, SHEETS }] = await Promise.all([
   import(asset("panel-dom.js")), import(asset("panel-model.js")), import(asset("panel-calibration-text.js")),
   import(asset("panel-cover-calibration.js")), import(asset("panel-calibration-wizard.js")), import(asset("panel-profile-catalogue-editor.js")),
   import(asset("panel-calibration-morph.js")), import(asset("panel-calibration-layout.js")),
@@ -791,7 +791,7 @@ export class CalibrationTab {
       if (typeof ResizeObserver === "function") { this._sheetObserver = new ResizeObserver(more); this._sheetObserver.observe(body); }
       more();
     }
-    if (!(typeof matchMedia === "function" && matchMedia("(max-width: 1023px)").matches)) return;
+    if (!layout.sheets()) return;
     this._held = holdScroll(this._context.host);
   }
 
@@ -818,11 +818,9 @@ export class CalibrationTab {
   }
 
   _dialogDone() {
-    // On the phone the dialog is a sheet: it slides down before it closes (at once with reduced motion or wide).
+    // As a sheet (window under 720 × 500 px) the dialog slides down before it closes (at once with reduced motion or centred).
     const dialog = this._dialog;
-    const phone = typeof matchMedia === "function" && matchMedia("(max-width: 1023px)").matches
-      && !matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (dialog && phone && !dialog.classList.contains("is-leaving")) {
+    if (dialog && layout.slides(SHEETS) && !dialog.classList.contains("is-leaving")) {
       dialog.classList.add("is-leaving");
       setTimeout(() => { if (this._dialog === dialog) { this._closeDialog(); this.refresh(); } }, 220);
       return;

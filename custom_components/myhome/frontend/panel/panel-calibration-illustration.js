@@ -24,7 +24,7 @@ export const ILLUSTRATIONS = {
   "lift-sequence-mobile": { width: 358, height: 228 },
 };
 
-/** Drawings with a version of their own for phones (under 1024 px, A-07 M): only the lift-off sequence. */
+/** Drawings with a version of their own for phones (under 720 px, A-07 M): only the lift-off sequence. */
 export const PHONE_VERSION = { "lift-sequence": "lift-sequence-mobile" };
 
 export { SVG };
