@@ -14,7 +14,7 @@
  * `supports(target)` and `close()`. `onChange(kind)` is called with "view", "tick" or "error".
  */
 const asset = (name) => { const url = new URL(name, import.meta.url); url.search = new URL(import.meta.url).search; return url.href; };
-const { CoverCalibration } = await import(asset("panel-cover-calibration.js"));
+const { CoverCalibration, calibrationClient } = await import(asset("panel-cover-calibration.js"));
 
 /** The existing engine, with its DOM replaced by notifications to the wizard. */
 class WizardSession extends CoverCalibration {
@@ -28,7 +28,12 @@ class WizardSession extends CoverCalibration {
   _renderElapsed() { this._listener("tick"); }
   // The reading that was refused travels with the error, to name it beside the accepted range.
   _error(error, extra = {}) {
-    if (this._beats.has(extra)) { this.connection = "interrupted"; this._listener("view"); return; }
+    if (this._beats.has(extra)) {
+      // M3-1: a heartbeat refused as `calibration_expired` may only mean that its token died with the socket (Safari
+      // suspends the page, Home Assistant reconnects on a new one). It is not an end until Home Assistant says so.
+      if (this._expired) { this._expired = false; this.onBeatExpired?.(); }
+      this.connection = "interrupted"; this._listener("view"); return;
+    }
     this.error = { ...(error || {}), code: error?.code, reading: extra.reading_cm ?? null }; this._listener("error");
   }
   _accept(state) {
@@ -56,7 +61,36 @@ export class LiveCalibrationGateway {
     this.preview = false;
     this._onChange = onChange;
     this._engine = new WizardSession((kind) => this._onChange?.(kind));
+    this._engine.onBeatExpired = () => this._verify();
   }
+
+  /**
+   * Is the session still there? A `resume` without claim reads it and sends nothing to the bus. Refused as expired: the
+   * session really ended and the wizard says so; read: the same session is resumed under a new subscription; any other
+   * failure (no connection yet): it stays "interrupted" until the next heartbeat or the page's return.
+   */
+  async _verify() {
+    const engine = this._engine, state = engine._state;
+    if (!state || this._verifying || !this._base) return;
+    this._verifying = true;
+    let alive = null;
+    try {
+      const unsubscribe = await this._base.hass.connection.subscribeMessage(() => {}, { type: "myhome/cover_calibration/resume",
+        entry_id: state.entry_id, session_id: state.session_id, client_id: calibrationClient() });
+      Promise.resolve(unsubscribe()).catch(() => {});
+      alive = true;
+    } catch (error) {
+      alive = error?.code === "calibration_expired" ? false : null;
+    } finally {
+      this._verifying = false;
+    }
+    if (engine._state !== state) return;
+    if (alive === false) { engine._expired = true; this._onChange?.("view"); }
+    else if (alive) this.reconnect();
+  }
+
+  /** Ask Home Assistant at once (the page came back): a dead subscription shows up now, not at the next heartbeat. */
+  ping() { if (this._engine._state && !this._engine._busy) this._engine._perform("heartbeat"); }
 
   get view() { return this._engine._state || null; }
   get status() {

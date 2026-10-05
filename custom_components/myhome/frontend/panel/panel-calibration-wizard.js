@@ -112,8 +112,9 @@ export class CalibrationWizard {
     // Back on the page (Safari suspends a tab in the background): reconnect at once, without asking.
     this._onVisible = () => {
       const gateway = this._gateway, status = gateway?.status || {};
-      if (document.hidden || !gateway || gateway.preview || !status.lost || status.expired || !gateway.view?.recoverable) return;
-      gateway.reconnect();
+      if (document.hidden || !gateway || gateway.preview || status.expired || !gateway.view?.recoverable) return;
+      // Lost: resume the same session. Otherwise ask at once: a subscription that died in the background shows now.
+      if (status.lost) gateway.reconnect(); else gateway.ping?.();
     };
     document.addEventListener("visibilitychange", this._onVisible);
     this._signature = null;

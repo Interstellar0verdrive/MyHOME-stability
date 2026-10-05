@@ -1988,3 +1988,47 @@ test("while the backend waits for the actuator's stop the screen says «Stopping
     view: { mode: "geometry", phase: "interrupted", reason: "not_stopped", step: "lift", values: {}, samples: {}, readings: {}, owner: true, sequence: 9 } });
   assert.deepEqual([screen.code, screen.body], ["S-01", "La tapparella non ha confermato l'arresto: ricomincia la misurazione."]);
 });
+
+test("a heartbeat refused as expired after a reconnection resumes the same session; only a session Home Assistant ended shows S-06 (M3-1)", async () => {
+  const { backend, panel, wiz, code, press, startFor } = await mount();
+  await startFor("cover.living_one");
+  await press("begin"); await move(backend); await settle();
+  const before = code();
+  const gateway = panel._calibrationTab._wizard._gateway;
+  const callWS = backend.hass.callWS;
+  // The page came back on a new socket: the old token is refused as "expired", but the session is still there.
+  backend.hass.callWS = async (message) => {
+    if (message.action === "heartbeat") throw Object.assign(new Error("not owned by this connection"), { code: "calibration_expired" });
+    return callWS(message);
+  };
+  const resumes = () => backend.subscriptions.filter((message) => message.type === "myhome/cover_calibration/resume").length;
+  const count = resumes();
+  await gateway._engine._perform("heartbeat"); await settle();
+  backend.hass.callWS = callWS;
+  assert.equal(gateway.status.expired, false);
+  assert.notEqual(code(), "S-06", "no terminal screen while Home Assistant still has the session");
+  assert.equal(resumes(), count + 2, "one read to check, one to resume the same session");
+  assert.equal(backend.session.session_id, gateway.view.session_id);
+  await settle();
+  assert.equal(code(), before);
+  // Home Assistant ended it for real: the check is refused, and only then the wizard says so.
+  backend.hass.callWS = async (message) => {
+    if (message.action === "heartbeat") throw Object.assign(new Error("expired"), { code: "calibration_expired" });
+    return callWS(message);
+  };
+  backend.session.session_id = "gone";
+  await gateway._engine._perform("heartbeat"); await settle();
+  assert.equal(gateway.status.expired, true);
+  assert.equal(code(), "S-06");
+  backend.hass.callWS = callWS;
+});
+
+test("coming back to the page asks Home Assistant at once (M3-1)", async () => {
+  const { backend, startFor, press } = await mount();
+  await startFor("cover.living_one");
+  await press("begin"); await move(backend); await settle();
+  const beats = () => backend.calls.filter((message) => message.action === "heartbeat").length;
+  const count = beats();
+  document.dispatchEvent(new window.Event("visibilitychange")); await settle();
+  assert.equal(beats(), count + 1);
+});
