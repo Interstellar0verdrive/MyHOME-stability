@@ -2168,3 +2168,16 @@ test("a value the field refuses says why under it, never a silent red (G3-4)", a
   input.value = "2"; input.dispatchEvent(new Event("input", { bubbles: true })); await tick();
   assert.equal(error().hidden, true, "typing again clears it");
 });
+
+test("A-08b advises repeating: «Repeat the measurement» is the primary, «Ignore and continue» the outlined secondary; its warning is amber on dark themes (G3-5)", async () => {
+  const { backend, code, press, type, startFor, wiz } = await mount();
+  await startFor("cover.living_one");
+  await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  await press("ack:lift"); await press("next"); await move(backend); await press("lift"); backend.stopped(); await tick();
+  await type("12");
+  assert.equal(code(), "A-08");
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => [item.dataset.wiz, item.textContent, item.className.replace("wiz-action ", "")]),
+    [["repeat", "Repeat the measurement", "primary"], ["next", "Ignore and continue", "secondary"]]);
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\[data-theme="dark"\] \.wiz-notice\[data-tone="warning"\][^{]*\{ color: color-mix\(in srgb, var\(--panel-warning\) 70%/);
+});

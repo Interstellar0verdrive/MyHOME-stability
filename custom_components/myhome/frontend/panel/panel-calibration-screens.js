@@ -342,7 +342,8 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     if (phase === "briefing" && view.gap_warning) return Object.assign(screen, { code: p("08"), title: t("wiz_T047"), body: t("wiz_T048"),
       results: [liftTile()].filter(Boolean),
       notices: [{ tone: "warning", result: true, text: fill(t("calGapWarning"), view) }],
-      actions: [{ id: "next", label: t("wiz_T060"), kind: "primary" }, { id: "repeat", label: t("wiz_T061"), kind: "secondary" }] });
+      // G3-5: repeating is the advised way; going on with a wide gap is the outlined secondary.
+      actions: [{ id: "repeat", label: t("wiz_T061"), kind: "primary" }, { id: "next", label: t("wiz_T473"), kind: "secondary" }] });
     // The same Stop rule as A-05 (only while the motor runs); no T033 here, a stop would discard the lift-off.
     if (phase === "closing" && !positioningRun(closingTime)) {
       Object.assign(screen, { code: p("10"), title: t("wiz_T053"), body: t("wiz_T054"),
