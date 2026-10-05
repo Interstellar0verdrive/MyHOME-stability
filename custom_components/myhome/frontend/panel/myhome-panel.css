@@ -807,6 +807,10 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
     border-radius: 11px; }
   .cal-row-actions { display: contents; }
   .cal-row-action { grid-area: action; justify-self: end; }
+  /* A long status («Calibrated (times and roll)») leaves the profile chip the room that remains, ellipsised. */
+  .cal-row-profile { min-width: 0; }
+  .cal-row-profile .cal-profile-chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: middle; }
+  .cal-row-profile .cal-profile-chip ha-icon { margin-inline-end: 4px; }
   .cal-menu-wrap { grid-area: menu; align-self: start; justify-self: end; }
   .cal-row-last-inline { display: block; color: var(--panel-text-2); }
   /* M2-3: a card opens a page, it does not unfold: no chevron. */

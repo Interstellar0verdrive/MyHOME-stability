@@ -106,16 +106,16 @@ test("the Calibration sub-tab sits next to Devices and Profiles and lists timed 
   assert.equal(row(tab, "cover.sensor"), null, "covers with a position sensor need no calibration");
   const badge = (id) => row(tab, id).querySelector(".cal-badge");
   assert.deepEqual(["cover.bedroom", "cover.living_one", "cover.living_two"].map((id) => [badge(id).dataset.status, badge(id).textContent]),
-    [["to_measure", "To measure"], ["times", "Times measured"], ["rolls", "Times and roll"]]);
+    [["to_measure", "To calibrate"], ["times", "Calibrated (times)"], ["rolls", "Calibrated (times and roll)"]]);
   assert.equal(row(tab, "cover.living_two").querySelector(".cal-profile-chip").textContent, "tall_two_leaf");
   assert.equal(row(tab, "cover.living_one").querySelector(".cal-row-profile").textContent.trim(), "—");
   assert.deepEqual([...tab.querySelectorAll(".cal-list-head > span")].map((cell) => cell.querySelector("button")?.firstChild.textContent ?? cell.textContent),
     ["", "Cover", "Status", "Profile", ""], "no column for the last measurement: its date is in the details");
   assert.equal(tab.querySelector(".cal-row-last"), null);
-  assert.equal(row(tab, "cover.living_one").querySelector(".cal-row-last-inline").textContent, "Measured on Oct 1, 2026", "phones show it on its own line under the name");
-  assert.equal(row(tab, "cover.bedroom").querySelector(".cal-row-last-inline").textContent, "Never measured");
+  assert.equal(row(tab, "cover.living_one").querySelector(".cal-row-last-inline").textContent, "Calibrated on Oct 1, 2026", "phones show it on its own line under the name");
+  assert.equal(row(tab, "cover.bedroom").querySelector(".cal-row-last-inline").textContent, "Never calibrated");
   assert.equal(row(tab, "cover.bedroom").querySelector(".cal-row-name > .muted .cal-row-last-inline"), null, "not inside the address line");
-  assert.equal(tab.querySelector(".cal-tab-summary").textContent, "4 covers · 3 calibrated · 1 to measure");
+  assert.equal(tab.querySelector(".cal-tab-summary").textContent, "4 covers · 3 calibrated · 1 to calibrate");
   assert.equal(commands(calls).length, 0, "rendering the list never starts a measurement");
   assert.deepEqual(calls.filter((message) => message.type.startsWith("myhome/cover_profiles/")).map((message) => [message.type, message.entity_id]),
     [["myhome/cover_profiles/overview", undefined], ["myhome/cover_profiles/read", "cover.living_one"]]);
@@ -160,11 +160,11 @@ test("the chevron expands a row in place with the values in use, the last measur
     return [...row(tab, entity).querySelectorAll(".cal-details-grid > section")]
       .map((section) => [...section.querySelectorAll(".cal-block-action button")].map((button) => [button.dataset.action, button.textContent.trim()]));
   };
-  assert.deepEqual(blockActions("cover.living_two"), [[["cal-tab-refine", "Fine-tune"]], [["cal-tab-measure-cover", "Remeasure"]], [["cal-tab-assign", "Change profile"]]],
+  assert.deepEqual(blockActions("cover.living_two"), [[["cal-tab-refine", "Fine-tune"]], [["cal-tab-measure-cover", "Recalibrate"]], [["cal-tab-assign", "Change profile"]]],
     "each block ends with its own action");
-  assert.deepEqual(blockActions("cover.living_one"), [[], [["cal-tab-measure-cover", "Remeasure"]], [["cal-tab-assign", "Assign profile"]]],
+  assert.deepEqual(blockActions("cover.living_one"), [[], [["cal-tab-measure-cover", "Recalibrate"]], [["cal-tab-assign", "Assign profile"]]],
     "no Fine-tune without measured rolls");
-  assert.deepEqual(blockActions("cover.bedroom"), [[], [["cal-tab-measure-cover", "Measure"]], [["cal-tab-assign", "Assign profile"]]], "a cover without a profile is assigned one");
+  assert.deepEqual(blockActions("cover.bedroom"), [[], [["cal-tab-measure-cover", "Calibrate"]], [["cal-tab-assign", "Assign profile"]]], "a cover without a profile is assigned one");
   const menuLabel = (id) => row(tab, id).querySelector('.cal-menu [data-action="cal-tab-assign"]').textContent.trim();
   assert.deepEqual([menuLabel("cover.living_two"), menuLabel("cover.bedroom")], ["Change profile", "Assign profile"], "the ⋮ menu says the same");
   assert.equal(tab.querySelector(".cal-details-actions"), null, "no shared row of buttons");
@@ -172,7 +172,7 @@ test("the chevron expands a row in place with the values in use, the last measur
     "Assign profile shows the link of the profile's covers, not a pencil");
   const measureIcon = (id) => row(tab, id).querySelector('.cal-block-action [data-action="cal-tab-measure-cover"] ha-icon').getAttribute("icon");
   assert.deepEqual([measureIcon("cover.bedroom"), measureIcon("cover.living_one")], ["mdi:ruler", "mdi:reload"], "Measure a ruler, Remeasure a reload");
-  assert.equal(tab.querySelector('[data-action="cal-tab-measure"] ha-icon').getAttribute("icon"), "mdi:ruler", "the tab's Measure a cover too");
+  assert.equal(tab.querySelector('[data-action="cal-tab-measure"] ha-icon').getAttribute("icon"), "mdi:ruler", "the tab's Calibrate a cover too");
   const refineIcons = [...tab.querySelectorAll('[data-action="cal-tab-refine"] ha-icon')];
   assert.ok(refineIcons.length && refineIcons.every((icon) => icon.getAttribute("icon") === "mdi:target"), "Fine-tune shows a target");
   row(tab, "cover.living_two").querySelector('[data-action="cal-tab-toggle"]').click();
@@ -328,7 +328,7 @@ test("Assign profile waits while a calibration is open on the gateway, and after
   open(busy.tab, "cover.bedroom"); await tick();
   let dialog = busy.root.querySelector("#dialog-host dialog.cal-dialog");
   const note = dialog.querySelector(".cal-assign-busy");
-  assert.equal(note.textContent, "A measurement is in progress: finish or cancel it before assigning a profile.");
+  assert.equal(note.textContent, "A calibration is in progress: finish or cancel it before assigning a profile.");
   assert.ok(note.classList.contains("cal-note") && !note.classList.contains("error"), "an information, not an error");
   const tall = dialog.querySelector('input[value="tall"]');
   tall.checked = true; tall.dispatchEvent(new Event("change", { bubbles: true }));
@@ -395,7 +395,7 @@ test("Assign profile offers No profile to unlink the followed profile, never on 
   assert.equal(none.closest(".wiz-radio"), dialog.querySelector(".wiz-radio"), "first in the list");
   assert.equal(none.closest(".wiz-radio").querySelector("ha-icon").getAttribute("icon"), "mdi:link-variant-off");
   assert.deepEqual([...none.closest(".wiz-radio").querySelectorAll("strong, small")].map((item) => item.textContent),
-    ["No profile", 'Unlinks "tall_two_leaf": the cover will use its own values, if it has any, otherwise it will go back to "to measure". The profile will stay available for the other covers.']);
+    ["No profile", 'Unlinks "tall_two_leaf": the cover will use its own values, if it has any, otherwise it will go back to "to calibrate". The profile will stay available for the other covers.']);
   const button = dialog.querySelector("[data-assign]");
   none.checked = true; none.dispatchEvent(new Event("change", { bubbles: true }));
   assert.equal(button.textContent, "Unlink profile");
@@ -429,7 +429,7 @@ test("a session in progress marks its cover, blocks new measurements and opens a
   resume.callback({ ...session, attachment: "reader", owner: false, read_only: true });
   const dialog = root.querySelector("#dialog-host dialog.cal-dialog");
   assert.equal(dialog.open, true);
-  assert.equal(dialog.querySelector("h2").textContent, "Measurement in sequence");
+  assert.equal(dialog.querySelector("h2").textContent, "Calibration in sequence");
   assert.equal(dialog.querySelector("#cal-paused").hidden, false);
   assert.ok(tab.querySelector(".cal-list"), "the list stays behind the dialog");
   assert.equal(commands(calls).length, 0);
@@ -461,7 +461,7 @@ test("several covers in sequence are chosen in a view of the tab, not a dialog, 
   const { root, tab } = await openBatch();
   assert.equal(root.querySelector("#dialog-host dialog"), null, "no dialog");
   assert.equal(tab.querySelector(".cal-list-rows"), null, "the selection replaces the list");
-  assert.equal(tab.querySelector(".cal-batch h3").textContent, "Misurazione in sequenza");
+  assert.equal(tab.querySelector(".cal-batch h3").textContent, "Calibrazione in sequenza");
   assert.equal(tab.querySelector(".cal-batch-back").textContent.trim(), "Torna all'elenco");
   assert.equal(tab.querySelector(".cal-batch-back").classList.contains("link"), false, "an outlined button, not a link");
   const note = tab.querySelector(".cal-batch-note");
@@ -469,14 +469,14 @@ test("several covers in sequence are chosen in a view of the tab, not a dialog, 
     ["La sequenza", "Servono attuatori"], "two paragraphs");
   assert.match(note.querySelectorAll("p")[1].textContent, /una tapparella alla volta\. Annulla o un errore di misura scarteranno l'intera sequenza non salvata\.$/);
   assert.deepEqual([...note.querySelectorAll("strong")].map((bold) => bold.textContent),
-    ["misurazione automatica", "Servono attuatori che segnalino l'arresto reale", "misurazione guidata"]);
+    ["calibrazione automatica", "Servono attuatori che segnalino l'arresto reale", "calibrazione guidata"]);
   assert.ok(note.classList.contains("is-warning"), "the warning variant of the note, as in T-06");
   assert.doesNotMatch(note.textContent, /\*\*/);
   assert.deepEqual([...tab.querySelectorAll(".cal-batch-row .cal-row-name strong")].map((item) => item.textContent),
     ["Bedroom", "Kitchen shutter 2", "Living room shutter 1", "Living room shutter 2"], "inventory names, sorted by name");
   assert.doesNotMatch(tab.textContent, /cover\.bedroom|cover_bedroom_raw|living_two_raw|gruppo/i);
   assert.match(tab.querySelector('.cal-batch-row[data-entity="cover.kitchen_two"]').textContent, /Kitchen · Indirizzo: 91 · A: 9 · PL: 1/);
-  assert.equal(tab.querySelector('.cal-batch-row[data-entity="cover.living_two"] .cal-badge').textContent, "Tempi e rullo");
+  assert.equal(tab.querySelector('.cal-batch-row[data-entity="cover.living_two"] .cal-badge').textContent, "Calibrata (tempi e rullo)");
   assert.equal(tab.querySelector('.cal-batch-row[data-entity="cover.living_two"] .cal-profile-chip').textContent, "tall_two_leaf");
   assert.equal(tab.querySelector('.cal-batch-row input[value="cover.living_one"]').disabled, true);
   assert.equal(tab.querySelector(".cal-batch-capacity").textContent, "4 tapparelle a tempo · massimo 20 per sequenza");
@@ -568,8 +568,8 @@ test("Italian texts of the tab carry no placeholder", async () => {
   const { tab } = await mount({ language: "it" });
   row(tab, "cover.living_two").querySelector('[data-action="cal-tab-toggle"]').click();
   assert.doesNotMatch(tab.textContent, /\{\w+\}|calTab|wiz_T/);
-  assert.match(tab.textContent, /Tempi e rullo/);
-  assert.match(tab.querySelector(".cal-tab-summary").textContent, /^4 tapparelle · 3 calibrate · 1 da misurare$/);
+  assert.match(tab.textContent, /Calibrata \(tempi e rullo\)/);
+  assert.match(tab.querySelector(".cal-tab-summary").textContent, /^4 tapparelle · 3 calibrate · 1 da calibrare$/);
 });
 
 test("a gateway whose session cannot be read but is reserved keeps new measurements off; a failed read tries the next cover", async () => {
@@ -604,7 +604,7 @@ test("the summary uses singular forms for one cover", async () => {
   const data = overview();
   data.covers = [data.covers[0], data.covers[4]];
   const { tab } = await mount({ data, language: "it" });
-  assert.equal(tab.querySelector(".cal-tab-summary").textContent, "1 tapparella · 1 calibrata · 0 da misurare");
+  assert.equal(tab.querySelector(".cal-tab-summary").textContent, "1 tapparella · 1 calibrata · 0 da calibrare");
 });
 
 test("a click anywhere on a row opens and closes its details, never from its buttons", async () => {
@@ -630,8 +630,8 @@ test("the row menu holds every secondary action, the same as the expanded detail
   const menuActions = (id) => [...row(tab, id).querySelectorAll(".cal-menu [role=menuitem]")].map((item) => item.dataset.action);
   assert.deepEqual(menuActions("cover.living_two"), ["cal-tab-refine", "cal-tab-measure-cover", "cal-tab-assign", "cal-tab-toggle"]);
   assert.deepEqual(menuActions("cover.living_one"), ["cal-tab-measure-cover", "cal-tab-assign", "cal-tab-toggle"]);
-  assert.match(row(tab, "cover.living_one").querySelector('.cal-menu [data-action="cal-tab-measure-cover"]').textContent, /Remeasure/);
-  assert.match(row(tab, "cover.bedroom").querySelector('.cal-menu [data-action="cal-tab-measure-cover"]').textContent, /Measure/);
+  assert.match(row(tab, "cover.living_one").querySelector('.cal-menu [data-action="cal-tab-measure-cover"]').textContent, /Recalibrate/);
+  assert.match(row(tab, "cover.bedroom").querySelector('.cal-menu [data-action="cal-tab-measure-cover"]').textContent, /Calibrate/);
 });
 
 
@@ -641,7 +641,7 @@ test("every explanatory note of the tab shares one style", async () => {
   const notes = [...tab.querySelectorAll(".cal-note")].map((note) => note.textContent);
   assert.equal(notes.length, 2);
   assert.match(notes[0], /adapted to the curtain travel/);
-  assert.match(notes[1], /If the profile is remeasured/);
+  assert.match(notes[1], /If the profile is recalibrated/);
   tab.querySelector('[data-action="cal-tab-filter"][data-id="to_measure"]').click();
   assert.ok(tab.querySelector(".cal-tab-help.cal-note"));
 });
@@ -762,12 +762,12 @@ test("on phones the list has one row of two drop-downs: the filter opens a sheet
   assert.equal(sheet.querySelector("h2").textContent, "Filtra le tapparelle");
   assert.equal(sheet.querySelector(".cal-sheet-close").getAttribute("aria-label"), "Chiudi");
   assert.deepEqual([...sheet.querySelectorAll(".cal-filter-option")].map((option) => [option.querySelector("input").checked, option.textContent]),
-    [[true, "Tutte (4)"], [false, "Da misurare (1)"], [false, "Calibrate (3)"], [false, "Con profilo (2)"]]);
+    [[true, "Tutte (4)"], [false, "Da calibrare (1)"], [false, "Calibrate (3)"], [false, "Con profilo (2)"]]);
   const radio = sheet.querySelector('input[value="to_measure"]');
   radio.checked = true; radio.dispatchEvent(new Event("change", { bubbles: true })); await tick();
   assert.equal(panel.shadowRoot.querySelector("dialog.cal-filter-sheet"), null, "a choice closes the sheet");
   assert.deepEqual(order(tab), ["bedroom"]);
-  assert.equal(button().textContent.trim(), "Filtro: Da misurare (1)");
+  assert.equal(button().textContent.trim(), "Filtro: Da calibrare (1)");
   assert.equal(tab.querySelector('.cal-chip[data-id="to_measure"]').getAttribute("aria-pressed"), "true", "the desktop chips follow");
 });
 
@@ -816,7 +816,7 @@ test("on phones a cover's details open as a page over the list, closed by its �
     assert.equal(page.querySelector("#cal-page-name").textContent, "Living room shutter 1");
     assert.equal(page.querySelector(".cal-page-title h3").textContent, "Dettagli della calibrazione");
     assert.ok(page.querySelector(".cal-page-title .cal-badge"));
-    assert.deepEqual([...page.querySelectorAll(".cal-details-grid h4")].map((h) => h.textContent), ["Valori in uso", "Ultima misura", "Profilo"]);
+    assert.deepEqual([...page.querySelectorAll(".cal-details-grid h4")].map((h) => h.textContent), ["Valori in uso", "Ultima calibrazione", "Profilo"]);
     const close = page.querySelector(".cal-page-close");
     assert.equal(close.getAttribute("aria-label"), "Chiudi dettagli");
     assert.equal(root.activeElement, close, "the focus goes to the ✕");
@@ -906,7 +906,7 @@ test("on phones the sequence view has «Select ⌄» (a menu of actions in a she
   const sheet = panel.shadowRoot.querySelector("dialog.cal-select-sheet");
   assert.ok(sheet?.open);
   assert.equal(sheet.querySelector("h2").textContent, "Seleziona");
-  assert.deepEqual([...sheet.querySelectorAll("[data-pick]")].map((item) => [item.dataset.pick, item.textContent]), [["all", "Tutte"], ["to_measure", "Da misurare"], ["none", "Nessuna"]],
+  assert.deepEqual([...sheet.querySelectorAll("[data-pick]")].map((item) => [item.dataset.pick, item.textContent]), [["all", "Tutte"], ["to_measure", "Da calibrare"], ["none", "Nessuna"]],
     "actions without counts");
   sheet.querySelector('[data-pick="all"]').click(); await tick();
   assert.equal(panel.shadowRoot.querySelector("dialog.cal-select-sheet"), null, "a choice closes the sheet");

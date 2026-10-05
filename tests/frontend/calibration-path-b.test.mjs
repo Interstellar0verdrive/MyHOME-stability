@@ -118,7 +118,7 @@ test("without a profile on the gateway, B is disabled and the screen says why", 
   const b = wiz().querySelector('input[name="path"][value="B"]');
   assert.equal(b.disabled, true);
   assert.deepEqual([...b.closest(".wiz-radio").querySelectorAll("small")].map((line) => line.textContent),
-    ["Only the curtain travel is measured.", "No saved profile: measure a cover of this type first"]);
+    ["Only the curtain travel is measured.", "No saved profile: calibrate a cover of this type first"]);
   assert.equal(wiz().querySelector(".wiz-subline").textContent, "Already calibrated (times and roll, Sep 29, 2026)");
   assert.equal(wiz().querySelector(".wiz-radio:has(.wiz-recommended) input").value, "C", "a calibrated cover is advised to C");
 });

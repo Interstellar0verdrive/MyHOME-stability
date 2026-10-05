@@ -39,7 +39,8 @@ function update(from, to) {
   if (from.nodeType !== 1) { if (from.data !== to.data) from.data = to.data; return; }
   for (const { name } of [...from.attributes]) if (!to.hasAttribute(name)) from.removeAttribute(name);
   for (const { name, value } of [...to.attributes]) if (from.getAttribute(name) !== value) from.setAttribute(name, value);
-  children(from, to);
+  // A custom element (ha-icon…) owns what it draws: only its attributes are ours.
+  if (!from.tagName.includes("-")) children(from, to);
   // Form state lives in properties: the markup decides it.
   if (from.tagName === "INPUT" && (from.type === "checkbox" || from.type === "radio")) from.checked = to.hasAttribute("checked");
   else if (from.tagName === "OPTION") from.selected = to.hasAttribute("selected");

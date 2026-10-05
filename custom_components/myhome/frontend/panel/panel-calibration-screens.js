@@ -60,7 +60,8 @@ function pathContext(t, cover, language) {
   // G2-1: without a measured travel the profile's values are not scaled, and the line says so.
   if (cover.profile?.name) return fill(t(cover.travel_cm > 0 ? "wiz_T395" : "wiz_T455"), { profile: cover.profile.name });
   if (cover.status && cover.status !== "to_measure") {
-    return fill(t("wiz_T399"), { status: t(`calTabStatus_${cover.status}`).toLocaleLowerCase(language), date: dateText(cover.last, language) || "—" });
+    // Inside «already calibrated (…)» the detail of the status, not the badge (G3-7: the badge says «Calibrated (…)»).
+    return fill(t("wiz_T399"), { status: t(`calTabStatusDetail_${cover.status}`), date: dateText(cover.last, language) || "—" });
   }
   return t("wiz_T418");
 }
@@ -112,7 +113,7 @@ export function buildScreen(ctx) {
     // fine-tuning is the way to adjust them. A cover that only follows a profile says which.
     if (picked?.status && picked.status !== "to_measure") {
       notes.push({ tone: "warning", text: fill(t(cover?.profile?.name ? "wiz_T413" : "wiz_T414"), { profile: cover?.profile?.name ?? "",
-        status: t(`calTabStatus_${picked.status}`).toLocaleLowerCase(language), date: dateText(picked.last, language) || "—" }) });
+        status: t(`calTabStatusDetail_${picked.status}`), date: dateText(picked.last, language) || "—" }) });
     } else if (picked && cover?.profile?.name) notes.push({ tone: "info", text: fill(t("wiz_T395"), { profile: cover.profile.name }) });
     Object.assign(screen, { code: "A-01", phase: "intro", title: t("wiz_T003"), body: t("wiz_T004"),
       picker: { selected: picked ? local.coverKey : "", filter: local.pickFilter || "all", notes },

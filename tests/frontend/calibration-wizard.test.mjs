@@ -53,20 +53,20 @@ test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothin
   const { tab, wiz, code, press, title, backend, button, pickCover, choosePath } = await mount();
   tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
   assert.equal(code(), "A-01");
-  assert.equal(title(), "Which cover do you want to measure?");
-  assert.equal(wiz().querySelector(".wiz-cover").textContent, "Measure a cover");
+  assert.equal(title(), "Which cover do you want to calibrate?");
+  assert.equal(wiz().querySelector(".wiz-cover").textContent, "Calibrate a cover");
   assert.match(wiz().querySelector(".wiz-body").innerHTML, /<strong>from travel times<\/strong>/);
   // The covers as the sequence view's rows, one radio each: name, room and address, status, profile.
   assert.equal(wiz().querySelector('select[name="cover"]'), null, "no drop-down");
   const rows = () => [...wiz().querySelectorAll(".wiz-picker .wiz-pick-row")];
   assert.deepEqual(rows().map((row) => [row.querySelector(".cal-row-name strong").textContent, row.querySelector(".cal-row-name .muted").textContent,
     row.querySelector(".cal-badge").textContent, row.querySelector(".cal-batch-profile").textContent.trim()]), [
-    ["Kitchen shutter 2", "Kitchen · Address: 91 · A: 9 · PL: 1", "Times and roll", "tall_two_leaf"],
-    ["Living room shutter 1", "Living room · Address: 91 · A: 9 · PL: 1", "To measure", "—"],
-    ["Living room shutter 3", "Living room · Address: 91 · A: 9 · PL: 1", "Times measured", "tall_two_leaf"]]);
-  assert.equal(wiz().querySelector(".wiz-picker [role=radiogroup]").getAttribute("aria-label"), "Cover to measure");
+    ["Kitchen shutter 2", "Kitchen · Address: 91 · A: 9 · PL: 1", "Calibrated (times and roll)", "tall_two_leaf"],
+    ["Living room shutter 1", "Living room · Address: 91 · A: 9 · PL: 1", "To calibrate", "—"],
+    ["Living room shutter 3", "Living room · Address: 91 · A: 9 · PL: 1", "Calibrated (times)", "tall_two_leaf"]]);
+  assert.equal(wiz().querySelector(".wiz-picker [role=radiogroup]").getAttribute("aria-label"), "Cover to calibrate");
   assert.deepEqual([...wiz().querySelectorAll(".wiz-pick-chips .cal-chip")].map((chip) => chip.textContent.replace(/\s+/g, " ").trim()),
-    ["All 3", "To measure 1", "Calibrated 2", "With profile 2"], "the list's filter chips");
+    ["All 3", "To calibrate 1", "Calibrated 2", "With profile 2"], "the list's filter chips");
   assert.equal(wiz().querySelectorAll('.wiz-picker input[name="cover"]:checked').length, 0, "opened from the tab's button, nothing is chosen");
   assert.equal(wiz().querySelector(".wiz-pick-notes"), null, "no note before a choice");
   const subtitle = () => wiz().querySelector(".wiz-head .muted");
@@ -98,12 +98,12 @@ test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothin
   // The chosen row opens with what choosing it means, in the row itself.
   const notes = [...wiz().querySelectorAll(".wiz-pick-row.is-selected .wiz-pick-notes .cal-note")];
   assert.deepEqual(notes.map((note) => [note.textContent, note.classList.contains("is-warning")]), [[
-    'This cover is already calibrated (times and roll, Sep 29, 2026) and follows the profile "tall_two_leaf". A new measurement, if you choose it in the next step, will replace the values in use; to adjust them, choose fine-tuning.', true]],
+    'This cover is already calibrated (times and roll, Sep 29, 2026) and follows the profile "tall_two_leaf". A new calibration, if you choose it in the next step, will replace the values in use; to adjust them, choose fine-tuning.', true]],
     "one yellow note with the profile");
   wiz().querySelector('[data-wiz="pick-sort:status"]').click(); await tick(); wiz().querySelector('[data-wiz="pick-sort:status"]').click(); await tick();
   await press("choose");
   assert.equal(code(), "A-02");
-  assert.equal(title(), 'How to measure "Kitchen shutter 2"?');
+  assert.equal(title(), 'How to calibrate "Kitchen shutter 2"?');
   assert.equal(wiz().querySelector(".wiz-cover").textContent, "Kitchen shutter 2");
   assert.match(wiz().querySelector(".wiz-head .muted").textContent, /Address: 91 · A: 9 · PL: 1 · WHO 2/);
   assert.equal(wiz().querySelector(".wiz-subline").textContent, 'Follows the profile "tall_two_leaf"');
@@ -125,7 +125,7 @@ test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothin
   assert.equal(wiz().querySelector('input[name="path"][value="A"]').checked, true, "the choice survives the redraw");
   assert.match(wiz().querySelector(".wiz-body").textContent, /If unsure, choose "Fine-tuning"\.$/, "the advice does not follow the choice");
   assert.equal(wiz().querySelector('input[name="path"][value="A"]').closest(".wiz-radio").querySelector(".wiz-radio-warning.is-warning").textContent,
-    "A full new measurement will replace this cover's values in use. To adjust them without starting over, choose \"Fine-tuning\".", "a warning under the chosen path");
+    "A full new calibration will replace this cover's values in use. To adjust them without starting over, choose \"Fine-tuning\".", "a warning under the chosen path");
   assert.equal(sent(), before, "choosing a path sends nothing");
   await choosePath("A");
   assert.equal(code(), "A-03");
@@ -1600,21 +1600,21 @@ test("a stop frame well before the estimated run asks to check the end stop; the
 test("S-01 says what happened when the panel knows more: It did not do what it should", async () => {
   const t = (key) => translations.en[key] || key;
   const view = { mode: "geometry", phase: "interrupted", reason: "stopped", step: "home", values: {}, samples: {}, readings: {}, owner: true, sequence: 9 };
-  assert.equal(buildScreen({ t, stage: "session", path: "A", view, local: { misbehaved: true }, cover: { name: "K" } }).body, "The cover did not do what it should. Restart the measurement.");
+  assert.equal(buildScreen({ t, stage: "session", path: "A", view, local: { misbehaved: true }, cover: { name: "K" } }).body, "The cover did not do what it should. Restart the calibration.");
   assert.equal(buildScreen({ t, stage: "session", path: "A", view, local: {}, cover: { name: "K" } }).body, translations.en.calReason_stopped, "a plain Stop keeps its text");
   const { backend, wiz, code, press, startFor } = await mount();
   await startFor("cover.living_one");
   await press("begin"); await move(backend);
   await press("misbehaved"); await tick();
   assert.equal(code(), "S-01");
-  assert.equal(wiz().querySelector(".wiz-body").textContent, "The cover did not do what it should. Restart the measurement.");
+  assert.equal(wiz().querySelector(".wiz-body").textContent, "The cover did not do what it should. Restart the calibration.");
 });
 
 test("S-01 after the lift-off run stopped before ② says how to redo it; other steps keep the generic text", () => {
   const t = (key) => translations.en[key] || key;
   const body = (step) => buildScreen({ t, stage: "session", path: "A", cover: { name: "K" }, local: {},
     view: { mode: "geometry", phase: "interrupted", reason: "unexpected_stop", step, values: {}, samples: {}, readings: {}, owner: true, sequence: 9 } }).body;
-  assert.equal(body("lift"), "The cover stopped before you pressed ②. Restart the measurement and press ② as soon as the bottom edge lifts off the rest.");
+  assert.equal(body("lift"), "The cover stopped before you pressed ②. Restart the calibration and press ② as soon as the bottom edge lifts off the rest.");
   assert.equal(body("half_open"), translations.en.calReason_unexpected_stop);
 });
 
@@ -1692,21 +1692,21 @@ test("A-02 advises a path from the cover and the gateway's profiles, and presele
   const advice = (screen) => screen.choice.options.filter((option) => option.badge).map((option) => [option.value, option.badge]);
   const note = (screen) => screen.choice.options.find((option) => option.value === "B").note;
   const tall = { id: "tall", name: "tall_two_leaf", slat: 4.4, referenceTravel: 198 }, low = { id: "low", name: "low_one_leaf", slat: 0, referenceTravel: 112 };
-  // Never measured, no profile on the gateway: Ⓐ advised and preselected, Ⓑ cannot be chosen and says why.
+  // Never calibrated, no profile on the gateway: Ⓐ advised and preselected, Ⓑ cannot be chosen and says why.
   const none = buildScreen({ t, stage: "path", profiles: [], cover: { name: "Kitchen 2", status: "to_measure" } });
   assert.deepEqual(advice(none), [["A", "Recommended"]]);
   assert.equal(none.choice.options.find((option) => option.value === "B").disabled, true);
   assert.deepEqual(note(none), [translations.en.wiz_T453, translations.en.wiz_T401]);
   assert.equal(none.choice.value, "A");
   assert.equal(none.actions[0].disabled, false);
-  assert.equal(none.subline, "Never measured", "the context says only that");
+  assert.equal(none.subline, "Never calibrated", "the context says only that");
   assert.match(none.body, /If unsure, choose "First cover of its type"\.$/);
   const c = none.choice.options.find((option) => option.value === "C");
-  assert.deepEqual([c.disabled, c.note], [true, ["Only what is off gets corrected: tape readings, times, or everything.", "Measure the cover first."]], "no fine-tuning on a cover never measured");
+  assert.deepEqual([c.disabled, c.note], [true, ["Only what is off gets corrected: tape readings, times, or everything.", "Calibrate the cover first."]], "no fine-tuning on a cover never measured");
   // G2-2: the introduction is one line and the advice; each option explains itself in its note.
   assert.equal(none.body, 'There are **three measurement paths**.\n\n"First cover of its type" is the recommended option because the cover has never been measured and there are no saved profiles.\n\nIf unsure, choose "First cover of its type".');
   assert.deepEqual(none.choice.options.map((option) => option.note[0]), [translations.en.wiz_T452, translations.en.wiz_T453, translations.en.wiz_T454]);
-  // Never measured, profiles available, no saved travel: no badge, nothing preselected, Ⓑ lists the profiles to compare.
+  // Never calibrated, profiles available, no saved travel: no badge, nothing preselected, Ⓑ lists the profiles to compare.
   const some = buildScreen({ t, stage: "path", profiles: [tall, low], cover: { name: "Kitchen 2", status: "to_measure" } });
   assert.deepEqual(advice(some), []);
   assert.equal(some.choice.value, "");
@@ -1827,13 +1827,13 @@ test("A-01's list names the bus address and its notes in Italian too", async () 
   assert.equal(wiz().querySelector(".wiz-pick-row .cal-row-name .muted").textContent, "Kitchen · Indirizzo: 91 · A: 9 · PL: 1");
   await pickCover("cover.kitchen_two");
   assert.equal(wiz().querySelector(".wiz-pick-notes .cal-note").textContent,
-    "Questa tapparella è già calibrata (tempi e rullo, 29 set 2026) e segue il profilo «tall_two_leaf». Una nuova misurazione, se la scegli al passo successivo, sostituirà i valori in uso; per correggerli, scegli il perfezionamento.");
+    "Questa tapparella è già calibrata (tempi e rullo, 29 set 2026) e segue il profilo «tall_two_leaf». Una nuova calibrazione, se la scegli al passo successivo, sostituirà i valori in uso; per correggerli, scegli il perfezionamento.");
   // Without a profile the clause about it falls.
   const t = (key) => translations.it[key] || key;
   const alone = buildScreen({ t, language: "it", stage: "choose", local: { coverKey: "k", coverPicked: true },
     covers: [{ key: "k", label: "Cucina 2", status: "times", last: "2026-10-01T09:00:00+00:00" }], cover: { name: "Cucina 2", profile: null } });
   assert.deepEqual(alone.picker.notes, [{ tone: "warning",
-    text: "Questa tapparella è già calibrata (tempi misurati, 1 ott 2026). Una nuova misurazione, se la scegli al passo successivo, sostituirà i valori in uso; per correggerli, scegli il perfezionamento." }]);
+    text: "Questa tapparella è già calibrata (tempi misurati, 1 ott 2026). Una nuova calibrazione, se la scegli al passo successivo, sostituirà i valori in uso; per correggerli, scegli il perfezionamento." }]);
 });
 
 test("opened on a given cover, the wizard already has it chosen; from the tab's button it starts empty", async () => {
@@ -1986,7 +1986,7 @@ test("while the backend waits for the actuator's stop the screen says «Stopping
   const t = (key) => translations.it[key] || key;
   const screen = buildScreen({ t, language: "it", stage: "session", path: "A", cover: { name: "Cucina 2" }, local: {},
     view: { mode: "geometry", phase: "interrupted", reason: "not_stopped", step: "lift", values: {}, samples: {}, readings: {}, owner: true, sequence: 9 } });
-  assert.deepEqual([screen.code, screen.body], ["S-01", "La tapparella non ha confermato l'arresto: ricomincia la misurazione."]);
+  assert.deepEqual([screen.code, screen.body], ["S-01", "La tapparella non ha confermato l'arresto: ricomincia la calibrazione."]);
 });
 
 test("a heartbeat refused as expired after a reconnection resumes the same session; only a session Home Assistant ended shows S-06 (M3-1)", async () => {
