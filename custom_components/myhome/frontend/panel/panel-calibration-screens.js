@@ -288,7 +288,9 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
   // the bottom starts, so the panel keeps the value it sent: the return (A-09) and the new lift-off briefing (A-07)
   // name it and say why; after a reload, without the value, the backend's notice stands while it lasts.
   const resting = local.lastGap != null && local.lastGap < (view.touching_cm ?? 1) && (view.lift_attempts ?? 1) > 1;
-  const liftRepeated = () => ({ tone: "info", result: true, text: resting ? fill(t("wiz_T458"), { n: n(local.lastGap) }) : fill(t("calLiftRepeated"), view) });
+  // G3-3: a warning, worded by where the repeat came from (the value typed, or the button).
+  const liftRepeated = () => ({ tone: "warning", result: true, text: !resting ? fill(t("calLiftRepeated"), view)
+    : local.liftOrigin === "button" ? t("wiz_T469") : fill(t("wiz_T458"), { n: n(local.lastGap, 2) }) });
   // G2-10: after ② (or at the end of a half run) the backend waits for the actuator's stop: the screen says so, the
   // stopwatch stays at the press, and ①/② give way to the status instead of sitting there disabled.
   const stopping = (seconds) => {
@@ -324,7 +326,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     if (phase === "reading") {
       Object.assign(screen, { code: p("08"), title: t("wiz_T047"), body: t("wiz_T048"),
         field: { label: t("wiz_T049"), hint: t("wiz_T050"), min: 0, max: view.max_gap_cm ?? 20, kind: "gap" },
-        actions: [{ id: "reading", label: t("wiz_T051"), kind: "primary" }] });
+        actions: [{ id: "reading", label: t("wiz_T051"), kind: "primary" }, { id: "resting", label: t("wiz_T468"), kind: "secondary" }] });
       return screen;
     }
     const running = ["starting_open", "opening"].includes(phase);

@@ -1950,7 +1950,7 @@ test("a lift-off gap under 1 cm repeats the run and the repeat says which value 
   await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
   await press("ack:lift"); await press("next"); await move(backend); await press("lift"); backend.stopped(); await tick();
   assert.equal(code(), "A-08");
-  assert.equal(wiz().querySelector("#wiz-field-hint").textContent, "Di solito 1–4 cm. Sotto 1 cm il bordo conta come ancora appoggiato e la corsa si ripete.");
+  assert.equal(wiz().querySelector("#wiz-field-hint").textContent, "Di solito 1–4 cm.");
   // 0,5 is sent as it is (no rounding): under the backend's 1 cm the edge still rests.
   await type("0,5");
   assert.equal(backend.calls.filter((message) => message.action === "reading").at(-1).reading_cm, 0.5);
@@ -2130,4 +2130,20 @@ test("A-02 says why the advised option is advised, impersonally, and says nothin
     "«Come una tapparella già misurata» è l'opzione consigliata perché la corsa del telo (110 cm) è vicina a quella del profilo «alte» (109 cm).");
   const none = buildScreen({ t, language: "it", stage: "path", profiles: [{ ...tall, referenceTravel: 198 }], cover: { name: "Cucina 2", status: "to_measure", travel_cm: 110 } });
   assert.equal(none.body, "Ci sono **tre percorsi di misurazione**.\n\nNel dubbio, scegli «Prima tapparella del suo tipo».", "travel known, no similar profile: no sentence");
+});
+
+test("«The edge is still resting» repeats the lift-off without a value, and the repeat warns by origin (G3-2, G3-3)", async () => {
+  const { backend, code, press, startFor, wiz, button } = await mount({ language: "it" });
+  await startFor("cover.living_one");
+  await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  await press("ack:lift"); await press("next"); await move(backend); await press("lift"); backend.stopped(); await tick();
+  assert.equal(code(), "A-08");
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => [item.dataset.wiz, item.textContent, item.className.replace("wiz-action ", "")]),
+    [["reading", "Fatto, avanti", "primary"], ["resting", "Il bordo è ancora appoggiato", "secondary"]]);
+  await press("resting");
+  assert.equal(backend.calls.filter((message) => message.action === "reading").at(-1).reading_cm, 0, "the backend's path of a value under 1 cm");
+  assert.equal(backend.session.lift_attempts, 2);
+  const notice = wiz().querySelector(".wiz-result-notices .wiz-notice");
+  assert.equal(notice.dataset.tone, "warning");
+  assert.equal(notice.textContent, "Il bordo era ancora appoggiato: la corsa di stacco viene ripetuta.");
 });

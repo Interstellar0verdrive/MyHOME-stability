@@ -598,6 +598,9 @@ export class CalibrationWizard {
       return this._render();
     }
     if (id === "reading") return this._reading();
+    // G3-2: «The edge is still resting» repeats the lift-off run without a value: the backend's path of a reading under
+    // 1 cm (0 cm), remembered as coming from the button for the notice of the repeat (G3-3).
+    if (id === "resting") { this._local.lastGap = 0; this._local.liftOrigin = "button"; this._local.fieldError = null; return this._send("reading", { reading_cm: 0 }); }
     // The guided protocol's own movements ("open", "close") are named apart from closing the wizard.
     if (id.startsWith("run:")) return this._send(id.slice(4));
     if (id === "endpoint" && local.fullRun && !local.fullRun.decided) {
@@ -675,7 +678,7 @@ export class CalibrationWizard {
     this._local.fieldError = null;
     // The lift-off gap as typed (G2-9): a value under the backend's 1 cm counts as still resting, and the screen of the
     // repeated run names it. The backend uses the number as sent, without rounding (0.5 is under 1).
-    if (input.dataset.kind === "gap") this._local.lastGap = value;
+    if (input.dataset.kind === "gap") { this._local.lastGap = value; this._local.liftOrigin = "typed"; }
     return this._send("reading", { reading_cm: value });
   }
 
@@ -1063,7 +1066,7 @@ function key(item) { return JSON.stringify([item.entry.entry_id, item.cover.enti
 function freshFlags() {
   return { ackLift: false, ackAscent: false, ackDescent: false, ackReadings: false, arm: null, run: null, fullRun: null, invalidRun: null, misbehaved: false,
     review: null, pendingSave: null, fieldError: null, fieldSequence: undefined, errorPhase: undefined, saveProfile: undefined, saveChoice: undefined,
-    profileName: undefined, refining: false, lastGap: null, baseReadings: null, fineReadings: null, pathChoice: null, reachedPhase: null };
+    profileName: undefined, refining: false, lastGap: null, liftOrigin: null, baseReadings: null, fineReadings: null, pathChoice: null, reachedPhase: null };
 }
 
 export { slug };

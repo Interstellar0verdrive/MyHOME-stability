@@ -47,7 +47,7 @@ export const translations = {
     wiz_T047: "How far has the edge risen?",
     wiz_T048: "There is always a moment between pressing and stopping, and the edge keeps rising during it. Use the tape measure to measure how many centimetres there are now from the window base, i.e. the rest the closed cover sits on, to the bottom edge of the curtain: **this is not an error to correct; it is a needed value** — it cancels the delay in your press and makes the measurement more precise.",
     wiz_T049: "Distance from the rest to the curtain's edge (cm)",
-    wiz_T050: "Usually 1–4 cm. Below 1 cm the edge counts as still resting and the run is repeated.",
+    wiz_T050: "Usually 1–4 cm.",
     wiz_T051: "Done, continue",
     wiz_T052: "{cover} returns to the rest: full ascent starts there.",
     wiz_T053: "Back at the rest",
@@ -390,6 +390,8 @@ export const translations = {
     wiz_T465: "\"{option}\" is the recommended option because the cover has never been measured and, without the length of its curtain, there is no telling whether a saved profile fits it.",
     wiz_T466: "\"{option}\" is the recommended option because the cover has never been measured and there are no saved profiles.",
     wiz_T467: "\"{option}\" is the recommended option because the curtain travel ({travel} cm) is close to that of the profile \"{profile}\" ({reference} cm).",
+    wiz_T468: "The edge is still resting",
+    wiz_T469: "The edge was still resting: the lift-off run is repeated.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -899,7 +901,7 @@ export const translations = {
     wiz_T047: "Quanto si è alzato il bordo?",
     wiz_T048: "Fra la pressione e l'arresto passa sempre un istante, e il bordo continua a salire per quell'istante. Misura con il metro quanti centimetri ci sono ora dalla base della finestra, cioè l'appoggio su cui si ferma la tapparella chiusa, al bordo inferiore del telo: **non è un errore da correggere, è un numero che serve** — con questo numero il ritardo della tua pressione si annulla e la misura diventa più precisa.",
     wiz_T049: "Distanza dall'appoggio al bordo del telo (cm)",
-    wiz_T050: "Di solito 1–4 cm. Sotto 1 cm il bordo conta come ancora appoggiato e la corsa si ripete.",
+    wiz_T050: "Di solito 1–4 cm.",
     wiz_T051: "Fatto, avanti",
     wiz_T052: "{cover} torna alla base: la salita completa parte da lì.",
     wiz_T053: "Ritorno alla base",
@@ -1242,6 +1244,8 @@ export const translations = {
     wiz_T465: "«{option}» è l'opzione consigliata perché la tapparella non è mai stata misurata e, senza la lunghezza del telo, non si può dire se un profilo salvato le si adatti.",
     wiz_T466: "«{option}» è l'opzione consigliata perché la tapparella non è mai stata misurata e non ci sono profili salvati.",
     wiz_T467: "«{option}» è l'opzione consigliata perché la corsa del telo ({travel} cm) è vicina a quella del profilo «{profile}» ({reference} cm).",
+    wiz_T468: "Il bordo è ancora appoggiato",
+    wiz_T469: "Il bordo era ancora appoggiato: la corsa di stacco viene ripetuta.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",
