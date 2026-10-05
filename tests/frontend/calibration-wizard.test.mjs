@@ -2101,3 +2101,17 @@ test("an ended session keeps the step it reached, greyed, in the stepper and the
   assert.equal(wiz().querySelector(".wiz-steps").hasAttribute("data-interrupted"), false);
   assert.equal(wiz().querySelector(".wiz-compact-line").textContent, "Preparazione · 2 di 7");
 });
+
+test("choosing a cover on A-01 patches the list in place: same content area, same rows (M3-4)", async () => {
+  const { tab, wiz, pickCover } = await mount();
+  tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
+  const main = wiz().querySelector(".wiz-main"), rowOf = (id) => wiz().querySelector(`.wiz-pick-row[data-entity="${id}"]`);
+  const kept = rowOf("cover.living_three");
+  await pickCover("cover.kitchen_two");
+  assert.equal(wiz().querySelector(".wiz-main"), main, "the frame is not rebuilt");
+  assert.equal(rowOf("cover.living_three"), kept);
+  assert.match(wiz().querySelector(".wiz-head .muted").textContent, /Kitchen/, "the header is patched");
+  await pickCover("cover.living_three");
+  assert.equal(rowOf("cover.living_three"), kept);
+  assert.ok(kept.classList.contains("is-selected"));
+});

@@ -1,8 +1,9 @@
 /** WHO 2 "Calibration" view: what each timed cover uses, its measurement state and the ways to measure it. */
 const asset = (name) => { const url = new URL(name, import.meta.url); url.search = new URL(import.meta.url).search; return url.href; };
-const [{ escapeHtml: esc, replacePreservingFocus }, model, text, { CoverCalibration }, { CalibrationWizard }, { ProfileCatalogueEditor }] = await Promise.all([
+const [{ escapeHtml: esc }, model, text, { CoverCalibration }, { CalibrationWizard }, { ProfileCatalogueEditor }, { morph }] = await Promise.all([
   import(asset("panel-dom.js")), import(asset("panel-model.js")), import(asset("panel-calibration-text.js")),
   import(asset("panel-cover-calibration.js")), import(asset("panel-calibration-wizard.js")), import(asset("panel-profile-catalogue-editor.js")),
+  import(asset("panel-calibration-morph.js")),
 ]);
 const { fill, rich, number, dateText, names, followedBy } = text;
 
@@ -312,7 +313,7 @@ export class CalibrationTab {
   /** A sheet that changes nothing on the backend: it slides away (phones with motion) and the focus goes back. */
   _sheetDone(dialog) {
     if (this._dialog !== dialog || dialog.classList.contains("is-leaving")) return;
-    const back = () => { if (this._dialog === dialog) this._closeDialog(); this._context?.host.querySelector(".cal-compact-filter")?.focus(); };
+    const back = () => { if (this._dialog === dialog) this._closeDialog(); this._context?.host.querySelector(".cal-compact-filter")?.focus({ preventScroll: true }); };
     const motion = typeof matchMedia === "function" && matchMedia("(max-width: 1023px)").matches && !matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (!motion) { back(); return; }
     dialog.classList.add("is-leaving");
@@ -436,7 +437,8 @@ export class CalibrationTab {
           <div class="cal-list-rows" role="list">${visible.map((item) => this._row(item, busy, language)).join("")}</div></div>` : ""}
         ${this._pageMarkup(busy, language)}`;
     }
-    if (host.innerHTML !== html) replacePreservingFocus(host, html);
+    // Patched in place (M3): the list, the details page and their scroll stay where they are.
+    morph(host, html);
   }
 
   _row(item, busy, language) {
@@ -752,7 +754,8 @@ export class CalibrationTab {
     }
     if (!(typeof matchMedia === "function" && matchMedia("(max-width: 1023px)").matches)) return;
     const held = [];
-    const hold = (element) => { if (element?.style) { held.push([element, element.style.overflow]); element.style.overflow = "hidden"; } };
+    // The scroll of each held element is noted and put back on release (iOS may move it when overflow changes).
+    const hold = (element) => { if (element?.style) { held.push([element, element.style.overflow, element.scrollTop]); element.style.overflow = "hidden"; } };
     hold(document.documentElement); hold(document.body);
     for (let node = this._context.host; node; node = node.parentElement || node.getRootNode?.().host) {
       if (node === document.documentElement || node === document.body) continue;
@@ -765,7 +768,7 @@ export class CalibrationTab {
   _releasePage() {
     this._sheetObserver?.disconnect();
     this._sheetObserver = null;
-    for (const [element, value] of this._held || []) element.style.overflow = value;
+    for (const [element, value, top] of this._held || []) { element.style.overflow = value; if (element.scrollTop !== top) element.scrollTop = top; }
     this._held = null;
   }
 
@@ -984,7 +987,7 @@ export class CalibrationTab {
     const structure = JSON.stringify([targets.map((target) => [target.entity_id, target.name, target.area, target.status, target.profile?.name, target.reason]),
       batch.loading, batch.error, batch.entryId, max, gateways.length, this._sort, t("wiz_T364")]);
     if (host.querySelector(".cal-batch") && this._batchStructure === structure) this._patchBatch(summary, count, max);
-    else { this._batchStructure = structure; replacePreservingFocus(host, html); }
+    else { this._batchStructure = structure; morph(host, html); }
     this._watchBar();
   }
 

@@ -4,9 +4,9 @@
  * `CalibrationGateway` (live session or local preview); it never builds a WebSocket message itself.
  */
 const asset = (name) => { const url = new URL(name, import.meta.url); url.search = new URL(import.meta.url).search; return url.href; };
-const [{ escapeHtml: esc }, text, screens, gateways, illustration] = await Promise.all([
+const [{ escapeHtml: esc }, text, screens, gateways, illustration, { morph }] = await Promise.all([
   import(asset("panel-dom.js")), import(asset("panel-calibration-text.js")), import(asset("panel-calibration-screens.js")),
-  import(asset("panel-calibration-gateway.js")), import(asset("panel-calibration-illustration.js")),
+  import(asset("panel-calibration-gateway.js")), import(asset("panel-calibration-illustration.js")), import(asset("panel-calibration-morph.js")),
 ]);
 const { rich, inline, names } = text;
 const { buildScreen, slug } = screens;
@@ -204,7 +204,9 @@ export class CalibrationWizard {
     const drawing = (position) => screen.illustration?.position === position ? illustrationMarkup(screen.illustration.id, t("wizIllustration"), esc) : "";
     // G2-11: a notice that comments a result sits right under the result box (or the stopwatch), before text and drawing.
     const resultNotices = '<div class="wiz-result-notices" aria-live="polite"></div>';
-    const signature = JSON.stringify([screen.code, screen.title, screen.body, screen.header, screen.choice && { ...screen.choice, value: undefined },
+    // The header (cover name and address) is patched, not part of the frame: choosing a cover on A-01 keeps the list
+    // and its scroll (M3-4).
+    const signature = JSON.stringify([screen.code, screen.title, screen.body, screen.choice && { ...screen.choice, value: undefined },
       screen.field && { ...screen.field, disabled: undefined }, screen.box, screen.table, screen.technical, screen.precision,
       screen.profileBlock && { ...screen.profileBlock, name: screen.profileBlock.name && { label: screen.profileBlock.name.label, hint: screen.profileBlock.name.hint } },
       screen.saveInfo, screen.status, screen.preview, screen.illustration, screen.wait && screen.wait.text, screen.discard, screen.back, !!screen.picker, screen.results, screen.note, screen.help]);
@@ -226,7 +228,7 @@ export class CalibrationWizard {
       this._frame.innerHTML = `
         <header class="wiz-head">
           ${screen.back ? `<button type="button" class="icon-button wiz-back" data-wiz="back" aria-label="${esc(t("wiz_T403"))}" title="${esc(t("wiz_T403"))}"><ha-icon icon="mdi:arrow-left" aria-hidden="true"></ha-icon></button>` : ""}
-          <div class="wiz-head-text"><h3 id="wiz-cover" class="wiz-cover">${esc(screen.header.title)}</h3>${screen.header.subtitle ? `<p class="muted${screen.header.placeholder ? " wiz-head-placeholder" : ""}">${esc(screen.header.subtitle)}</p>` : ""}</div>
+          <div class="wiz-head-text"><h3 id="wiz-cover" class="wiz-cover">${esc(screen.header.title)}</h3><p class="muted wiz-head-sub"${screen.header.subtitle ? "" : " hidden"}>${esc(screen.header.subtitle || "")}</p></div>
           ${screen.discard ? `<button type="button" class="wiz-discard" data-wiz="exit">${esc(t("wizDiscard"))}</button>` : ""}
           <button type="button" class="icon-button wiz-x" data-wiz="${screen.discard ? "exit" : "close"}" aria-label="${esc(screen.discard ? t("wizDiscard") : t("wiz_T158"))}" title="${esc(screen.discard ? t("wizDiscard") : t("wiz_T158"))}"><ha-icon icon="mdi:close" aria-hidden="true"></ha-icon></button>
         </header>
@@ -337,7 +339,12 @@ export class CalibrationWizard {
         const focus = active && picker.contains(active) ? (active.dataset.wiz ? ["wiz", active.dataset.wiz] : active.name === "cover" ? ["cover", active.value]
           : active.dataset.pickSort ? ["pickSort", active.dataset.pickSort] : null) : null;
         this._pickerHtml = html;
-        picker.innerHTML = html;
+        // Patched in place: the rows, the scroll and the focus stay (M3-4).
+        morph(picker, html);
+        // A new choice opens its row with notes: the row stays in view.
+        const chosen = picker.querySelector(".wiz-pick-row.is-selected");
+        if (chosen && chosen.dataset.entity !== this._pickedEntity) chosen.scrollIntoView?.({ block: "nearest" });
+        this._pickedEntity = chosen?.dataset.entity;
         if (focus) {
           const [kind, value] = focus;
           [...picker.querySelectorAll("button, input, select")].find((element) => (kind === "cover" ? element.name === "cover" && element.value : element.dataset[kind]) === value)
@@ -345,6 +352,13 @@ export class CalibrationWizard {
         }
       }
     } else this._pickerHtml = null;
+    const head = root.querySelector(".wiz-cover"), sub = root.querySelector(".wiz-head-sub");
+    if (head && head.textContent !== screen.header.title) head.textContent = screen.header.title;
+    if (sub) {
+      if (sub.textContent !== (screen.header.subtitle || "")) sub.textContent = screen.header.subtitle || "";
+      sub.hidden = !screen.header.subtitle;
+      sub.classList.toggle("wiz-head-placeholder", !!screen.header.placeholder);
+    }
     const stepper = this._stepperMarkup(screen);
     for (const target of [root.querySelector(".wiz-steps"), root.querySelector(".wiz-sheet-steps")]) if (target.innerHTML !== stepper) target.innerHTML = stepper;
     root.querySelector(".wiz-compact-line").textContent = screen.stepper.line;

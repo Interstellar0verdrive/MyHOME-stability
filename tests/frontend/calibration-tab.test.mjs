@@ -851,3 +851,46 @@ test("on phones an open sheet holds the page under it and lets it go when it clo
     assert.equal(document.body.style.overflow, "");
   } finally { globalThis.matchMedia = original; document.documentElement.style.overflow = ""; }
 });
+
+test("no update rebuilds what is on screen: filters, order, refreshes and the details page are patched in place (M3)", async () => {
+  const original = globalThis.matchMedia;
+  globalThis.matchMedia = (query) => ({ matches: query.includes("max-width") && !query.includes("reduced-motion") });
+  try {
+    const { tab, panel, hass } = await mount({ language: "it" });
+    const kept = row(tab, "cover.kitchen_two"), list = tab.querySelector(".cal-list");
+    // The order: the same row elements, moved.
+    const select = tab.querySelector(".cal-tab-compact select"); select.value = "status:desc"; select.dispatchEvent(new Event("change", { bubbles: true }));
+    assert.equal(row(tab, "cover.kitchen_two"), kept);
+    assert.equal(tab.querySelector(".cal-list"), list);
+    // The filter sheet: opening, closing and applying keep the rows that stay.
+    tab.querySelector(".cal-compact-filter").click(); await tick();
+    panel.shadowRoot.querySelector("dialog.cal-filter-sheet .cal-sheet-close").click(); await tick();
+    assert.equal(row(tab, "cover.kitchen_two"), kept);
+    tab.querySelector(".cal-compact-filter").click(); await tick();
+    const radio = panel.shadowRoot.querySelector('dialog.cal-filter-sheet input[value="calibrated"]');
+    radio.checked = true; radio.dispatchEvent(new Event("change", { bubbles: true })); await tick();
+    assert.equal(row(tab, "cover.kitchen_two"), kept);
+    // A Home Assistant update (states, the profiles' revision) with nothing new: nothing is replaced.
+    const html = tab.innerHTML;
+    panel.hass = { ...hass, states: { ...hass.states } }; await tick(6);
+    assert.equal(tab.innerHTML, html);
+    assert.equal(row(tab, "cover.kitchen_two"), kept);
+    // The details page under a refresh: the same page and body (its scroll stays).
+    kept.querySelector(".cal-row-toggle").click(); await tick();
+    const page = tab.querySelector(".cal-page"), body = page.querySelector(".cal-page-body");
+    panel._calibrationTab.refresh(); await tick(8);
+    assert.equal(tab.querySelector(".cal-page"), page);
+    assert.equal(tab.querySelector(".cal-page-body"), body);
+  } finally { globalThis.matchMedia = original; }
+});
+
+test("the sequence view keeps its rows when the order or the selection changes (M3)", async () => {
+  const { tab } = await openBatch();
+  const kept = tab.querySelector('.cal-batch-row[data-entity="cover.bedroom"]'), view = tab.querySelector(".cal-batch");
+  tick_(tab, "cover.bedroom");
+  assert.equal(tab.querySelector('.cal-batch-row[data-entity="cover.bedroom"]'), kept);
+  tab.querySelector('.cal-batch-head [data-action="cal-tab-sort"][data-id="status"]').click();
+  assert.equal(tab.querySelector('.cal-batch-row[data-entity="cover.bedroom"]'), kept, "a new order moves the same rows");
+  assert.equal(tab.querySelector(".cal-batch"), view);
+  assert.equal(kept.querySelector("input").checked, true);
+});
