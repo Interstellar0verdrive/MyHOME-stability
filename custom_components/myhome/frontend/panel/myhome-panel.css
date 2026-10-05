@@ -830,10 +830,18 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   .cal-row-action { grid-area: action; align-self: center; justify-self: end; white-space: nowrap; }
   .cal-row-main .cal-badge, .cal-row-main .cal-profile-chip { max-width: 100%; }
   .cal-row-last-inline { display: block; color: var(--panel-text-2); }
-  /* M2-3: a card opens a page, it does not unfold: no chevron. */
-  .cal-row-chevron { display: none; }
+  /* Responsive map: from 720 px of window a card opens in place, its blocks side by side while they fit (240 px each). */
+  .cal-row.is-expanded .cal-row-main { border-radius: 11px 11px 0 0; }
+  .cal-row-details { border-radius: 0 0 11px 11px; }
+  .cal-details-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 20px 24px; }
+  .cal-details-grid > section { max-width: none; }
+  .cal-details-grid .cal-note { max-width: none; }
 }
-/* T-05 M: a cover's details as a page over the list (phones only; wider windows open the row). */
+/* On the phone (window under 720 px, not a landscape phone) a card opens a page, it does not unfold: no chevron
+   (M2-3). Elsewhere the page never shows, so it can never cover Home Assistant's sidebar (D3). */
+@media (max-width: 719px) and (min-height: 500px), (max-width: 719px) and (orientation: portrait) { .cal-row-chevron { display: none; } }
+@media (min-width: 720px), (max-height: 499px) and (orientation: landscape) { .cal-page { display: none; } }
+/* T-05 M: a cover's details as a page over the list (phones only; wider windows and landscape phones open the row). */
 .cal-page { position: fixed; inset: 0; z-index: 8; display: flex; flex-direction: column; height: 100vh; height: 100dvh;
   background: var(--primary-background-color, #fafafa); }
 .cal-page-head { display: flex; align-items: start; gap: 12px; padding: calc(16px + var(--cal-safe-top)) calc(16px + var(--cal-safe-right)) 16px calc(16px + var(--cal-safe-left));
@@ -855,7 +863,6 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-page .cal-details-grid > section + section { margin-inline: -16px; padding-inline: 16px; border-top: 1px solid var(--panel-border); }
 .cal-page .cal-details-grid h4 { margin: 0 0 12px; padding: 0; border: 0; font-size: 15px; font-weight: 600; color: var(--primary-text-color, #182b37); }
 .cal-page .cal-details-grid .cal-note { max-width: none; }
-@container caltab (min-width: 880px) { .cal-page { display: none; } }
 .cal-tab-back { justify-self: start; }
 .cal-dialog-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; padding-block: 18px 4px; }
 .cal-dialog-body > p { margin: 0; }
@@ -971,6 +978,14 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   .cal-details-grid > section:nth-child(2) { grid-column: 3; }
   .cal-details-grid > section:nth-child(3) { grid-column: 4; }
   .cal-details-grid .cal-note { max-width: none; }
+}
+/* D2: in a narrower table the blocks leave the status and profile columns, too narrow for them, and share the row
+   from the cover column to the actions, 240 px at least each. */
+@container caltab (min-width: 880px) and (max-width: 1099px) {
+  .cal-details-grid { display: grid; grid-column: 2 / -1; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px var(--cal-gap); }
+  .cal-details-grid > section:nth-child(n) { grid-row: auto; grid-column: auto; }
+}
+@container caltab (min-width: 880px) {
   /* The sequence list keeps the list's columns; its lead holds checkbox, place and a 32 px icon (12 px apart). */
   .cal-batch-list { --cal-lead-box: calc(20px + 24px + 32px + 2 * var(--cal-lead-gap)); }
   .cal-batch-head { grid-template-columns: var(--cal-cols); }

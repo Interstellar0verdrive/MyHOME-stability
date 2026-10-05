@@ -18,10 +18,10 @@ const slides = () => typeof matchMedia === "function" && matchMedia("(max-width:
 
 /** WHO 2 "Calibration" view: what each timed cover uses, its measurement state and the ways to measure it. */
 const asset = (name) => { const url = new URL(name, import.meta.url); url.search = new URL(import.meta.url).search; return url.href; };
-const [{ escapeHtml: esc }, model, text, { CoverCalibration }, { CalibrationWizard }, { ProfileCatalogueEditor }, { morph }] = await Promise.all([
+const [{ escapeHtml: esc }, model, text, { CoverCalibration }, { CalibrationWizard }, { ProfileCatalogueEditor }, { morph }, { layout }] = await Promise.all([
   import(asset("panel-dom.js")), import(asset("panel-model.js")), import(asset("panel-calibration-text.js")),
   import(asset("panel-cover-calibration.js")), import(asset("panel-calibration-wizard.js")), import(asset("panel-profile-catalogue-editor.js")),
-  import(asset("panel-calibration-morph.js")),
+  import(asset("panel-calibration-morph.js")), import(asset("panel-calibration-layout.js")),
 ]);
 const { fill, rich, number, dateText, names, followedBy } = text;
 
@@ -522,13 +522,11 @@ export class CalibrationTab {
           ${this._details(item, busy, language, addressDetails)}</div></div>`;
   }
 
-  /** With the cards (tab under 820 px, M5-1) the details open as a page; the table keeps them in the row. */
-  _phone() {
-    if (typeof matchMedia !== "function") return false;
-    // The tab's own width (the cards' container query), or a phone window.
-    const width = this._context?.host?.getBoundingClientRect?.().width || 0;
-    return matchMedia("(max-width: 719px)").matches || (width > 0 ? width < 820 : matchMedia("(max-width: 819px)").matches);
-  }
+  /**
+   * Only the phone layout (window under 720 px, not a landscape phone) opens a cover's details as a page; elsewhere the
+   * row or the card opens in place, so the page never covers Home Assistant's sidebar (responsive map, D3).
+   */
+  _phone() { return layout.phone(); }
 
   _closePage() {
     const page = this._context.host.querySelector(".cal-page");

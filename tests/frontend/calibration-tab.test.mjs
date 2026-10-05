@@ -843,6 +843,33 @@ test("on phones a cover's details open as a page over the list, closed by its �
   } finally { globalThis.matchMedia = original; }
 });
 
+/** A `matchMedia` for a window of `width` × `height` (lists of width, height and orientation features; reduced motion). */
+function viewport(width, height, { reduce = true } = {}) {
+  const feature = (text) => {
+    const [, name, value] = text.match(/\(\s*([a-z-]+)\s*:\s*([a-z0-9-]+)\s*\)/) || [];
+    const px = parseFloat(value);
+    return { "max-width": width <= px, "min-width": width >= px, "max-height": height <= px, "min-height": height >= px,
+      orientation: value === (width > height ? "landscape" : "portrait"), "prefers-reduced-motion": reduce, hover: value === "hover" }[name] ?? false;
+  };
+  return (query) => ({ matches: query.split(",").some((part) => part.split(/\)\s*and\s*\(/).every((one) => feature(`(${one.replace(/^\s*\(|\)\s*$/g, "")})`))) });
+}
+
+test("a cover's details open in place outside the phone layout, a landscape phone included (responsive map, D3, D13)", async () => {
+  const original = globalThis.matchMedia;
+  try {
+    for (const [width, height, page] of [[1100, 900, false], [844, 390, false], [667, 375, false], [390, 844, true], [700, 900, true]]) {
+      globalThis.matchMedia = viewport(width, height);
+      const { tab } = await mount({ language: "it" });
+      row(tab, "cover.living_one").querySelector(".cal-row-toggle").click(); await tick();
+      assert.equal(!!tab.querySelector(".cal-page"), page, `${width}×${height}: ${page ? "a page" : "in place"}`);
+      assert.equal(row(tab, "cover.living_one").querySelector(".cal-row-details").hidden, page);
+    }
+  } finally { globalThis.matchMedia = original; }
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /@media \(min-width: 720px\), \(max-height: 499px\) and \(orientation: landscape\) \{ \.cal-page \{ display: none; \} \}/, "never a page over the sidebar");
+  assert.match(css, /\.cal-details-grid \{ display: grid; grid-template-columns: repeat\(auto-fit, minmax\(min\(240px, 100%\), 1fr\)\);/, "the card's blocks side by side");
+});
+
 test("on phones an open sheet holds the page under it and lets it go when it closes", async () => {
   const original = globalThis.matchMedia;
   globalThis.matchMedia = (query) => ({ matches: query.includes("max-width") || query.includes("reduced-motion") });
@@ -974,8 +1001,8 @@ test("one breakpoint for the list (880 px of the tab itself) and the wizard's th
   assert.match(calibration, /#cover-calibration-tab \{ container: caltab \/ inline-size; \}/, "the tab's width decides, not the window's");
   const widths = [...calibration.matchAll(/@(media|container caltab|container wizmain) ([^{]+)\{/g)].flatMap(([, kind, query]) =>
     [...query.matchAll(/(min|max)-width: (\d+)px/g)].map(([, edge, px]) => `${kind === "media" ? "window" : kind.endsWith("wizmain") ? "content" : "tab"} ${edge}-${px}`));
-  assert.deepEqual([...new Set(widths)].sort(), ["content max-719", "tab max-379", "tab max-599", "tab max-879", "tab max-999", "tab min-1000", "tab min-880", "window max-1023", "window max-719", "window min-1024", "window min-720"],
-    "the tab at 880 (list), 600 (header buttons), 380 (drop-downs) and 1000 (wizard: three columns); the wizard's content at 720 (its lists); the window at 720 (full screen) and 1024 (dialogs)");
+  assert.deepEqual([...new Set(widths)].sort(), ["content max-719", "tab max-1099", "tab max-379", "tab max-599", "tab max-879", "tab max-999", "tab min-1000", "tab min-880", "window max-1023", "window max-719", "window min-1024", "window min-720"],
+    "the tab at 880 (list), 1100 (details' blocks), 600 (header buttons), 380 (drop-downs) and 1000 (wizard: three columns); the wizard's content at 720 (its lists); the window at 720 (full screen) and 1024 (dialogs)");
   const { tab } = await mount();
   const address = row(tab, "cover.kitchen_two").querySelector(".cal-row-address");
   assert.equal(address.querySelector(".cal-row-address-ap").textContent, " · A: 9 · PL: 1", "A and PL apart, hidden on the cards");
