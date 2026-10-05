@@ -646,6 +646,16 @@ export class CalibrationWizard {
         name: saved.name ?? item.profile?.name ?? null });
       return;
     }
+    if (id === "restart") {
+      // G4-6: the guided session has no repeat verb: this attempt is cancelled (nothing was saved) and the times start
+      // again from the briefing, with the cover to be closed.
+      const gateway = this._gateway;
+      Promise.resolve(gateway?.act("cancel")).catch(() => {}).finally(() => {
+        if (this._gateway !== gateway) return;
+        this._dropGateway(); Object.assign(local, freshFlags(), { stage: "before" }); this._render();
+      });
+      return;
+    }
     if (id === "start-over") {
       // Fine-tuning starts again from the values just saved; everything else from "Before you begin".
       if (local.refining && local.base) { this._startRefine(local.base); return this._render(); }
@@ -861,11 +871,14 @@ export class CalibrationWizard {
   /** The full ascent and descent (A-11, A-14 and their C clones): who owned the run when it started, on which subscription. */
   _trackFullRun(view) {
     const local = this._local;
-    const full = !!view && !view.preview && view.mode === "geometry"
-      && ((view.step === "opening" && ["starting_open", "opening"].includes(view.phase)) || (view.step === "closing" && ["starting_close", "closing"].includes(view.phase)));
+    // The guided times-only runs (G4-6) are full runs too: their direction is their step.
+    const step = view?.mode === "guided" ? (["starting_open", "opening"].includes(view.phase) ? "opening" : ["starting_close", "closing"].includes(view.phase) ? "closing" : null)
+      : view?.step;
+    const full = !!view && !view.preview && ["geometry", "guided"].includes(view.mode)
+      && ((step === "opening" && ["starting_open", "opening"].includes(view.phase)) || (step === "closing" && ["starting_close", "closing"].includes(view.phase)));
     if (!full) { local.fullRun = null; return; }
-    if (local.fullRun?.step === view.step) return;
-    local.fullRun = { step: view.step, attachment: view.attachment ?? null, owned: !!view.owner && !view.read_only, decided: false };
+    if (local.fullRun?.step === step) return;
+    local.fullRun = { step, attachment: view.attachment ?? null, owned: !!view.owner && !view.read_only, decided: false };
     local.invalidRun = null;
   }
 

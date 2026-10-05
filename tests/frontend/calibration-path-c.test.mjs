@@ -52,17 +52,32 @@ test("times only runs the existing guided measurement and saves on this cover on
   assert.equal("direction" in start, false, "both directions");
   assert.equal("slats" in start, false);
   assert.deepEqual(actions(), [], "the guided protocol starts nothing by itself");
-  assert.equal(code(), "C-05");
+  // G4-6: our own screens and texts, never the maintainer's phase texts.
+  assert.equal(code(), "C-11");
+  assert.equal(title(), "Full ascent");
+  assert.match(wiz().querySelector(".wiz-body").textContent, /Get ready to press button ② when the motor stops by itself at the top: you can hear it\./);
+  assert.doesNotMatch(wiz().textContent, /Confirm that the cover is fully closed and stopped before starting/);
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => [item.dataset.wiz, item.disabled]), [["run:open", false], ["endpoint", true], ["stop", false]]);
   await press("run:open");
   await move(backend, { seconds: 12.6 });
   assert.equal(code(), "C-11");
   assert.equal(wiz().querySelector(".wiz-stopwatch").hidden, false);
   await press("endpoint");
   assert.equal(code(), "C-12");
+  assert.equal(title(), "Ascent measured");
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-results .wiz-result-label")].map((item) => item.textContent), ["Full ascent"]);
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => item.dataset.wiz), ["ack:ascent", "restart"]);
+  await press("ack:ascent");
+  assert.equal(code(), "C-14");
+  assert.equal(title(), "Full descent");
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => item.textContent), ["①  Start movement", "②  Stopped at the bottom", "Stop the cover"]);
   await press("run:close");
   await move(backend, { seconds: 12.2 });
   assert.equal(code(), "C-14");
   await press("endpoint");
+  assert.equal(code(), "C-15");
+  assert.equal(title(), "Descent measured");
+  await press("ack:descent");
   assert.equal(code(), "C-36");
   assert.equal(title(), "The calibration is ready");
   const rows = [...wiz().querySelectorAll(".wiz-main > .wiz-table tbody tr")].map((row) => [...row.children].map((cell) => cell.textContent));
@@ -140,4 +155,24 @@ test("remeasuring everything runs the geometry session with the C texts and wait
   await press("save");
   assert.equal(backend.calls.filter((message) => message.action === "save").at(-1).save_mode, "new");
   assert.equal(code(), "C-34");
+});
+
+test("times only: a repeat starts the times again from the briefing, and a run the bus ended without ② is not valid (G4-6, R8-7)", async () => {
+  const context = await mount();
+  const { backend, wiz, code, press } = context;
+  await toCase(context, "times_only");
+  await press("begin");
+  await press("run:open");
+  await move(backend, { seconds: 12.6 });
+  await press("endpoint");
+  assert.equal(code(), "C-12");
+  await press("restart"); await tick(8);
+  assert.equal(backend.session.phase, "cancelled", "the attempt is cancelled, nothing saved");
+  assert.equal(code(), "C-35");
+  const panel = context.panel ?? document.querySelector("myhome-panel");
+  const wizard = panel._calibrationTab._wizard;
+  // A guided run is tracked as a full run, for the same validity rule.
+  wizard._local.fullRun = null;
+  wizard._trackFullRun({ mode: "guided", phase: "opening", owner: true, attachment: "a" });
+  assert.equal(wizard._local.fullRun.step, "opening");
 });

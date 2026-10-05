@@ -454,24 +454,46 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
   return Object.assign(screen, { code: "unknown", title: t(`calPhase_${phase}`), actions: [stop] });
 }
 
-/** Live `guided` session for path C, times only: the existing two-run protocol. */
+/**
+ * Live `guided` session for path C, times only (G4-6): the backend's two-run protocol on our own screens and texts,
+ * adapted from A-11/A-12/A-14/A-15 (never the maintainer's phase texts). The backend goes from the measured ascent
+ * straight to «ready for the descent» and from the measured descent straight to the review: the result screens are
+ * the panel's own (acknowledged locally). A repeat starts the times again from a closed cover (the guided session has
+ * no repeat verb). The validity rule of the full runs (R8-7) applies as on A-11/A-14.
+ */
 function guidedScreen(screen, ctx, tx, n, values, stop) {
-  const { t, view, elapsed } = ctx;
+  const { t, view, elapsed, local = {} } = ctx;
   const phase = view.phase;
+  const tile = (key, seconds) => seconds == null ? null : { label: t(key), value: n(seconds), unit: "s" };
+  const bad = (key) => local.invalidRun?.step === key ? { tone: "warning", result: true, text: t(local.invalidRun.reason === "timer" ? "wiz_T445" : "wiz_T444") } : null;
+  const result = (code, title, body, time, key, ack) => {
+    const notice = bad(key);
+    return Object.assign(screen, { code, title, body: notice ? "" : t(body), results: [time].filter(Boolean), notices: notice ? [notice] : [],
+      actions: notice ? [{ id: "restart", label: t("wiz_T061"), kind: "primary" }]
+        : [{ id: ack, label: t("wiz_T060"), kind: "primary" }, { id: "restart", label: t("wiz_T061"), kind: "secondary" }] });
+  };
+  if ((phase === "review" || phase === "saving") && !local.ackDescent) {
+    screen.phase = "descent";
+    return result("C-15", t("wiz_T071"), "wiz_T480", tile("wiz_T068", view.values?.closing_time), "closing", "ack:descent");
+  }
   if (phase === "review" || phase === "saving") return summaryScreen(screen, ctx, tx, n, values);
-  if (["confirm_closed"].includes(phase)) return Object.assign(screen, { code: "C-05", phase: "prep", title: t("wiz_T030"), body: t("calPhase_confirm_closed"),
-    actions: [{ id: "run:open", label: t("wiz_T045"), kind: "primary" }, stop] });
-  if (["starting_open", "opening"].includes(phase)) return Object.assign(screen, { code: "C-11", phase: "ascent", title: t("wiz_T040"), body: t("calPhase_opening"),
-    stopwatch: runWatch(t, n, view, elapsed),
-    actions: [{ id: "run:open", label: t("wiz_T045"), kind: "primary", disabled: true },
-      { id: "endpoint", label: t("wiz_T057"), kind: "primary", disabled: phase !== "opening" }, ...whileRunning(view, stop)] });
-  if (phase === "confirm_open") return Object.assign(screen, { code: "C-12", phase: "descent", title: t("wiz_T058"), body: t("calPhase_confirm_open"),
-    actions: [{ id: "run:close", label: t("wiz_T045"), kind: "primary" }, stop] });
-  if (["starting_close", "closing"].includes(phase)) return Object.assign(screen, { code: "C-14", phase: "descent", title: t("wiz_T068"), body: t("calPhase_closing"),
-    stopwatch: runWatch(t, n, view, elapsed),
-    actions: [{ id: "run:close", label: t("wiz_T045"), kind: "primary", disabled: true },
-      { id: "endpoint", label: t("wiz_T070"), kind: "primary", disabled: phase !== "closing" }, ...whileRunning(view, stop)] });
-  return Object.assign(screen, { code: "unknown", title: t(`calPhase_${phase}`), actions: [stop] });
+  if (["confirm_closed", "starting_open", "opening"].includes(phase)) {
+    return Object.assign(screen, { code: "C-11", phase: "ascent", title: t("wiz_T040"), body: t("wiz_T477"),
+      stopwatch: runWatch(t, n, view, elapsed),
+      actions: [{ id: "run:open", label: t("wiz_T045"), kind: "primary", disabled: phase !== "confirm_closed" },
+        { id: "endpoint", label: t("wiz_T057"), kind: "primary", disabled: phase !== "opening" }, ...whileRunning(view, stop)] });
+  }
+  if (phase === "confirm_open" && !local.ackAscent) {
+    screen.phase = "ascent";
+    return result("C-12", t("wiz_T058"), "wiz_T478", tile("wiz_T040", view.values?.opening_time), "opening", "ack:ascent");
+  }
+  if (["confirm_open", "starting_close", "closing"].includes(phase)) {
+    return Object.assign(screen, { code: "C-14", phase: "descent", title: t("wiz_T068"), body: t("wiz_T479"),
+      stopwatch: runWatch(t, n, view, elapsed),
+      actions: [{ id: "run:close", label: t("wiz_T045"), kind: "primary", disabled: phase !== "confirm_open" },
+        { id: "endpoint", label: t("wiz_T070"), kind: "primary", disabled: phase !== "closing" }, ...whileRunning(view, stop)] });
+  }
+  return Object.assign(screen, { code: "unknown", title: t("wiz_T027"), actions: [stop] });
 }
 
 /** Simulated steps: fine-tuning (A, C), tape readings only (C) and path B. */

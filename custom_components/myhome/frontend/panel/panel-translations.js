@@ -399,6 +399,10 @@ export const translations = {
     wiz_T474: "Filter:",
     wiz_T475: "If in doubt, choose this option.",
     wiz_T476: "\"{option}\" is the recommended option because the curtain travel ({travel} cm) is not close to that of any saved profile.",
+    wiz_T477: "Check that the cover is fully closed and stopped. To start the ascent, press button ①: the cover will rise to the top and stop by itself.\n\n**Get ready to press button ② when the motor stops by itself at the top: you can hear it.**",
+    wiz_T478: "If you pressed ② at the right moment, continue. Otherwise repeat the measurement: it will start again with the cover closed.",
+    wiz_T479: "To start the descent, press button ①: the cover will descend fully, slats included, and stop by itself.\n\n**Get ready to press button ② when the motor stops by itself at the bottom: you can hear it.** Do not press when the edge first touches the rest: the slats keep closing for a moment.",
+    wiz_T480: "If you pressed ② at the right moment, continue to the summary. Otherwise repeat the measurement: it will start again with the cover closed.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1262,6 +1266,10 @@ export const translations = {
     wiz_T474: "Filtro:",
     wiz_T475: "Nel dubbio, scegli questa opzione.",
     wiz_T476: "«{option}» è l'opzione consigliata perché la corsa del telo ({travel} cm) non è vicina a quella di nessun profilo salvato.",
+    wiz_T477: "Controlla che la tapparella sia chiusa del tutto e ferma. Per iniziare la salita premi il pulsante ①: la tapparella salirà fino in cima e si fermerà da sola.\n\n**Preparati a premere il pulsante ② quando il motore si ferma da solo in alto: lo senti dal suono.**",
+    wiz_T478: "Se hai premuto ② al momento giusto, continua. Altrimenti ripeti la misura: si ricomincerà con la tapparella chiusa.",
+    wiz_T479: "Per iniziare la discesa premi il pulsante ①: la tapparella scenderà fino in fondo, lamelle comprese, e si fermerà da sola.\n\n**Preparati a premere il pulsante ② quando il motore si ferma da solo in basso: lo senti dal suono.** Non premere già quando il bordo tocca l'appoggio: le lamelle si chiudono ancora per un momento.",
+    wiz_T480: "Se hai premuto ② al momento giusto, continua al riepilogo. Altrimenti ripeti la misura: si ricomincerà con la tapparella chiusa.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

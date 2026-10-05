@@ -1751,7 +1751,7 @@ test("counts of zero and one use their own forms", () => {
   const view = { mode: "geometry", phase: "review", values: { opening_time: 22, closing_time: 21 }, geometry: {}, travel_cm: 110, owner: true, sequence: 2 };
   const cover = (followers) => ({ name: "Cucina 2", profile: { name: "alte" }, followers, effective: {} });
   const review = (followers, local = {}) => buildScreen({ t, language: "it", stage: "session", path: "C", scope: "times_only", cover: cover(followers),
-    view: { ...view, mode: "guided" }, local });
+    view: { ...view, mode: "guided" }, local: { ackDescent: true, ...local } });
   assert.match(review([]).saveInfo.body, /Il profilo «alte» non cambierà\.\n/);
   assert.match(review(["Sala 3"]).saveInfo.body, /e l’altra tapparella che lo segue resterà com’è\./);
   assert.match(review(["Sala 2", "Sala 3"]).saveInfo.body, /e le altre 2 tapparelle che lo seguono resteranno come sono\./);
