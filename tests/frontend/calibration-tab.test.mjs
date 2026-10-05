@@ -784,3 +784,34 @@ test("the sequence list sorts by its headers like the tab, and reordering never 
   assert.deepEqual(subscriptions.find((item) => item.request.type === "myhome/cover_calibration/batch_start").request.entity_ids,
     ["cover.living_two", "cover.bedroom"], "the sequence runs in the order of the ticks");
 });
+
+test("on phones a cover's details open as a page over the list, closed by its ✕ or Escape", async () => {
+  const original = globalThis.matchMedia;
+  globalThis.matchMedia = (query) => ({ matches: query.includes("max-width") && !query.includes("reduced-motion") });
+  try {
+    const { tab, root } = await mount({ language: "it" });
+    const toggle = () => row(tab, "cover.living_one").querySelector(".cal-row-toggle");
+    toggle().click(); await tick();
+    const page = tab.querySelector(".cal-page");
+    assert.ok(page, "the page opens");
+    assert.equal(row(tab, "cover.living_one").querySelector(".cal-row-details").hidden, true, "the row itself stays closed");
+    assert.equal(page.getAttribute("role"), "dialog");
+    assert.equal(page.querySelector("#cal-page-name").textContent, "Living room shutter 1");
+    assert.equal(page.querySelector(".cal-page-title h3").textContent, "Dettagli della calibrazione");
+    assert.ok(page.querySelector(".cal-page-title .cal-badge"));
+    assert.deepEqual([...page.querySelectorAll(".cal-details-grid h4")].map((h) => h.textContent), ["Valori in uso", "Ultima misura", "Profilo"]);
+    const close = page.querySelector(".cal-page-close");
+    assert.equal(close.getAttribute("aria-label"), "Chiudi dettagli");
+    assert.equal(root.activeElement, close, "the focus goes to the ✕");
+    assert.ok(rows(tab).length > 1, "the list stays under the page");
+    close.click(); await tick();
+    assert.equal(tab.querySelector(".cal-page"), null);
+    assert.equal(root.activeElement, toggle(), "back on the row that opened it");
+    // The menu's Details opens it too; Escape closes it.
+    row(tab, "cover.living_one").querySelector('[data-action="cal-tab-menu"]').click(); await tick();
+    row(tab, "cover.living_one").querySelector('.cal-menu [data-action="cal-tab-toggle"]').click(); await tick();
+    assert.ok(tab.querySelector(".cal-page"));
+    tab.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, composed: true })); await tick();
+    assert.equal(tab.querySelector(".cal-page"), null);
+  } finally { globalThis.matchMedia = original; }
+});

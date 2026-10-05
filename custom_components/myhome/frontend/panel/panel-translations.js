@@ -369,6 +369,8 @@ export const translations = {
     wiz_T444: "The cover stopped before you pressed ②: the time may not be the real one. Repeat the run and press ② as soon as the motor really stops.",
     wiz_T445: "The cover stopped when the actuator's timer ran out (about 60 s): the time is not valid. Repeat the run and press ② as soon as the motor really stops.",
     wiz_T446: "The connection to Home Assistant was interrupted: reconnecting.",
+    wiz_T447: "Calibration details",
+    wiz_T448: "Close details",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1201,6 +1203,8 @@ export const translations = {
     wiz_T444: "La tapparella si è fermata senza che premessi ②: il tempo potrebbe non essere quello reale. Ripeti la corsa e premi ② appena il motore si ferma davvero.",
     wiz_T445: "La tapparella si è fermata allo scadere del timer dell'attuatore (circa 60 s): il tempo non è valido. Ripeti la corsa e premi ② appena il motore si ferma davvero.",
     wiz_T446: "Connessione con Home Assistant interrotta: riconnessione in corso.",
+    wiz_T447: "Dettagli della calibrazione",
+    wiz_T448: "Chiudi dettagli",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

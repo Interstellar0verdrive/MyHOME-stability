@@ -49,7 +49,7 @@ export function timedCovers(data) {
 
 export class CalibrationTab {
   constructor() {
-    this._generation = 0; this._rows = new Map(); this._unsubs = []; this._expanded = new Set();
+    this._generation = 0; this._rows = new Map(); this._unsubs = []; this._expanded = new Set(); this._page = null;
     this._filter = "all"; this._sort = savedSort(); this._menu = null; this._mode = { kind: "list" }; this._hosts = new WeakSet();
     this._calibration = new CoverCalibration();
     this._wizard = new CalibrationWizard();
@@ -63,6 +63,8 @@ export class CalibrationTab {
   get _mode() { return this.__mode; }
   set _mode(mode) {
     this.__mode = mode;
+    // The phone's details page belongs to the list: a wizard, a sequence or a session closes it.
+    if (mode?.kind !== "list") this._page = null;
     const hold = mode?.kind === "wizard" || mode?.kind === "batch", roots = [document.documentElement, document.body].filter(Boolean);
     if (hold && !this._overscroll) {
       this._overscroll = roots.map((element) => [element, element.style.overscrollBehaviorY]);
@@ -378,7 +380,8 @@ export class CalibrationTab {
         ${visible.length ? `${this._sortBar()}
         <div class="cal-list">
           ${this._sortHeads("", undefined, this._expandAll(visible))}
-          <div class="cal-list-rows" role="list">${visible.map((item) => this._row(item, busy, language)).join("")}</div></div>` : ""}`;
+          <div class="cal-list-rows" role="list">${visible.map((item) => this._row(item, busy, language)).join("")}</div></div>` : ""}
+        ${this._pageMarkup(busy, language)}`;
     }
     if (host.innerHTML !== html) replacePreservingFocus(host, html);
   }
@@ -428,6 +431,36 @@ export class CalibrationTab {
   }
 
   _area(item) { return item.area; }
+
+  /**
+   * T-05 M: on phones a cover's details are a page over the list (the list stays below it, so closing it lands at the
+   * same place): name, address and ✕ at the top, then the title, the status and the three blocks one under the other.
+   */
+  _pageMarkup(busy, language) {
+    const item = this._page ? this._item(this._page) : null;
+    if (!item) { this._page = null; return ""; }
+    const { t, gateways, addressDetails } = this._context;
+    const session = this._running(item) ? item.session : null;
+    const badge = session ? `<span class="badge cal-badge" data-status="running">${esc(t(session.waiting_for_stop ? "calTabRunning_waiting"
+      : session.phase === "paused" ? "calTabRunning_paused" : session.owner_present ?? session.attached ? "calTabRunning_present" : "calTabRunning_absent"))}</span>`
+      : `<span class="badge cal-badge" data-status="${item.status}">${esc(t(`calTabStatus_${item.status}`))}</span>`;
+    return `<div class="cal-page${session ? " is-running" : ""}" role="dialog" aria-modal="true" aria-labelledby="cal-page-name" data-entity="${esc(item.cover.entity_id)}">
+        <div class="cal-page-head"><div class="cal-page-head-text"><h2 id="cal-page-name">${esc(item.name)}</h2>
+          <p class="muted">${esc([this._area(item), gateways.length > 1 ? item.entry.title : ""].filter(Boolean).join(" · "))}${this._address(item)}</p></div>
+          <button type="button" class="icon-button cal-page-close" data-action="cal-tab-page-close" aria-label="${esc(t("wiz_T448"))}" title="${esc(t("wiz_T448"))}"><ha-icon icon="mdi:close" aria-hidden="true"></ha-icon></button></div>
+        <div class="cal-page-body"><div class="cal-page-title"><h3>${esc(t("wiz_T447"))}</h3>${badge}</div>
+          ${this._details(item, busy, language, addressDetails)}</div></div>`;
+  }
+
+  /** Phones open the details as a page; wider windows keep them in the row. */
+  _phone() { return typeof matchMedia === "function" && matchMedia("(max-width: 1023px)").matches; }
+
+  _closePage() {
+    const key = this._page;
+    this._page = null;
+    this._render();
+    [...this._context.host.querySelectorAll('.cal-row [data-action="cal-tab-toggle"].cal-row-toggle')].find((button) => button.dataset.id === key)?.focus({ preventScroll: true });
+  }
 
   _details(item, busy, language) {
     const { t, inventory, hass } = this._context;
@@ -481,6 +514,7 @@ export class CalibrationTab {
   }
 
   _keydown(event) {
+    if (this._page && this._menu === null && this._mode.kind === "list" && event.key === "Escape") { event.preventDefault(); this._closePage(); return; }
     if (this._menu === null || this._mode.kind !== "list") return;
     if (["ArrowDown", "ArrowUp"].includes(event.key)) {
       // Menu items move with the arrows and wrap, as in Home Assistant's own menus.
@@ -529,8 +563,16 @@ export class CalibrationTab {
       }
       this._render();
     } else if (action === "cal-tab-toggle") {
+      if (this._phone()) {
+        this._page = id;
+        this._render();
+        this._context.host.querySelector(".cal-page-close")?.focus();
+        return;
+      }
       if (this._expanded.has(id)) this._expanded.delete(id); else this._expanded.add(id);
       this._render();
+    } else if (action === "cal-tab-page-close") {
+      this._closePage();
     } else if (action === "cal-tab-menu") {
       this._menu = this._menu === id ? null : id;
       this._render();

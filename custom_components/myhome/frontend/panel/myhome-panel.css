@@ -782,6 +782,21 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   .cal-menu-wrap { grid-area: menu; align-self: start; justify-self: end; }
   .cal-row-last-inline { display: block; color: var(--panel-text-2); }
 }
+/* T-05 M: a cover's details as a page over the list (phones only; wider windows open the row). */
+.cal-page { position: fixed; inset: 0; z-index: 8; display: flex; flex-direction: column; height: 100vh; height: 100dvh;
+  background: var(--primary-background-color, #fafafa); }
+.cal-page-head { display: flex; align-items: start; gap: 12px; padding: 16px; padding-top: calc(16px + env(safe-area-inset-top));
+  border-bottom: 1px solid var(--panel-border); background: var(--panel-surface); }
+.cal-page-head-text { flex: 1; min-width: 0; }
+.cal-page-head h2 { margin: 0; font-size: 20px; font-weight: 600; overflow-wrap: anywhere; }
+.cal-page-head .muted { margin: 2px 0 0; font-size: 13px; }
+.cal-page-close { flex: none; width: 40px; min-width: 40px; height: 40px; min-height: 40px; padding: 0; margin: -4px -4px 0 0; border: 0; background: transparent; color: var(--panel-text-2); }
+.cal-page-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+  padding: 16px 16px calc(24px + env(safe-area-inset-bottom)); }
+.cal-page-title { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin-bottom: 20px; }
+.cal-page-title h3 { margin: 0; font-size: 16px; font-weight: 600; }
+.cal-page.is-running .cal-page-head { background: color-mix(in srgb, var(--panel-warning) 7%, var(--panel-surface)); }
+@media (min-width: 1024px) { .cal-page { display: none; } }
 .cal-tab-back { justify-self: start; }
 .cal-dialog-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; padding-block: 18px 4px; }
 .cal-dialog-body > p { margin: 0; }
