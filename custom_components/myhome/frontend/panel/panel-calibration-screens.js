@@ -151,7 +151,13 @@ export function buildScreen(ctx) {
       if (warning) option.warning = warning;
     }
     // "There are three paths", then always "If unsure, choose «…»" with the advised option's label; the options follow.
-    const body = [t("wiz_T016"), fill(t("wiz_T421"), { path: label[advice.hint] })].join("\n\n");
+    // G3-1: why the advised option is advised, in one impersonal sentence (none when nothing is advised).
+    const closest = advice.similar[0];
+    const reason = measured ? fill(t(cover?.profile?.name ? "wiz_T464" : "wiz_T463"), { option: label.C, profile: cover?.profile?.name ?? "" })
+      : advice.badge === "B" && closest ? fill(t("wiz_T467"), { option: label.B, travel: n(cover.travel_cm, 0), reference: n(closest.referenceTravel, 0), profile: closest.name })
+        : !profiles ? fill(t("wiz_T466"), { option: label.A })
+          : !(cover?.travel_cm > 0) ? fill(t("wiz_T465"), { option: label.A }) : "";
+    const body = [t("wiz_T016"), reason, fill(t("wiz_T421"), { path: label[advice.hint] })].filter(Boolean).join("\n\n");
     Object.assign(screen, { code: "A-02", phase: "intro", title: tx("wiz_T015", { name }), subline: pathContext(t, cover, language), body,
       choice: { name: "path", kind: "radio", label: tx("wiz_T015", { name }), legendHidden: true, value: chosen, options },
       actions: [{ id: "path", label: t("wiz_T006"), kind: "primary", disabled: !chosen }] });

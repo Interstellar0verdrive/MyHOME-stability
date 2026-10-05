@@ -15,7 +15,7 @@ export const translations = {
     wiz_T012: "Summary",
     wiz_T013: "Fine-tuning (optional)",
     wiz_T015: "How to measure \"{name}\"?",
-    wiz_T016: "There are three measurement paths.",
+    wiz_T016: "There are **three measurement paths**.",
     wiz_T017: "First cover of its type",
     wiz_T018: "Like a cover already measured",
     wiz_T019: "Fine-tuning",
@@ -385,6 +385,11 @@ export const translations = {
     wiz_T460: "The cover did not confirm the stop: restart the measurement.",
     wiz_T461: "Interrupted · {phase} {n} of {total}",
     wiz_T462: "The session expires in {minutes} min unless you continue: the cover will be released and the measurements lost.",
+    wiz_T463: "\"{option}\" is the recommended option because this cover is already calibrated.",
+    wiz_T464: "\"{option}\" is the recommended option because this cover is already calibrated and follows the profile \"{profile}\".",
+    wiz_T465: "\"{option}\" is the recommended option because the cover has never been measured and, without the length of its curtain, there is no telling whether a saved profile fits it.",
+    wiz_T466: "\"{option}\" is the recommended option because the cover has never been measured and there are no saved profiles.",
+    wiz_T467: "\"{option}\" is the recommended option because the curtain travel ({travel} cm) is close to that of the profile \"{profile}\" ({reference} cm).",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -862,7 +867,7 @@ export const translations = {
     wiz_T012: "Riepilogo",
     wiz_T013: "Perfezionamento (facoltativo)",
     wiz_T015: "Come vuoi misurare «{name}»?",
-    wiz_T016: "Ci sono tre percorsi di misurazione.",
+    wiz_T016: "Ci sono **tre percorsi di misurazione**.",
     wiz_T017: "Prima tapparella del suo tipo",
     wiz_T018: "Come una tapparella già misurata",
     wiz_T019: "Perfezionamento",
@@ -1232,6 +1237,11 @@ export const translations = {
     wiz_T460: "La tapparella non ha confermato l'arresto: ricomincia la misurazione.",
     wiz_T461: "Interrotta · {phase} {n} di {total}",
     wiz_T462: "La sessione scade fra {minutes} min se non prosegui: la tapparella verrà liberata e le misure andranno perse.",
+    wiz_T463: "«{option}» è l'opzione consigliata perché questa tapparella è già calibrata.",
+    wiz_T464: "«{option}» è l'opzione consigliata perché questa tapparella è già calibrata e segue il profilo «{profile}».",
+    wiz_T465: "«{option}» è l'opzione consigliata perché la tapparella non è mai stata misurata e, senza la lunghezza del telo, non si può dire se un profilo salvato le si adatti.",
+    wiz_T466: "«{option}» è l'opzione consigliata perché la tapparella non è mai stata misurata e non ci sono profili salvati.",
+    wiz_T467: "«{option}» è l'opzione consigliata perché la corsa del telo ({travel} cm) è vicina a quella del profilo «{profile}» ({reference} cm).",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

@@ -1704,7 +1704,7 @@ test("A-02 advises a path from the cover and the gateway's profiles, and presele
   const c = none.choice.options.find((option) => option.value === "C");
   assert.deepEqual([c.disabled, c.note], [true, ["Only what is off gets corrected: tape readings, times, or everything.", "Measure the cover first."]], "no fine-tuning on a cover never measured");
   // G2-2: the introduction is one line and the advice; each option explains itself in its note.
-  assert.equal(none.body, 'There are three measurement paths.\n\nIf unsure, choose "First cover of its type".');
+  assert.equal(none.body, 'There are **three measurement paths**.\n\n"First cover of its type" is the recommended option because the cover has never been measured and there are no saved profiles.\n\nIf unsure, choose "First cover of its type".');
   assert.deepEqual(none.choice.options.map((option) => option.note[0]), [translations.en.wiz_T452, translations.en.wiz_T453, translations.en.wiz_T454]);
   // Never measured, profiles available, no saved travel: no badge, nothing preselected, Ⓑ lists the profiles to compare.
   const some = buildScreen({ t, stage: "path", profiles: [tall, low], cover: { name: "Kitchen 2", status: "to_measure" } });
@@ -2114,4 +2114,20 @@ test("choosing a cover on A-01 patches the list in place: same content area, sam
   await pickCover("cover.living_three");
   assert.equal(rowOf("cover.living_three"), kept);
   assert.ok(kept.classList.contains("is-selected"));
+});
+
+test("A-02 says why the advised option is advised, impersonally, and says nothing when nothing is advised (G3-1)", () => {
+  const t = (key) => translations.it[key] || key;
+  const tall = { id: "tall", name: "alte", slat: 4.4, referenceTravel: 109 };
+  const reason = (cover, profiles) => buildScreen({ t, language: "it", stage: "path", profiles, cover: { name: "Cucina 2", ...cover } }).body.split("\n\n")[1];
+  assert.equal(reason({ status: "rolls", last: "2026-10-01T09:00:00+00:00" }, [tall]), "«Perfezionamento» è l'opzione consigliata perché questa tapparella è già calibrata.");
+  assert.equal(reason({ status: "rolls", last: "2026-10-01T09:00:00+00:00", profile: { name: "alte" } }, [tall]),
+    "«Perfezionamento» è l'opzione consigliata perché questa tapparella è già calibrata e segue il profilo «alte».");
+  assert.equal(reason({ status: "to_measure" }, [tall]),
+    "«Prima tapparella del suo tipo» è l'opzione consigliata perché la tapparella non è mai stata misurata e, senza la lunghezza del telo, non si può dire se un profilo salvato le si adatti.");
+  assert.equal(reason({ status: "to_measure" }, []), "«Prima tapparella del suo tipo» è l'opzione consigliata perché la tapparella non è mai stata misurata e non ci sono profili salvati.");
+  assert.equal(reason({ status: "to_measure", travel_cm: 110 }, [tall]),
+    "«Come una tapparella già misurata» è l'opzione consigliata perché la corsa del telo (110 cm) è vicina a quella del profilo «alte» (109 cm).");
+  const none = buildScreen({ t, language: "it", stage: "path", profiles: [{ ...tall, referenceTravel: 198 }], cover: { name: "Cucina 2", status: "to_measure", travel_cm: 110 } });
+  assert.equal(none.body, "Ci sono **tre percorsi di misurazione**.\n\nNel dubbio, scegli «Prima tapparella del suo tipo».", "travel known, no similar profile: no sentence");
 });
