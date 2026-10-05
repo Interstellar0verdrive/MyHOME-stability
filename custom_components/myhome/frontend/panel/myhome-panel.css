@@ -638,6 +638,10 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .catalogue-candidate p { margin: 4px 0; }
 
 /* ---------- WHO 2 · Calibration tab ---------- */
+/* M6-2: iOS safe areas (Dynamic Island, home indicator, landscape notch), through variables so a harness can emulate
+   them; the full-screen views, their bars and the sheets keep their content clear of them. */
+:host { --cal-safe-top: env(safe-area-inset-top, 0px); --cal-safe-right: env(safe-area-inset-right, 0px);
+  --cal-safe-bottom: env(safe-area-inset-bottom, 0px); --cal-safe-left: env(safe-area-inset-left, 0px); }
 /* M5-1: the tab's own width decides its layout, not the window's (Home Assistant's sidebar takes ~256 px: a 1390 px
    window leaves the tab ~1130 px). Below 768 px of window the wizard and the details go full screen. */
 #cover-calibration-tab { container: caltab / inline-size; }
@@ -825,14 +829,14 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 /* T-05 M: a cover's details as a page over the list (phones only; wider windows open the row). */
 .cal-page { position: fixed; inset: 0; z-index: 8; display: flex; flex-direction: column; height: 100vh; height: 100dvh;
   background: var(--primary-background-color, #fafafa); }
-.cal-page-head { display: flex; align-items: start; gap: 12px; padding: 16px; padding-top: calc(16px + env(safe-area-inset-top));
+.cal-page-head { display: flex; align-items: start; gap: 12px; padding: calc(16px + var(--cal-safe-top)) calc(16px + var(--cal-safe-right)) 16px calc(16px + var(--cal-safe-left));
   border-bottom: 1px solid var(--panel-border); background: var(--panel-surface); }
 .cal-page-head-text { flex: 1; min-width: 0; }
 .cal-page-head h2 { margin: 0; font-size: 20px; font-weight: 600; overflow-wrap: anywhere; }
 .cal-page-head .muted { margin: 2px 0 0; font-size: 13px; }
 .cal-page-close { flex: none; width: 40px; min-width: 40px; height: 40px; min-height: 40px; padding: 0; margin: -4px -4px 0 0; border: 0; background: transparent; color: var(--panel-text-2); }
 .cal-page-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
-  padding: 16px 16px calc(24px + env(safe-area-inset-bottom)); }
+  padding: 16px calc(16px + var(--cal-safe-right)) calc(24px + var(--cal-safe-bottom)) calc(16px + var(--cal-safe-left)); }
 .cal-page-title { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin-bottom: 20px; }
 .cal-page-title h3 { margin: 0; font-size: 16px; font-weight: 600; }
 .cal-page.is-running .cal-page-head { background: color-mix(in srgb, var(--panel-warning) 7%, var(--panel-surface)); }
@@ -852,9 +856,9 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   /* The tab's own dialogs (Assign/Change profile, sessions) as sheets from the bottom (T-09 M); the maintainer's dialogs
      are not touched. */
   dialog.cal-dialog { width: 100%; max-width: none; max-height: 90vh; margin: auto 0 0; border-radius: 18px 18px 0 0;
-    padding-bottom: env(safe-area-inset-bottom); }
+    padding-bottom: var(--cal-safe-bottom); }
   dialog.cal-dialog::backdrop { background: rgb(0 0 0 / 55%); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
-  dialog.cal-dialog > * { padding-inline: 16px; }
+  dialog.cal-dialog > * { padding-inline: calc(16px + var(--cal-safe-left)) calc(16px + var(--cal-safe-right)); }
   dialog.cal-dialog .dialog-icon { display: none; }
   dialog.cal-dialog .dialog-foot { flex-direction: column-reverse; align-items: stretch; }
   dialog.cal-dialog .dialog-foot button { width: 100%; min-height: 48px; justify-content: center; }
@@ -1238,7 +1242,9 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
   /* The whole window, even when an ancestor of Home Assistant holds a transform (fixed then follows it). */
   .wiz { position: fixed; inset: 0; z-index: 8; display: flex; flex-direction: column; height: 100vh; height: 100dvh; border: 0; border-radius: 0; }
   .wiz-frame { display: flex; flex-direction: column; min-height: 0; height: 100%; }
-  .wiz-head { padding: 12px 16px; }
+  .wiz-head { padding: calc(12px + var(--cal-safe-top)) calc(16px + var(--cal-safe-right)) 12px calc(16px + var(--cal-safe-left)); }
+  .wiz-compact { padding-inline: calc(16px + var(--cal-safe-left)) calc(16px + var(--cal-safe-right)); }
+  .wiz-sheet .wiz-sheet-card { padding: 18px calc(20px + var(--cal-safe-right)) calc(24px + var(--cal-safe-bottom)) calc(20px + var(--cal-safe-left)); }
   .wiz-discard { display: none; }
   .wiz-x { display: inline-flex; }
   /* M2-1: every ✕ of a title bar or sheet is a 44 px touch target with a 24 px icon. */
@@ -1247,12 +1253,13 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
   .wiz-columns { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   /* The content scrolls between the phase strip and the action bar: min-height 0 lets it shrink (without it the column
      grew past the bar and showed a scrollbar that scrolled nothing). */
-  .wiz-main { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 16px;
+  .wiz-main { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+    padding: 16px calc(16px + var(--cal-safe-right)) 16px calc(16px + var(--cal-safe-left));
     display: flex; flex-direction: column; }
   /* A column of blocks that keep their own height: in the scrolling grid a scaled drawing kept a shorter row and the
      text under it slid beneath the drawing. */
   .wiz-main > * { flex-shrink: 0; min-width: 0; }
-  .wiz-actions { padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--panel-border); background: var(--panel-surface); }
+  .wiz-actions { padding: 12px calc(16px + var(--cal-safe-right)) calc(12px + var(--cal-safe-bottom)) calc(16px + var(--cal-safe-left)); border-top: 1px solid var(--panel-border); background: var(--panel-surface); }
   /* Confirmations (S-08, Calibration in progress) as sheets from the bottom (S-08 M): full width, rounded top, buttons
      stacked full width with the primary first, over a darker blurred scrim; they slide up and down as the Steps sheet. */
   /* M2-6: the wizard's sheets keep the scroll to themselves. */
@@ -1261,7 +1268,7 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
   .wiz-dialog, .wiz-sheet { background: rgb(0 0 0 / 55%); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
   .wiz-dialog { align-items: end; padding: 0; }
   .wiz-dialog .wiz-dialog-card { width: 100%; max-width: none; box-sizing: border-box; border-radius: 18px 18px 0 0;
-    padding: 22px 16px calc(16px + env(safe-area-inset-bottom)); }
+    padding: 22px calc(16px + var(--cal-safe-right)) calc(16px + var(--cal-safe-bottom)) calc(16px + var(--cal-safe-left)); }
   .wiz-dialog .actions { flex-direction: column-reverse; align-items: stretch; flex-wrap: nowrap; }
   .wiz-dialog .actions button { width: 100%; min-height: 48px; justify-content: center; }
   .wiz-dialog .wiz-leave { margin: 0; }
