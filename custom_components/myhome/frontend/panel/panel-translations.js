@@ -397,6 +397,8 @@ export const translations = {
     wiz_T472: "Enter a number of centimetres, with a comma or a point for the decimals.",
     wiz_T473: "Ignore and continue",
     wiz_T474: "Filter:",
+    wiz_T475: "If in doubt, choose this option.",
+    wiz_T476: "\"{option}\" is the recommended option because the curtain travel ({travel} cm) is not close to that of any saved profile.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1258,6 +1260,8 @@ export const translations = {
     wiz_T472: "Scrivi un numero di centimetri, con la virgola o il punto per i decimali.",
     wiz_T473: "Ignora, prosegui",
     wiz_T474: "Filtro:",
+    wiz_T475: "Nel dubbio, scegli questa opzione.",
+    wiz_T476: "«{option}» è l'opzione consigliata perché la corsa del telo ({travel} cm) non è vicina a quella di nessun profilo salvato.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

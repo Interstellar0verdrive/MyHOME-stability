@@ -115,7 +115,7 @@ test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothin
     [["C", "Recommended"]], "a calibrated cover: C is advised");
   assert.deepEqual(radios.filter((input) => input.checked).map((input) => input.value), ["C"], "the advised path is preselected");
   assert.equal(button("path").disabled, false, "Continue is ready on the advised path");
-  assert.match(wiz().querySelector(".wiz-body").textContent, /If unsure, choose "Fine-tuning"\.$/, "the last line names the advised path");
+  assert.match(wiz().querySelector(".wiz-body").textContent, /"Fine-tuning" is the recommended option because this cover is already calibrated[^.]*\. If in doubt, choose this option\.$/, "the reason names the advised option");
   assert.ok(wiz().querySelector(".wiz-subline").classList.contains("cal-note"), "the cover's context is an information box");
   const sent = () => backend.calls.length + backend.subscriptions.length;
   const before = sent();
@@ -123,7 +123,7 @@ test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothin
   a.checked = true; a.dispatchEvent(new Event("change", { bubbles: true })); await tick();
   assert.equal(code(), "A-02", "ticking a radio only changes the choice");
   assert.equal(wiz().querySelector('input[name="path"][value="A"]').checked, true, "the choice survives the redraw");
-  assert.match(wiz().querySelector(".wiz-body").textContent, /If unsure, choose "Fine-tuning"\.$/, "the advice does not follow the choice");
+  assert.match(wiz().querySelector(".wiz-body").textContent, /"Fine-tuning" is the recommended option.*If in doubt, choose this option\.$/, "the advice does not follow the choice");
   assert.equal(wiz().querySelector('input[name="path"][value="A"]').closest(".wiz-radio").querySelector(".wiz-radio-warning.is-warning").textContent,
     "A full new calibration will replace this cover's values in use. To adjust them without starting over, choose \"Fine-tuning\".", "a warning under the chosen path");
   assert.equal(sent(), before, "choosing a path sends nothing");
@@ -1700,27 +1700,27 @@ test("A-02 advises a path from the cover and the gateway's profiles, and presele
   assert.equal(none.choice.value, "A");
   assert.equal(none.actions[0].disabled, false);
   assert.equal(none.subline, "Never calibrated", "the context says only that");
-  assert.match(none.body, /If unsure, choose "First cover of its type"\.$/);
+  assert.match(none.body, /If in doubt, choose this option\.$/);
   const c = none.choice.options.find((option) => option.value === "C");
   assert.deepEqual([c.disabled, c.note], [true, ["Only what is off gets corrected: tape readings, times, or everything.", "Calibrate the cover first."]], "no fine-tuning on a cover never measured");
   // G2-2: the introduction is one line and the advice; each option explains itself in its note.
-  assert.equal(none.body, 'There are **three measurement paths**.\n\n"First cover of its type" is the recommended option because the cover has never been measured and there are no saved profiles.\n\nIf unsure, choose "First cover of its type".');
+  assert.equal(none.body, 'There are **three measurement paths**.\n\n"First cover of its type" is the recommended option because the cover has never been measured and there are no saved profiles. If in doubt, choose this option.');
   assert.deepEqual(none.choice.options.map((option) => option.note[0]), [translations.en.wiz_T452, translations.en.wiz_T453, translations.en.wiz_T454]);
   // Never calibrated, profiles available, no saved travel: no badge, nothing preselected, Ⓑ lists the profiles to compare.
   const some = buildScreen({ t, stage: "path", profiles: [tall, low], cover: { name: "Kitchen 2", status: "to_measure" } });
-  assert.deepEqual(advice(some), []);
-  assert.equal(some.choice.value, "");
-  assert.equal(some.actions[0].disabled, true, "Continue waits for a choice");
+  assert.deepEqual(advice(some), [["A", "Recommended"]], "always one advised option (G4-2)");
+  assert.equal(some.choice.value, "A");
+  assert.equal(some.actions[0].disabled, false);
   assert.deepEqual(note(some), [translations.en.wiz_T453, "2 profiles available", "tall_two_leaf · With slats · Reference travel 198 cm", "low_one_leaf · Without slats · Reference travel 112 cm"]);
-  assert.match(some.body, /If unsure, choose "First cover of its type"\.$/);
+  assert.match(some.body, /^There are \*\*three measurement paths\*\*\.\n\n"First cover of its type" is the recommended option because the cover has never been measured and, without the length of its curtain, there is no telling whether a saved profile fits it\. If in doubt, choose this option\.$/);
   assert.deepEqual(note(buildScreen({ t, stage: "path", profiles: [tall], cover: { name: "Kitchen 2", status: "to_measure" } }))[1], "1 profile available");
   // A saved travel within 5 % of a profile's reference: Ⓑ advised, preselected and explained (closest first).
   const close = { id: "close", name: "near", slat: 0, referenceTravel: 109 };
   const similar = buildScreen({ t, stage: "path", profiles: [tall, low, close], cover: { name: "Kitchen 2", status: "to_measure", travel_cm: 110 } });
   assert.deepEqual([advice(similar), similar.choice.value], [[["B", "Recommended"]], "B"]);
   assert.deepEqual(note(similar), [translations.en.wiz_T453, "3 profiles available", 'Travel similar to the profile "near" (110 cm vs 109 cm)', 'Travel similar to the profile "low_one_leaf" (110 cm vs 112 cm)']);
-  assert.match(similar.body, /If unsure, choose "Like a cover already measured"\.$/);
-  assert.deepEqual(advice(buildScreen({ t, stage: "path", profiles: [tall], cover: { name: "Kitchen 2", status: "to_measure", travel_cm: 110 } })), [], "198 cm is not similar");
+  assert.match(similar.body, /"Like a cover already measured" is the recommended option because .* If in doubt, choose this option\.$/);
+  assert.deepEqual(advice(buildScreen({ t, stage: "path", profiles: [tall], cover: { name: "Kitchen 2", status: "to_measure", travel_cm: 110 } })), [["A", "Recommended"]], "198 cm is not similar: the first of its type");
   // Already calibrated: Ⓒ; another choice gets its warning under it (Ⓑ: "a different profile" only when one is followed).
   const calibrated = (local, profile) => buildScreen({ t, stage: "path", local, profiles: [tall], cover: { name: "Kitchen 2", status: "rolls", last: "2026-10-01T09:00:00+00:00", profile } });
   assert.deepEqual([advice(calibrated({})), calibrated({}).choice.value, calibrated({}).subline], [[["C", "Recommended"]], "C", "Already calibrated (times and roll, Oct 1, 2026)"]);
@@ -2119,7 +2119,7 @@ test("choosing a cover on A-01 patches the list in place: same content area, sam
 test("A-02 says why the advised option is advised, impersonally, and says nothing when nothing is advised (G3-1)", () => {
   const t = (key) => translations.it[key] || key;
   const tall = { id: "tall", name: "alte", slat: 4.4, referenceTravel: 109 };
-  const reason = (cover, profiles) => buildScreen({ t, language: "it", stage: "path", profiles, cover: { name: "Cucina 2", ...cover } }).body.split("\n\n")[1];
+  const reason = (cover, profiles) => buildScreen({ t, language: "it", stage: "path", profiles, cover: { name: "Cucina 2", ...cover } }).body.split("\n\n")[1].replace(/ Nel dubbio, scegli questa opzione\.$/, "");
   assert.equal(reason({ status: "rolls", last: "2026-10-01T09:00:00+00:00" }, [tall]), "«Perfezionamento» è l'opzione consigliata perché questa tapparella è già calibrata.");
   assert.equal(reason({ status: "rolls", last: "2026-10-01T09:00:00+00:00", profile: { name: "alte" } }, [tall]),
     "«Perfezionamento» è l'opzione consigliata perché questa tapparella è già calibrata e segue il profilo «alte».");
@@ -2129,7 +2129,9 @@ test("A-02 says why the advised option is advised, impersonally, and says nothin
   assert.equal(reason({ status: "to_measure", travel_cm: 110 }, [tall]),
     "«Come una tapparella già misurata» è l'opzione consigliata perché la corsa del telo (110 cm) è vicina a quella del profilo «alte» (109 cm).");
   const none = buildScreen({ t, language: "it", stage: "path", profiles: [{ ...tall, referenceTravel: 198 }], cover: { name: "Cucina 2", status: "to_measure", travel_cm: 110 } });
-  assert.equal(none.body, "Ci sono **tre percorsi di misurazione**.\n\nNel dubbio, scegli «Prima tapparella del suo tipo».", "travel known, no similar profile: no sentence");
+  assert.equal(none.body, "Ci sono **tre percorsi di misurazione**.\n\n«Prima tapparella del suo tipo» è l'opzione consigliata perché la corsa del telo (110 cm) non è vicina a quella di nessun profilo salvato. Nel dubbio, scegli questa opzione.",
+    "travel known, no similar profile: still one advice (G4-2)");
+  assert.deepEqual(none.choice.options.filter((option) => option.badge).map((option) => option.value), ["A"]);
 });
 
 test("«The edge is still resting» repeats the lift-off without a value, and the repeat warns by origin (G3-2, G3-3)", async () => {

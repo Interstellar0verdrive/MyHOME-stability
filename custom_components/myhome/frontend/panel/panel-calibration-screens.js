@@ -81,7 +81,8 @@ export function pathAdvice(cover, profiles = []) {
   const similar = travel > 0 ? profiles.filter((profile) => profile.referenceTravel > 0 && Math.abs(profile.referenceTravel - travel) <= travel * SIMILAR_TRAVEL)
     .sort((a, b) => Math.abs(a.referenceTravel - travel) - Math.abs(b.referenceTravel - travel)) : [];
   if (similar.length) return { badge: "B", hint: "B", similar };
-  return { badge: profiles.length ? null : "A", hint: "A", similar: [] };
+  // G4-2 (replaces R4-9b): there is always exactly one advised option, badge and preselection included.
+  return { badge: "A", hint: "A", similar: [] };
 }
 
 /** The wizard's whole state as one screen. */
@@ -157,8 +158,9 @@ export function buildScreen(ctx) {
     const reason = measured ? fill(t(cover?.profile?.name ? "wiz_T464" : "wiz_T463"), { option: label.C, profile: cover?.profile?.name ?? "" })
       : advice.badge === "B" && closest ? fill(t("wiz_T467"), { option: label.B, travel: n(cover.travel_cm, 0), reference: n(closest.referenceTravel, 0), profile: closest.name })
         : !profiles ? fill(t("wiz_T466"), { option: label.A })
-          : !(cover?.travel_cm > 0) ? fill(t("wiz_T465"), { option: label.A }) : "";
-    const body = [t("wiz_T016"), reason, fill(t("wiz_T421"), { path: label[advice.hint] })].filter(Boolean).join("\n\n");
+          : !(cover?.travel_cm > 0) ? fill(t("wiz_T465"), { option: label.A }) : fill(t("wiz_T476"), { option: label.A, travel: n(cover.travel_cm, 0) });
+    // G4-2: the reason ends with «If in doubt, choose this option.»; no separate «If unsure» line.
+    const body = [t("wiz_T016"), `${reason} ${t("wiz_T475")}`].join("\n\n");
     Object.assign(screen, { code: "A-02", phase: "intro", title: tx("wiz_T015", { name }), subline: pathContext(t, cover, language), body,
       choice: { name: "path", kind: "radio", label: tx("wiz_T015", { name }), legendHidden: true, value: chosen, options },
       actions: [{ id: "path", label: t("wiz_T006"), kind: "primary", disabled: !chosen }] });
