@@ -295,7 +295,7 @@ export class CalibrationWizard {
    */
   /** A confirmation hides at once on the wide layout; on the phone, where it is a sheet, it slides down first. */
   _hideDialog(dialog, done) {
-    const phone = typeof matchMedia === "function" && matchMedia("(max-width: 767px)").matches;
+    const phone = typeof matchMedia === "function" && matchMedia("(max-width: 719px)").matches;
     if (phone) { this._slideAway(dialog, done); return; }
     dialog.hidden = true;
     done?.();

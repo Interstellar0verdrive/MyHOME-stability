@@ -14,7 +14,7 @@ function holdScroll(host) {
 }
 
 /** Phones with motion: the full-screen views slide up and down (M5-4). */
-const slides = () => typeof matchMedia === "function" && matchMedia("(max-width: 767px)").matches && !matchMedia("(prefers-reduced-motion: reduce)").matches;
+const slides = () => typeof matchMedia === "function" && matchMedia("(max-width: 719px)").matches && !matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /** WHO 2 "Calibration" view: what each timed cover uses, its measurement state and the ways to measure it. */
 const asset = (name) => { const url = new URL(name, import.meta.url); url.search = new URL(import.meta.url).search; return url.href; };
@@ -94,7 +94,7 @@ export class CalibrationTab {
     }
     // M4-4: on a phone the full-screen wizard holds the page under it still; only its content area scrolls.
     // Full screen only below 768 px (M5-1); from 768 px the wizard sits in the page.
-    const phone = typeof matchMedia === "function" && matchMedia("(max-width: 767px)").matches;
+    const phone = typeof matchMedia === "function" && matchMedia("(max-width: 719px)").matches;
     if (hold && phone && this._context?.host && !this._fullHold) this._fullHold = holdScroll(this._context.host);
     else if (!hold && this._fullHold) { this._fullHold(); this._fullHold = null; }
   }
@@ -484,7 +484,7 @@ export class CalibrationTab {
     const address = item.entity?.address, { t } = this._context;
     if (!address?.raw) return "";
     const fields = [[t("address"), address.raw], ...(address.a != null && address.pl != null ? [["A", address.a], ["PL", address.pl]] : [])];
-    // M5-1: below 1200 px only «Address: 86»; A and PL in their own span, shown from 1200 px.
+    // M5-1: on the cards (tab under 820 px) only «Address: 86»; A and PL in their own span.
     const part = ([label, value]) => `<span><span class="cal-row-address-label">${esc(label)}:</span> <span class="cal-row-address-value">${esc(value)}</span></span>`;
     const [first, ...rest] = fields;
     return `<span class="cal-row-address"> · ${part(first)}${rest.length ? `<span class="cal-row-address-ap"> · ${rest.map(part).join(" · ")}</span>` : ""}</span>`;
@@ -512,12 +512,12 @@ export class CalibrationTab {
           ${this._details(item, busy, language, addressDetails)}</div></div>`;
   }
 
-  /** Below 1200 px (the cards, M5-1) the details open as a page; the desktop table keeps them in the row. */
+  /** With the cards (tab under 820 px, M5-1) the details open as a page; the table keeps them in the row. */
   _phone() {
     if (typeof matchMedia !== "function") return false;
     // The tab's own width (the cards' container query), or a phone window.
     const width = this._context?.host?.getBoundingClientRect?.().width || 0;
-    return matchMedia("(max-width: 767px)").matches || (width > 0 ? width < 1200 : matchMedia("(max-width: 1199px)").matches);
+    return matchMedia("(max-width: 719px)").matches || (width > 0 ? width < 820 : matchMedia("(max-width: 819px)").matches);
   }
 
   _closePage() {

@@ -966,10 +966,10 @@ test("one breakpoint for the lists (1200 px of the tab itself) and the wizard's 
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   const calibration = css.slice(css.indexOf("/* ---------- WHO 2 · Calibration tab ---------- */"));
   assert.match(calibration, /#cover-calibration-tab \{ container: caltab \/ inline-size; \}/, "the tab's width decides, not the window's");
-  const widths = [...calibration.matchAll(/@(media|container caltab) ([^{]+)\{/g)].flatMap(([, kind, query]) =>
-    [...query.matchAll(/(min|max)-width: (\d+)px/g)].map(([, edge, px]) => `${kind === "media" ? "window" : "tab"} ${edge}-${px}`));
-  assert.deepEqual([...new Set(widths)].sort(), ["tab max-1199", "tab min-1200", "tab min-768", "window max-1023", "window max-767", "window min-1024"],
-    "the tab at 1200 (lists, wizard) and 768 (wizard's two columns); the window at 768 (full screen) and 1024 (the tab's buttons, dialogs)");
+  const widths = [...calibration.matchAll(/@(media|container caltab|container wizmain) ([^{]+)\{/g)].flatMap(([, kind, query]) =>
+    [...query.matchAll(/(min|max)-width: (\d+)px/g)].map(([, edge, px]) => `${kind === "media" ? "window" : kind.endsWith("wizmain") ? "content" : "tab"} ${edge}-${px}`));
+  assert.deepEqual([...new Set(widths)].sort(), ["content max-719", "tab max-819", "tab max-999", "tab min-1000", "tab min-820", "window max-1023", "window max-719", "window min-1024", "window min-720"],
+    "the tab at 820 (lists) and 1000 (wizard: three columns); the wizard's content at 720 (its lists); the window at 720 (full screen) and 1024 (buttons, dialogs)");
   const { tab } = await mount();
   const address = row(tab, "cover.kitchen_two").querySelector(".cal-row-address");
   assert.equal(address.querySelector(".cal-row-address-ap").textContent, " · A: 9 · PL: 1", "A and PL apart, hidden below 1200 px");
@@ -978,7 +978,7 @@ test("one breakpoint for the lists (1200 px of the tab itself) and the wizard's 
 test("the sequence's status and Start stay in view while the list scrolls; on cards the place sits at the row's edge (M5-2)", async () => {
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /\.wiz\.cal-batch-wiz \{ overflow: clip; \}/, "not a scroll box of its own, or sticky would not stick");
-  assert.match(css, /@container caltab \(min-width: 768px\) \{\s*\.cal-batch-sticky \{ position: sticky; top: 76px; \}/);
+  assert.match(css, /@media \(min-width: 720px\) \{\s*\.cal-batch-sticky \{ position: sticky; top: 76px; \}/);
   assert.match(css, /\.cal-batch-wiz \.cal-batch-order \{ position: absolute; inset-inline-end: 12px;/);
   const { tab } = await openBatch();
   assert.ok(tab.querySelector(".cal-batch .wiz-actions > .cal-batch-sticky > .cal-batch-summary"));
