@@ -252,6 +252,21 @@ test("the chevron column's header closes the visible rows when any is open, othe
   assert.deepEqual(open().sort(), ["cover.bedroom", "cover.living_two"], "rows outside the filter were left as they were");
 });
 
+test("the page does not pull to refresh while the wizard or the sequence view is shown", async () => {
+  const { tab } = await mount();
+  const value = () => document.documentElement.style.overscrollBehaviorY;
+  assert.equal(value(), "");
+  tab.querySelector('[data-action="cal-tab-measure"]').click(); await tick();
+  assert.equal(value(), "none", "wizard");
+  tab.querySelector('.wiz-head [data-wiz="exit"]').click(); await tick();
+  assert.equal(value(), "", "back to the list: as before");
+  tab.querySelector('[data-action="cal-tab-batch"]').click(); await tick();
+  assert.equal(value(), "none", "sequence view");
+  assert.equal(document.body.style.overscrollBehaviorY, "none");
+  tab.querySelector('[data-action="cal-tab-batch-back"]').click(); await tick();
+  assert.equal(value(), "");
+});
+
 test("Assign profile lists the saved profiles as B-01 does and assigns with the existing write, never through the profile dialog", async () => {
   const data = overview();
   // As Home Assistant publishes it for a cover named by its device: the registry name is only the entity id.

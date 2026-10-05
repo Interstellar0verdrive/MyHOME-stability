@@ -55,6 +55,24 @@ export class CalibrationTab {
     this._wizard = new CalibrationWizard();
   }
 
+  /**
+   * While the wizard or the sequence view is shown, the page does not bounce or pull to refresh at its top (Safari's
+   * pull-to-refresh reloads Home Assistant and drops the wizard without asking: iOS never shows `beforeunload`). The
+   * previous values come back as soon as the list is shown again.
+   */
+  get _mode() { return this.__mode; }
+  set _mode(mode) {
+    this.__mode = mode;
+    const hold = mode?.kind === "wizard" || mode?.kind === "batch", roots = [document.documentElement, document.body].filter(Boolean);
+    if (hold && !this._overscroll) {
+      this._overscroll = roots.map((element) => [element, element.style.overscrollBehaviorY]);
+      for (const element of roots) element.style.overscrollBehaviorY = "none";
+    } else if (!hold && this._overscroll) {
+      for (const [element, value] of this._overscroll) element.style.overscrollBehaviorY = value;
+      this._overscroll = null;
+    }
+  }
+
   /** Replace the wizard (tests use a faster preview); `null` leaves only sessions and groups. */
   useWizard(wizard) { this._wizard?.close(); this._wizard = wizard; }
 
