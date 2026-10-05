@@ -13,6 +13,9 @@ function holdScroll(host) {
   return () => { for (const [element, value, top] of held.reverse()) { element.style.overflow = value; if (element.scrollTop !== top) element.scrollTop = top; } };
 }
 
+/** Phones with motion: the full-screen views slide up and down (M5-4). */
+const slides = () => typeof matchMedia === "function" && matchMedia("(max-width: 767px)").matches && !matchMedia("(prefers-reduced-motion: reduce)").matches;
+
 /** WHO 2 "Calibration" view: what each timed cover uses, its measurement state and the ways to measure it. */
 const asset = (name) => { const url = new URL(name, import.meta.url); url.search = new URL(import.meta.url).search; return url.href; };
 const [{ escapeHtml: esc }, model, text, { CoverCalibration }, { CalibrationWizard }, { ProfileCatalogueEditor }, { morph }] = await Promise.all([
@@ -518,6 +521,12 @@ export class CalibrationTab {
   }
 
   _closePage() {
+    const page = this._context.host.querySelector(".cal-page");
+    if (page && slides() && !page.classList.contains("is-leaving")) {
+      page.classList.add("is-leaving");
+      setTimeout(() => { if (this._page) this._closePage(); }, 220);
+      return;
+    }
     const key = this._page;
     this._page = null;
     this._render();
@@ -675,6 +684,13 @@ export class CalibrationTab {
 
   /** Back to the list after a wizard, a group or an opened session; the backend is read again. */
   _backToList() {
+    // M5-4: on a phone the full-screen view slides down before the list comes back (at once with reduced motion).
+    const view = this._context?.host.querySelector(":scope > .wiz");
+    if (view && slides() && !view.classList.contains("is-leaving")) {
+      view.classList.add("is-leaving");
+      setTimeout(() => { if (view.isConnected) this._backToList(); }, 220);
+      return;
+    }
     this._mode = { kind: "list" };
     if (!this._context) return;
     this._context.host.innerHTML = "";

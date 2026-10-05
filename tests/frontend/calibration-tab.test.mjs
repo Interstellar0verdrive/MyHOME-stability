@@ -807,7 +807,8 @@ test("the sequence list sorts by its headers like the tab, and reordering never 
 
 test("on phones a cover's details open as a page over the list, closed by its ✕ or Escape", async () => {
   const original = globalThis.matchMedia;
-  globalThis.matchMedia = (query) => ({ matches: query.includes("max-width") && !query.includes("reduced-motion") });
+  // Reduced motion: the slide of M5-4 would only delay the checks.
+  globalThis.matchMedia = (query) => ({ matches: query.includes("max-width") || query.includes("reduced-motion") });
   try {
     const { tab, root } = await mount({ language: "it" });
     const toggle = () => row(tab, "cover.living_one").querySelector(".cal-row-toggle");
@@ -931,7 +932,8 @@ test("focus rings are for the keyboard only; a touch choice lets the drop-down g
 
 test("on phones the full-screen wizard holds the page under it and lets it go when it closes (M4-4)", async () => {
   const original = globalThis.matchMedia;
-  globalThis.matchMedia = (query) => ({ matches: query.includes("max-width") && !query.includes("reduced-motion") });
+  // Reduced motion: the slide of M5-4 would only delay the checks.
+  globalThis.matchMedia = (query) => ({ matches: query.includes("max-width") || query.includes("reduced-motion") });
   try {
     const { tab, panel } = await mount();
     document.body.style.overflow = "";
@@ -980,4 +982,25 @@ test("the sequence's status and Start stay in view while the list scrolls; on ca
   assert.match(css, /\.cal-batch-wiz \.cal-batch-order \{ position: absolute; inset-inline-end: 12px;/);
   const { tab } = await openBatch();
   assert.ok(tab.querySelector(".cal-batch .wiz-actions > .cal-batch-sticky > .cal-batch-summary"));
+});
+
+test("on phones the full-screen views slide down before the list comes back, at once with reduced motion (M5-4)", async () => {
+  const original = globalThis.matchMedia;
+  globalThis.matchMedia = (query) => ({ matches: query.includes("max-width") && !query.includes("reduced-motion") });
+  try {
+    const { tab, panel } = await mount();
+    tab.querySelector('[data-action="cal-tab-measure"]').click(); await tick();
+    const view = tab.querySelector(":scope > .wiz");
+    panel._calibrationTab._backToList();
+    assert.ok(view.classList.contains("is-leaving"), "it slides away first");
+    assert.equal(panel._calibrationTab._mode.kind, "wizard");
+    await new Promise((resolve) => setTimeout(resolve, 260)); await tick();
+    assert.equal(panel._calibrationTab._mode.kind, "list");
+    globalThis.matchMedia = (query) => ({ matches: query.includes("max-width") || query.includes("reduced-motion") });
+    tab.querySelector('[data-action="cal-tab-measure"]').click(); await tick();
+    panel._calibrationTab._backToList();
+    assert.equal(panel._calibrationTab._mode.kind, "list", "reduced motion: at once");
+  } finally { globalThis.matchMedia = original; }
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.cal-tab > \.wiz, \.cal-page \{ animation: wiz-sheet-in 220ms/);
 });
