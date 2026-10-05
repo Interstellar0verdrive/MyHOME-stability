@@ -794,15 +794,18 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   .cal-list-rows { display: grid; gap: 12px; }
   .cal-row, .cal-row:first-of-type, .cal-list-head + .cal-row { border: 1px solid var(--panel-border); border-radius: 12px; background: var(--panel-surface); }
   .cal-row.is-running { border-color: color-mix(in srgb, var(--panel-warning) 60%, transparent); }
-  /* A wrapping row rather than a grid: with a long status («Calibrated (times and roll)») the profile chip and the
-     action move to the next line instead of being clipped; the action always ends on the right. */
-  .cal-row-main { display: flex; flex-wrap: wrap; align-items: center; border-radius: 11px; }
-  .cal-row-toggle { order: 0; flex: 1 1 calc(100% - 56px); }
+  /* M4-6: the chips on the left, the action on the right and never wrapping. One chip: centred on the action; two
+     (status and profile): stacked, the action centred on both. */
+  .cal-row-main { grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "cover cover menu" "status action action"; row-gap: 6px; border-radius: 11px; }
+  .cal-row-main:has(.cal-row-profile .cal-profile-chip) { grid-template-areas: "cover cover menu" "status action action" "profile action action"; }
   .cal-row-actions { display: contents; }
-  .cal-menu-wrap { order: 1; align-self: start; margin-inline-start: auto; }
-  .cal-row-status { order: 2; }
-  .cal-row-profile { order: 3; min-width: 0; }
-  .cal-row-action { order: 4; margin-inline-start: auto; }
+  .cal-menu-wrap { grid-area: menu; align-self: start; justify-self: end; }
+  .cal-row-status { grid-area: status; align-self: end; min-width: 0; }
+  .cal-row-main:not(:has(.cal-row-profile .cal-profile-chip)) .cal-row-status { align-self: center; }
+  .cal-row-profile { grid-area: profile; align-self: start; min-width: 0; padding-inline-start: 4px; }
+  .cal-row-main:not(:has(.cal-row-profile .cal-profile-chip)) .cal-row-profile { display: none; }
+  .cal-row-action { grid-area: action; align-self: center; justify-self: end; white-space: nowrap; }
+  .cal-row-main .cal-badge, .cal-row-main .cal-profile-chip { max-width: 100%; }
   .cal-row-last-inline { display: block; color: var(--panel-text-2); }
   /* M2-3: a card opens a page, it does not unfold: no chevron. */
   .cal-row-chevron { display: none; }

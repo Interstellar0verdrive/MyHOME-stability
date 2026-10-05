@@ -933,3 +933,10 @@ test("on phones the full-screen wizard holds the page under it and lets it go wh
     assert.equal(document.body.style.overflow, "");
   } finally { globalThis.matchMedia = original; }
 });
+
+test("phone cards: one chip centred on the action, two chips stacked beside it, the action never wrapping (M4-6)", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.cal-row-main:has\(\.cal-row-profile \.cal-profile-chip\) \{ grid-template-areas: "cover cover menu" "status action action" "profile action action"; \}/);
+  assert.match(css, /\.cal-row-main:not\(:has\(\.cal-row-profile \.cal-profile-chip\)\) \.cal-row-status \{ align-self: center; \}/);
+  assert.match(css, /\.cal-row-action \{ grid-area: action; align-self: center; justify-self: end; white-space: nowrap; \}/);
+});
