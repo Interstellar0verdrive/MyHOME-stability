@@ -1042,7 +1042,11 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-choice { max-width: 420px; }
 .wiz-choice-hint { font-weight: 400; }
 .wiz-radios { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; max-width: none; }
-.wiz-radios legend { margin-bottom: 6px; font-size: 12px; font-weight: 500; color: var(--panel-text-2); }
+/* G2-7: the label of a group of fields («Profilo da seguire», «Altezza del bordo inferiore», «Nome del profilo», …) is
+   15 px, semibold, in the text colour, everywhere; hints under the fields stay small and grey. */
+.wiz-radios legend { margin-bottom: 6px; font-size: 15px; font-weight: 600; color: var(--primary-text-color, #182b37); }
+.wiz-field > label, .wiz-profile-block > label:not(.wiz-switch) { font-size: 15px; font-weight: 600; color: var(--primary-text-color, #182b37); }
+.wiz-profile-block > label:not(.wiz-switch) input { font-weight: 400; }
 /* Plain radio rows, as in the mockups: no card, no tinted background on the chosen one. */
 /* The circle sits centred on the first line: a 20 px line and a 16 px circle 2 px down, whatever follows the label. */
 .wiz-radio { display: flex; gap: 10px; align-items: start; padding: 6px 0; font-size: 14px; line-height: 20px; font-weight: 400; color: var(--primary-text-color, #182b37); cursor: pointer; }
