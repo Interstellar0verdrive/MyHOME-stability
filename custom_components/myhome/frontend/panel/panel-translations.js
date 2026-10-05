@@ -411,6 +411,9 @@ export const translations = {
     wiz_T486: "1 selected",
     wiz_T487: "None selected",
     wiz_T488: "Up to {max} covers per sequence",
+    wiz_T489: "Remeasuring only the times takes five movements and about two minutes: three stopwatch presses and **no tape measure readings**. If you make a mistake, you can repeat a step without restarting. You can end the correction at any time: **values will be saved only at the final summary**.\n\nStand in front of {cover}. It must be clearly visible and easy to reach for measurements.\n\nThe two roll coefficients and the curtain travel will stay as they are: nothing will be measured with a tape measure here.",
+    wiz_T490: "This correction does not time any run: the times {cover} currently uses will stay in use. The process takes ten movements and about three minutes: four tape measure readings and a final check. If you make a mistake, you can repeat a step without restarting. You can end the correction at any time: **values will be saved only at the final summary**.\n\n**You will need a tape measure.** Stand in front of {cover}. It must be clearly visible and easy to reach for measurements.\n\nThe readings will correct the two roll coefficients, which set where the cover stops along its travel. The curtain travel will not be remeasured.",
+    wiz_T491: "In centimetres; a comma or a point are both fine.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1286,6 +1289,9 @@ export const translations = {
     wiz_T486: "1 selezionata",
     wiz_T487: "Nessuna selezionata",
     wiz_T488: "Massimo {max} tapparelle per sequenza",
+    wiz_T489: "La rimisurazione dei soli tempi prevede cinque movimenti e dura circa due minuti: tre pressioni al cronometro, **nessuna misurazione con il metro**. In caso di errore è possibile ripetere un passaggio, senza rifare tutto il processo. Puoi terminare la correzione quando vuoi: **il salvataggio verrà fatto solo al riepilogo finale**.\n\nDevi trovarti davanti a {cover}, che deve essere visibile chiaramente e facilmente accessibile per le misurazioni.\n\nI due coefficienti di rullo e la corsa del telo resteranno quelli in uso: qui non si misurerà niente col metro.",
+    wiz_T490: "Questa correzione non cronometra nessuna corsa: i tempi con cui {cover} si muove attualmente resteranno quelli in uso. Il processo prevede dieci movimenti e dura circa tre minuti: quattro misurazioni con un metro e una verifica finale. In caso di errore è possibile ripetere un passaggio, senza rifare tutto il processo. Puoi terminare la correzione quando vuoi: **il salvataggio verrà fatto solo al riepilogo finale**.\n\n**Ti servirà un metro.** Devi trovarti davanti a {cover}, che deve essere visibile chiaramente e facilmente accessibile per le misurazioni.\n\nLe letture correggeranno i due coefficienti di rullo, cioè il punto in cui la tapparella si ferma lungo la corsa. La corsa del telo non verrà rimisurata.",
+    wiz_T491: "In centimetri; la virgola o il punto vanno bene.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

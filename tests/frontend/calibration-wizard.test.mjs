@@ -2197,3 +2197,14 @@ test("C-03 asks about the slats with the answer of the last calibration preselec
   assert.equal(before(undefined).choice.value, "yes", "unknown: with slats");
   assert.equal(before(0, { slats: true }).choice.value, "yes", "the user's own answer wins");
 });
+
+test("no «—» inside a sentence: without the datum the variant that does not name it (M5-6)", () => {
+  const t = (key) => translations.it[key] || key;
+  const before = (scope, travel_cm) => buildScreen({ t, language: "it", stage: "before", path: "C", scope, cover: { name: "Cucina 2", travel_cm } }).body;
+  assert.match(before("times_only", null), /I due coefficienti di rullo e la corsa del telo resteranno quelli in uso/);
+  assert.match(before("times_only", 110), /la corsa del telo, 110 cm, resteranno/);
+  assert.match(before("points_only", null), /La corsa del telo non verrà rimisurata\./);
+  for (const scope of ["times_only", "points_only"]) assert.doesNotMatch(before(scope, null), /—/);
+  const all = Object.entries(translations.it).filter(([key]) => /^wiz_T(230|235|489|490|491)$/.test(key));
+  assert.equal(all.length, 5);
+});

@@ -207,7 +207,9 @@ export function buildScreen(ctx) {
     }
     Object.assign(screen, {
       code: pointsOnly ? "C-37" : timesOnly ? "C-35" : path === "C" ? "C-03" : "A-03", phase: "prep", title: t("wiz_T021"),
-      body: pointsOnly ? tx("wiz_T235", { ...values, travel: n(cover?.travel_cm) }) : timesOnly ? tx("wiz_T230", { ...values, travel: n(cover?.travel_cm) })
+      // M5-6: never «— cm» inside a sentence: without a known travel the variant that does not name it.
+      body: pointsOnly ? tx(cover?.travel_cm > 0 ? "wiz_T235" : "wiz_T490", { ...values, travel: n(cover?.travel_cm) })
+        : timesOnly ? tx(cover?.travel_cm > 0 ? "wiz_T230" : "wiz_T489", { ...values, travel: n(cover?.travel_cm) })
         : path === "C" ? tx("wiz_T197", values) : t("wiz_T022"),
       // Guided times only has no lift-off: the backend does not use the slat choice there.
       // G4-5: the answer known from the last calibration is preselected (0 s of slats: without), «with slats» otherwise.
@@ -444,7 +446,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     // intermediate runs, so no elapsed time; then the tape reading, from 0.1 cm to the measured travel.
     screen.phase = "readings";
     if (phase === "reading") return Object.assign(screen, { code: p("31"), title: t("wiz_T138"), body: t("wiz_T139"),
-      field: { label: t("wiz_T064"), hint: tx("wiz_T123", { cm: n(view.check?.target_cm, 0) }), min: 0.1, max: view.travel_cm ?? 10000, kind: "height" },
+      field: { label: t("wiz_T064"), hint: view.check?.target_cm != null ? tx("wiz_T123", { cm: n(view.check.target_cm, 0) }) : t("wiz_T491"), min: 0.1, max: view.travel_cm ?? 10000, kind: "height" },
       actions: [{ id: "reading", label: t("wiz_T051"), kind: "primary" }, { id: "repeat", label: t("wiz_T033"), kind: "secondary" }] });
     positioning("30", t("wiz_T086"));
     if (phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
@@ -521,11 +523,11 @@ function previewScreen(screen, ctx, tx, n, values, stop) {
       actions: [{ id: "reading", label: t("wiz_T051"), kind: "primary" }] });
     if (profile) return Object.assign(screen, { code: "B-06", title: t("wiz_T138"),
       body: tx("wiz_T173", { expected: n(view.expected_cm, 0), travel: n(view.travel_cm, 0) }),
-      field: { label: t("wiz_T064"), hint: tx("wiz_T123", { cm: n(view.expected_cm, 0) }), min: 0, max: 10000, kind: "height" },
+      field: { label: t("wiz_T064"), hint: view.expected_cm != null ? tx("wiz_T123", { cm: n(view.expected_cm, 0) }) : t("wiz_T491"), min: 0, max: 10000, kind: "height" },
       actions: [{ id: "reading", label: t("wiz_T051"), kind: "primary" }, { id: "repeat", label: t("wiz_T033"), kind: "secondary" }] });
     const [, number, title] = readingCodes[view.step];
     return Object.assign(screen, { code: p(number), title: t(title), body: view.step === "check" ? t("wiz_T139") : t("wiz_T082"),
-      field: { label: t("wiz_T064"), hint: tx("wiz_T123", { cm: n(view.expected_cm, 0) }), min: 0, max: 10000, kind: "height" },
+      field: { label: t("wiz_T064"), hint: view.expected_cm != null ? tx("wiz_T123", { cm: n(view.expected_cm, 0) }) : t("wiz_T491"), min: 0, max: 10000, kind: "height" },
       actions: [{ id: "reading", label: t("wiz_T051"), kind: "primary" }, { id: "repeat", label: t("wiz_T033"), kind: "secondary" }] });
   }
   if (view.phase === "check_result") {
@@ -759,7 +761,7 @@ function problemScreen(screen, ctx, reason, step = false) {
  */
 function halfField(ctx, tx, n) {
   const { t, view, language = "en" } = ctx, span = view.reading_range;
-  if (!span) return { label: t("wiz_T064"), hint: tx("wiz_T083", { cm: n(view.expected_cm, 0) }), min: 0.1, max: 10000, kind: "height" };
+  if (!span) return { label: t("wiz_T064"), hint: view.expected_cm != null ? tx("wiz_T083", { cm: n(view.expected_cm, 0) }) : t("wiz_T491"), min: 0.1, max: 10000, kind: "height" };
   return { label: t("wiz_T064"), hint: fill(t("calReadingRange"), readingRange(span, language)),
     min: span.min_cm - RANGE_SLACK_CM, max: span.max_cm + RANGE_SLACK_CM, kind: "height", range: true };
 }
