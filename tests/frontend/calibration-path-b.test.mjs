@@ -14,7 +14,8 @@ test("B-01 offers the gateway's profiles with where they were measured and who f
   const { wiz, code, press, startFor, title } = await mount();
   await startFor("cover.living_one", "B");
   assert.equal(code(), "B-01");
-  assert.equal(title(), "Which profile does this cover follow?");
+  assert.equal(title(), "Which profile should this cover follow?");
+  assert.match(wiz().querySelector(".wiz-body").textContent, /No run will be timed on this cover: you will measure its curtain travel/);
   // A radio list, one row per profile, as in the mockup (no drop-down).
   assert.equal(wiz().querySelector('select[name="profile"]'), null);
   assert.equal(wiz().querySelector(".wiz-radios legend").textContent, "Profile to follow");
