@@ -1068,10 +1068,14 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-radio input { flex: none; width: 16px; height: 16px; min-height: 0; margin: 2px 0 0; accent-color: var(--panel-accent); }
 .wiz-radio small { line-height: 18px; }
 .wiz-radio .wiz-recommended { line-height: 16px; padding-block: 2px; }
-.wiz-radio small { display: block; margin-top: 2px; }
+/* G4-3: about 4 px of visible space between the bold label and its explanation (line boxes included); further note
+   lines keep their own 4 px. The space between options is unchanged. */
+.wiz-radio small { display: block; margin-top: 1px; }
+.wiz-radio small + small { margin-top: 4px; }
+.wiz-radio-explain { display: block; margin-top: 1px; }
 .wiz-radio.is-disabled { cursor: not-allowed; opacity: .6; }
-.wiz-radio-text { display: grid; gap: 2px; min-width: 0; }
-.wiz-radio-label { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.wiz-radio-text { display: grid; gap: 0; min-width: 0; }
+.wiz-radio-label { display: flex; flex-wrap: wrap; align-items: center; gap: 1px 8px; }
 .wiz-recommended { background: var(--panel-accent-soft); color: var(--panel-accent); font-size: 11px; padding: 1px 8px; }
 .wiz-subline { margin: 8px 0 0; }
 .wiz-radio-warning { display: block; margin-top: 6px; }

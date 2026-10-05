@@ -481,9 +481,19 @@ export class CalibrationWizard {
   }
 
   _choiceMarkup(choice) {
+    // G4-3: a label written as «**title**\nexplanation» (C-02) is a title and its explanation, not one flex line with a
+    // break in it (the break took a whole row: 24 px between them).
+    const parts = (option) => {
+      if (option.plain) return [esc(option.label), ""];
+      const [first, ...rest] = option.label.split("\n");
+      // The bold run closes on the next line in the sheet («**title\n**explanation»): close it on the title.
+      const head = /^\*\*/.test(first) && !/^\*\*.*\*\*/.test(first) ? `${first.trim()}**` : first;
+      const tail = rest.join(" ").trim().replace(/^\*\*\s*/, "");
+      return tail ? [inline(head), `<span class="wiz-radio-explain">${inline(tail)}</span>`] : [inline(option.label), ""];
+    };
     return `<fieldset class="wiz-choice wiz-radios"><legend${choice.legendHidden ? ' class="visually-hidden"' : ""}>${esc(choice.label)}</legend>${choice.help ? this._helpMarkup(choice.help) : ""}${choice.options.map((option) =>
-      `<label class="wiz-radio${option.disabled ? " is-disabled" : ""}"><input type="radio" name="${esc(choice.name)}" value="${esc(option.value)}" ${option.value === choice.value ? "checked" : ""} ${option.disabled ? "disabled" : ""}><span class="wiz-radio-text"><span class="wiz-radio-label">${option.plain ? esc(option.label) : inline(option.label)}${option.badge
-        ? ` <span class="badge wiz-recommended">${esc(option.badge)}</span>` : ""}</span>${[].concat(option.note || []).map((line) => `<small class="muted">${esc(line)}</small>`).join("")}${option.warning
+      `<label class="wiz-radio${option.disabled ? " is-disabled" : ""}"><input type="radio" name="${esc(choice.name)}" value="${esc(option.value)}" ${option.value === choice.value ? "checked" : ""} ${option.disabled ? "disabled" : ""}><span class="wiz-radio-text"><span class="wiz-radio-label">${parts(option)[0]}${option.badge
+        ? ` <span class="badge wiz-recommended">${esc(option.badge)}</span>` : ""}</span>${parts(option)[1]}${[].concat(option.note || []).map((line) => `<small class="muted">${esc(line)}</small>`).join("")}${option.warning
         ? `<span class="cal-note is-warning wiz-radio-warning">${esc(option.warning)}</span>` : ""}</span></label>`).join("")}</fieldset>`;
   }
 
