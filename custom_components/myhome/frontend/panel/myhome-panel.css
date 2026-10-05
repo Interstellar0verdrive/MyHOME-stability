@@ -912,8 +912,8 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   /* «12 tapparelle disponibili…» first, then «Seleziona:» with its shortcuts. */
   .cal-batch-tools { flex-direction: column; align-items: start; }
   .cal-batch-capacity { order: -1; }
-  /* GM2: the reading field takes the content's width. */
-  .wiz-field { max-width: none; }
+  /* GM2: the reading field takes the content's width (more specific than the base rule, which comes later). */
+  .wiz-main .wiz-field { max-width: none; }
   .cal-batch-cancel { border: 0; background: transparent; color: var(--panel-accent); }
 }
 @media (min-width: 1024px) {
