@@ -210,7 +210,9 @@ export function buildScreen(ctx) {
       body: pointsOnly ? tx("wiz_T235", { ...values, travel: n(cover?.travel_cm) }) : timesOnly ? tx("wiz_T230", { ...values, travel: n(cover?.travel_cm) })
         : path === "C" ? tx("wiz_T197", values) : t("wiz_T022"),
       // Guided times only has no lift-off: the backend does not use the slat choice there.
-      choice: pointsOnly || timesOnly ? null : { name: "slats", kind: "radio", label: t("wiz_T023"), value: local.slats === false ? "no" : "yes",
+      // G4-5: the answer known from the last calibration is preselected (0 s of slats: without), «with slats» otherwise.
+      choice: pointsOnly || timesOnly ? null : { name: "slats", kind: "radio", label: t("wiz_T023"),
+        value: (local.slats ?? cover?.effective?.slat_time_s?.value !== 0) === false ? "no" : "yes",
         // G2-3: how to tell, closed by default, right after the question.
         help: { summary: t("wiz_T456"), text: t("wiz_T457") },
         options: [{ value: "yes", label: t("wiz_T198") }, { value: "no", label: t("wiz_T199") }] },

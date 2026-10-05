@@ -2183,3 +2183,17 @@ test("A-08b advises repeating: «Repeat the measurement» is the primary, «Igno
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /\[data-theme="dark"\] \.wiz-notice\[data-tone="warning"\][^{]*\{ color: color-mix\(in srgb, var\(--panel-warning\) 70%/);
 });
+
+test("C-03 asks about the slats with the answer of the last calibration preselected (G4-5)", () => {
+  const t = (key) => translations.it[key] || key;
+  const before = (slat, local = {}) => buildScreen({ t, language: "it", stage: "before", path: "C", scope: "times_and_rolls", local,
+    cover: { name: "Cucina 2", effective: slat === undefined ? {} : { slat_time_s: { value: slat } } } });
+  const c03 = before(0);
+  assert.equal(c03.code, "C-03");
+  assert.equal(c03.choice.label, "Ha le lamelle?");
+  assert.ok(c03.choice.help, "with its help");
+  assert.equal(c03.choice.value, "no", "known: without slats");
+  assert.equal(before(2.4).choice.value, "yes");
+  assert.equal(before(undefined).choice.value, "yes", "unknown: with slats");
+  assert.equal(before(0, { slats: true }).choice.value, "yes", "the user's own answer wins");
+});
