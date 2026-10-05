@@ -1128,6 +1128,9 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
   .wiz-head { padding: 12px 16px; }
   .wiz-discard { display: none; }
   .wiz-x { display: inline-flex; }
+  /* M2-1: every ✕ of a title bar or sheet is a 44 px touch target with a 24 px icon. */
+  .wiz-x, .wiz-sheet-close, .cal-page-close { width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0; justify-content: center; }
+  .wiz-x ha-icon, .wiz-sheet-close ha-icon, .cal-page-close ha-icon { --mdc-icon-size: 24px; }
   .wiz-compact { display: flex; align-items: center; gap: 10px; padding: 8px 16px; background: var(--panel-surface-2); border-bottom: 1px solid var(--panel-border); font-size: 13px; }
   .wiz-compact-line { flex: 1; }
   .wiz-dot { width: 14px; height: 14px; border-radius: 50%; box-sizing: border-box; }
