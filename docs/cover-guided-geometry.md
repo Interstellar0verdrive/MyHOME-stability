@@ -51,8 +51,9 @@ The final tape reading seeds the new runtime position after successful Save.
 ## Measurement and fitting
 
 The motor start anchor is the actuator's moving status after the guarded command
-is dispatched. This path requires movement and Stop feedback: absent feedback
-interrupts rather than fabricating a duration or assuming a safe stationary state.
+is dispatched. This path requires movement feedback, and Stop feedback or a written
+Stop: absent feedback interrupts rather than fabricating a duration or assuming a
+safe stationary state.
 Direction delivery failures also interrupt, but only for the movement still current:
 a frame refused or acknowledged after a later movement was queued (the next step, a new
 check, or a check cut short) is ignored. Existing one-session gateway ownership,
@@ -61,9 +62,20 @@ lease, reservation, shutdown, guard and recovery rules apply.
 A lift-off or intermediate stop measures from the motor anchor to the worker's
 Stop frame write timestamp, exposed only after the send is acknowledged. Queue wait
 before movement is excluded; queue wait before Stop is included. Readings unlock
-only after both confirmed delivery and actuator Stop feedback. A physical endpoint
-confirmation instead ends timing on receipt by the backend; the subsequent relay
-release Stop is excluded. No browser clock is used.
+only after confirmed delivery and actuator Stop feedback, or the quiet window below.
+A physical endpoint confirmation instead ends timing on receipt by the backend; the
+subsequent relay release Stop is excluded. No browser clock is used.
+
+Some gateways acknowledge our Stop with its translation (`*2*1000#0*WHERE##`, which
+the gateway handler drops) and never relay the stop status itself. So once the Stop
+is written (lift-off, intermediate and check runs, and an end stop confirmed before
+its stop status), the step also goes on when no movement status arrives within
+`ECHO_WINDOW` (1.5 s) of the write; the measured durations are unchanged.
+The stop status ends the wait at once if it comes first, an opposite movement
+status still interrupts, and a movement status in the run's direction brings back
+the 30-second `not_stopped` deadline. Until the Stop is written that deadline
+stays, so a Stop never written still ends in `not_stopped`. The gateway reservation
+is not released by this: it still waits for a stop status or its guard.
 
 In the end stop runs (`home`, `reset`, the full ascent and descent, `top`, and the
 returns of a check) the actuator's own stop status (`state == 0`) does not interrupt:
