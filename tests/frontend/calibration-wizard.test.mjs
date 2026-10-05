@@ -1837,3 +1837,34 @@ test("opened on a given cover, the wizard already has it chosen; from the tab's 
   assert.equal(wiz().querySelector(".wiz-head .muted").textContent, "Living room shutter 3 · Living room · Address: 91 · A: 9 · PL: 1");
   assert.equal(button("choose").disabled, false);
 });
+
+test("a missed heartbeat is a calm status, and the panel reconnects when the page is visible again", async () => {
+  const { backend, panel, wiz, code, press, startFor } = await mount();
+  await startFor("cover.living_one");
+  await press("begin"); await move(backend); await settle();
+  const screenCode = code();
+  const gateway = panel._calibrationTab._wizard._gateway;
+  const notices = () => wiz().querySelector(".wiz-notices");
+  // Safari puts the page aside: the heartbeat fails, as a closed connection would.
+  const callWS = backend.hass.callWS;
+  backend.hass.callWS = async (message) => {
+    if (message.action === "heartbeat") throw Object.assign(new Error("Connection lost"), { code: 3 });
+    return callWS(message);
+  };
+  await gateway._engine._perform("heartbeat"); await tick();
+  assert.equal(notices().textContent, translations.en.wiz_T446);
+  assert.ok(notices().querySelector(".notice.info, [data-tone='info'], .info"), "the interruption is told as information");
+  assert.doesNotMatch(notices().textContent, /Connection or command failed/);
+  // The page comes back: the panel resumes the session on its own and the status goes away.
+  backend.hass.callWS = callWS;
+  const resumes = () => backend.subscriptions.filter((message) => message.type === "myhome/cover_calibration/resume").length;
+  const before = resumes();
+  document.dispatchEvent(new window.Event("visibilitychange")); await settle();
+  assert.equal(resumes(), before + 1);
+  assert.equal(notices().textContent, "");
+  assert.equal(code(), screenCode);
+  // A command that really fails still says so.
+  backend.hass.callWS = async (message) => { if (message.type === "myhome/cover_calibration/action" && message.action !== "heartbeat") throw new Error("boom"); return callWS(message); };
+  await gateway._engine._perform("stop", {}); await tick();
+  assert.match(notices().textContent, /Connection or command failed/);
+});

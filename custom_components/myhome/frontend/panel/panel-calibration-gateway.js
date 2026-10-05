@@ -18,20 +18,32 @@ const { CoverCalibration } = await import(asset("panel-cover-calibration.js"));
 
 /** The existing engine, with its DOM replaced by notifications to the wizard. */
 class WizardSession extends CoverCalibration {
-  constructor(listener) { super(); this._listener = listener; this.error = null; this.notice = null; }
+  constructor(listener) {
+    super();
+    this._listener = listener; this.error = null; this.notice = null;
+    // A failed heartbeat is the connection, not a command: it is told apart by the extra object its call carries.
+    this._beats = new WeakSet(); this.connection = null;
+  }
   _render() { this._listener("view"); }
   _renderElapsed() { this._listener("tick"); }
   // The reading that was refused travels with the error, to name it beside the accepted range.
-  _error(error, extra = {}) { this.error = { ...(error || {}), code: error?.code, reading: extra.reading_cm ?? null }; this._listener("error"); }
+  _error(error, extra = {}) {
+    if (this._beats.has(extra)) { this.connection = "interrupted"; this._listener("view"); return; }
+    this.error = { ...(error || {}), code: error?.code, reading: extra.reading_cm ?? null }; this._listener("error");
+  }
   _accept(state) {
     const claiming = this._claiming;
     super._accept(state);
+    // Attached again (Home Assistant reconnected, or the page came back): the interruption is over.
+    if (state.attached && !this._lost) this.connection = null;
     // A claim against a sequence that moved on only reads: the wizard says so.
     if (claiming && state.read_only) { this.notice = "calClaimStale"; this._listener("view"); }
   }
   _perform(action, extra) {
-    if (action !== "heartbeat") { this.error = null; this.notice = null; }
-    return super._perform(action, extra);
+    if (action !== "heartbeat") { this.error = null; this.notice = null; return super._perform(action, extra); }
+    const beat = {};
+    this._beats.add(beat);
+    return super._perform(action, beat);
   }
 }
 
@@ -49,7 +61,7 @@ export class LiveCalibrationGateway {
   get view() { return this._engine._state || null; }
   get status() {
     const engine = this._engine;
-    return { busy: !!engine._busy, lost: !!engine._lost, expired: !!engine._expired, error: engine.error, notice: engine.notice,
+    return { busy: !!engine._busy, lost: !!engine._lost, expired: !!engine._expired, error: engine.error, notice: engine.notice, connection: engine.connection,
       cancelPending: !!engine._cancelPending, confirmTake: !!engine._confirmTake, locked: !!engine._state && engine._locked() };
   }
 

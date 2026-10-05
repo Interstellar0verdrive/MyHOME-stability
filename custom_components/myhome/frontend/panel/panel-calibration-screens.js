@@ -833,7 +833,9 @@ function finalize(screen, ctx) {
   // Alone in a wait, Stop is the red filled button of the mockups; beside a step's buttons it stays a red link.
   if (screen.wait && screen.actions.length === 1 && screen.actions[0].id === "stop") screen.actions[0] = { ...screen.actions[0], kind: "danger" };
   if (status.lost && !status.expired && view && !ENDED.includes(view.phase)) {
-    screen.notices.push({ tone: "error", text: t("calVisual_disconnected") });
+    // A missed heartbeat (the phone put the page aside, the connection dropped for a moment) is a calm status while the
+    // panel reconnects; a lost presence for any other reason stays an error.
+    screen.notices.push(status.connection === "interrupted" ? { tone: "info", text: t("wiz_T446") } : { tone: "error", text: t("calVisual_disconnected") });
     if (view.recoverable) screen.actions.push({ id: "reconnect", label: t("calResume"), kind: "secondary" });
   }
   if (status.notice) screen.notices.push({ tone: "warning", text: t(status.notice) });

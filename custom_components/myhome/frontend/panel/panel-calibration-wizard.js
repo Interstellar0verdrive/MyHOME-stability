@@ -66,6 +66,8 @@ export class CalibrationWizard {
   }
 
   close() {
+    if (this._onVisible) document.removeEventListener("visibilitychange", this._onVisible);
+    this._onVisible = null;
     this._moreObserver?.disconnect();
     this._moreObserver = null;
     this._moreUpdate = null;
@@ -107,6 +109,13 @@ export class CalibrationWizard {
     this._root.addEventListener("input", (event) => this._input(event));
     this._root.addEventListener("change", (event) => this._change(event));
     this._root.addEventListener("submit", (event) => { event.preventDefault(); this._reading(); });
+    // Back on the page (Safari suspends a tab in the background): reconnect at once, without asking.
+    this._onVisible = () => {
+      const gateway = this._gateway, status = gateway?.status || {};
+      if (document.hidden || !gateway || gateway.preview || !status.lost || status.expired || !gateway.view?.recoverable) return;
+      gateway.reconnect();
+    };
+    document.addEventListener("visibilitychange", this._onVisible);
     this._signature = null;
     if (start === "path" && item) this._local.stage = "path";
     // Where the way back ends: A-01 from the tab's generic button, A-02 from a cover's own Measure.
