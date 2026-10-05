@@ -207,7 +207,7 @@ export class CalibrationWizard {
     // The header (cover name and address) is patched, not part of the frame: choosing a cover on A-01 keeps the list
     // and its scroll (M3-4).
     const signature = JSON.stringify([screen.code, screen.title, screen.body, screen.choice && { ...screen.choice, value: undefined },
-      screen.field && { ...screen.field, disabled: undefined }, screen.box, screen.table, screen.technical, screen.precision,
+      screen.field && { ...screen.field, disabled: undefined, error: undefined }, screen.box, screen.table, screen.technical, screen.precision,
       screen.profileBlock && { ...screen.profileBlock, name: screen.profileBlock.name && { label: screen.profileBlock.name.label, hint: screen.profileBlock.name.hint } },
       screen.saveInfo, screen.status, screen.preview, screen.illustration, screen.wait && screen.wait.text, screen.discard, screen.back, !!screen.picker, screen.results, screen.note, screen.help]);
     if (signature !== this._signature) {
@@ -402,6 +402,14 @@ export class CalibrationWizard {
     if (top) { const first = markup(screen.notices.filter((notice) => notice.result)); if (top.innerHTML !== first) top.innerHTML = first; }
     const field = root.querySelector(".wiz-field input");
     if (field) field.disabled = !!screen.field?.disabled;
+    // G3-4: a refused value says why, under the field; never a silent red.
+    const fieldError = root.querySelector("#wiz-field-error");
+    if (fieldError) {
+      const message = screen.field?.error || "";
+      if (fieldError.textContent !== message) fieldError.textContent = message;
+      fieldError.hidden = !message;
+      if (message) field?.setAttribute("aria-invalid", "true");
+    }
     const block = screen.profileBlock?.name;
     const line = root.querySelector(".wiz-name-line");
     if (line && block && line.textContent !== block.line) line.textContent = block.line;
@@ -479,8 +487,8 @@ export class CalibrationWizard {
 
   _fieldMarkup(field) {
     const value = field.value == null ? "" : `${field.value}`;
-    return `<form class="wiz-field" novalidate autocomplete="off"><label>${esc(field.label)}<span class="input-suffix"><input name="reading_cm" type="text" inputmode="decimal" autocomplete="off" value="${esc(value)}" aria-describedby="wiz-field-hint" data-kind="${esc(field.kind)}" data-min="${field.min}" data-max="${field.max}"><span>cm</span></span></label>
-      <p id="wiz-field-hint" class="muted">${esc(field.hint)}</p></form>`;
+    return `<form class="wiz-field" novalidate autocomplete="off"><label>${esc(field.label)}<span class="input-suffix"><input name="reading_cm" type="text" inputmode="decimal" autocomplete="off" value="${esc(value)}" aria-describedby="wiz-field-hint wiz-field-error" data-kind="${esc(field.kind)}" data-min="${field.min}" data-max="${field.max}"><span>cm</span></span></label>
+      <p id="wiz-field-hint" class="muted">${esc(field.hint)}</p><p id="wiz-field-error" class="wiz-field-error" role="alert" hidden></p></form>`;
   }
 
   _tableMarkup(table) {
@@ -668,7 +676,7 @@ export class CalibrationWizard {
     const value = parseReading(input.value), min = Number(input.dataset.min), max = Number(input.dataset.max);
     if (!Number.isFinite(value) || value < min || value > max) {
       // Outside the accepted range of an intermediate reading the screen names the range; nothing is sent.
-      this._local.fieldError = Number.isFinite(value) ? value : null;
+      this._local.fieldError = Number.isFinite(value) ? value : "nan";
       this._patch(this._screen());
       const field = this._frame.querySelector('[name="reading_cm"]');
       field.setAttribute("aria-invalid", "true");

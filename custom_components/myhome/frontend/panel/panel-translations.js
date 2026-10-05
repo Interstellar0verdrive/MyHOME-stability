@@ -392,6 +392,9 @@ export const translations = {
     wiz_T467: "\"{option}\" is the recommended option because the curtain travel ({travel} cm) is close to that of the profile \"{profile}\" ({reference} cm).",
     wiz_T468: "The edge is still resting",
     wiz_T469: "The edge was still resting: the lift-off run is repeated.",
+    wiz_T470: "Value above the maximum ({max} cm): check the measurement.",
+    wiz_T471: "Value below the minimum ({min} cm): check the measurement.",
+    wiz_T472: "Enter a number of centimetres, with a comma or a point for the decimals.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1246,6 +1249,9 @@ export const translations = {
     wiz_T467: "«{option}» è l'opzione consigliata perché la corsa del telo ({travel} cm) è vicina a quella del profilo «{profile}» ({reference} cm).",
     wiz_T468: "Il bordo è ancora appoggiato",
     wiz_T469: "Il bordo era ancora appoggiato: la corsa di stacco viene ripetuta.",
+    wiz_T470: "Valore oltre il massimo ({max} cm): controlla la misura.",
+    wiz_T471: "Valore sotto il minimo ({min} cm): controlla la misura.",
+    wiz_T472: "Scrivi un numero di centimetri, con la virgola o il punto per i decimali.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

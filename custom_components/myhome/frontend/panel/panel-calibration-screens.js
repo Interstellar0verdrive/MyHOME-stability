@@ -891,7 +891,14 @@ function finalize(screen, ctx) {
     if (!/\{\w+\}/.test(text)) screen.notices.push({ tone: "error", text });
   }
   // A reading refused in the field, before anything is sent.
-  if (local.fieldError != null && screen.field?.range) {
+  // G3-4: outside the field's own limits (or not a number) the field says so under itself.
+  // (A reading outside the fit's range keeps its notice with the accepted range.)
+  if (local.fieldError != null && screen.field && !(screen.field.range && typeof local.fieldError === "number")) {
+    const value = local.fieldError, { min, max } = screen.field;
+    screen.field.error = value === "nan" ? t("wiz_T472") : value > max ? fill(t("wiz_T470"), { max: n(max) })
+      : value < min ? fill(t("wiz_T471"), { min: n(min) }) : null;
+  }
+  if (typeof local.fieldError === "number" && screen.field?.range) {
     screen.notices.push({ tone: "error", text: fill(t("profileError_reading_out_of_range"), readingRange(view.reading_range, language, local.fieldError)) });
   }
   // Movement, readings and Save wait for an answer, a connection and ownership; Stop never does.

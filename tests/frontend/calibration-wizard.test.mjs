@@ -2147,3 +2147,24 @@ test("«The edge is still resting» repeats the lift-off without a value, and th
   assert.equal(notice.dataset.tone, "warning");
   assert.equal(notice.textContent, "Il bordo era ancora appoggiato: la corsa di stacco viene ripetuta.");
 });
+
+test("a value the field refuses says why under it, never a silent red (G3-4)", async () => {
+  const { backend, code, press, type, startFor, wiz, actions } = await mount({ language: "it" });
+  await startFor("cover.living_one");
+  await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  await press("ack:lift"); await press("next"); await move(backend); await press("lift"); backend.stopped(); await tick();
+  assert.equal(code(), "A-08");
+  const error = () => wiz().querySelector("#wiz-field-error");
+  assert.equal(error().hidden, true);
+  await type("25");
+  assert.equal(error().hidden, false);
+  assert.equal(error().textContent, "Valore oltre il massimo (20 cm): controlla la misura.");
+  assert.equal(wiz().querySelector('[name="reading_cm"]').getAttribute("aria-invalid"), "true");
+  assert.match(wiz().querySelector('[name="reading_cm"]').getAttribute("aria-describedby"), /wiz-field-error/);
+  assert.equal(actions().includes("reading"), false, "nothing sent");
+  await type("due");
+  assert.equal(error().textContent, "Scrivi un numero di centimetri, con la virgola o il punto per i decimali.");
+  const input = wiz().querySelector('[name="reading_cm"]');
+  input.value = "2"; input.dispatchEvent(new Event("input", { bubbles: true })); await tick();
+  assert.equal(error().hidden, true, "typing again clears it");
+});
