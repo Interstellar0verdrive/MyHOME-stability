@@ -315,9 +315,10 @@ export class CalibrationTab {
    * sequence's selection shortcuts) and «Ordina per» as a compact drop-down on the right; narrow, two native drop-downs at 50 % (the chips' drop-down and
    * the order). The order is the same `<select>` in both states.
    */
-  _filterBar({ chips, chipsClass = "", label = "", select, compactClass = "", sortAttribute = "data-sort", extra = "" }) {
+  _filterBar({ chips, chipsClass = "", label = "", select, compactClass = "", sortAttribute = "data-sort", extra = "", count = "" }) {
     const { t } = this._context;
-    return `<div class="cal-filterbar${extra}"><div class="cal-filterbar-row">
+    // Q-10: the counts («12 tapparelle · 7 calibrate · 5 da calibrare») only above the two drop-downs; the chips carry them.
+    return `<div class="cal-filterbar${extra}">${count ? `<p class="muted cal-tab-summary" role="status">${esc(count)}</p>` : ""}<div class="cal-filterbar-row">
           <div class="cal-tab-chips${chipsClass}" role="group" aria-label="${esc(t("calTabFilterLabel"))}">${label ? `<span class="cal-filterbar-label">${esc(label)}</span>` : ""}${chips}</div>
           <div class="cal-tab-compact${compactClass}">${select}${this._compactSort(sortAttribute)}</div></div></div>`;
   }
@@ -437,9 +438,9 @@ export class CalibrationTab {
           <button type="button" data-action="cal-tab-batch" ${busy || loading ? "disabled" : ""}><ha-icon icon="mdi:format-list-numbered" aria-hidden="true"></ha-icon><span>${esc(t("wiz_T363"))}</span></button>
           ${this._wizard ? `<button type="button" class="primary" data-action="cal-tab-measure" ${busy || loading || !counts.all ? "disabled" : ""}><ha-icon icon="mdi:ruler" aria-hidden="true"></ha-icon><span>${esc(t("calTabMeasureOne"))}</span></button>` : ""}
         </div></div>
-        <p class="muted cal-tab-summary" role="status">${esc([["calTabCountCovers", counts.all], ["calTabCountCalibrated", counts.calibrated], ["calTabCountToMeasure", counts.to_measure]]
-          .map(([key, count]) => fill(t(count === 1 ? `${key}_one` : key), { n: count })).join(" · "))}</p>
         ${this._filterBar({ extra: " cal-tab-filters", select: this._filterSelect(counts, this._filter),
+          count: [["calTabCountCovers", counts.all], ["calTabCountCalibrated", counts.calibrated], ["calTabCountToMeasure", counts.to_measure]]
+            .map(([key, count]) => fill(t(count === 1 ? `${key}_one` : key), { n: count })).join(" · "),
           chips: FILTERS.map((filter) => `<button type="button" class="cal-chip" data-action="cal-tab-filter" data-id="${filter}" aria-pressed="${this._filter === filter}">${esc(t(`calTabFilter_${filter}`))} <span class="count">${counts[filter]}</span></button>`).join("") })}
         ${this._done ? `<p class="notice cal-tab-done" role="status"><ha-icon icon="mdi:check-circle-outline" aria-hidden="true"></ha-icon><span>${esc(this._done)}</span></p>` : ""}
         ${busy ? `<p class="notice cal-tab-busy" role="status"><ha-icon icon="mdi:information-outline" aria-hidden="true"></ha-icon><span>${esc(t("calTabBusy"))}</span></p>` : ""}

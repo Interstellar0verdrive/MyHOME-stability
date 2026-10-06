@@ -729,11 +729,13 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-filterbar-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .cal-tab-chips { display: none; flex-wrap: wrap; align-items: center; gap: 6px; }
 .cal-filterbar-label { margin-inline-end: 4px; font-size: 13px; color: var(--panel-text-2); }
-.cal-tab-compact { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+/* Q-10: the two drop-downs always side by side, 50 % each net of an 8 px gap; the counts above them. */
+.cal-tab-compact { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.cal-filterbar .cal-tab-summary { margin: 0 0 8px; }
 .cal-sort-long { display: none; }
-@container calbar (max-width: 379px) { .cal-tab-compact { grid-template-columns: minmax(0, 1fr); } }
 @container calbar (min-width: 640px) {
-  .cal-filterbar-row { display: flex; align-items: center; gap: 8px 16px; }
+  .cal-filterbar .cal-tab-summary { display: none; }
+  .cal-filterbar-row { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; }
   .cal-tab-chips { display: flex; flex: 1 1 auto; min-width: 0; }
   .cal-tab-compact { display: flex; flex: none; margin-inline-start: auto; }
   .cal-tab-compact .cal-compact-filter { display: none; }

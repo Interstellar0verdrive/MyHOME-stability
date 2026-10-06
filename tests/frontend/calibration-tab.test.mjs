@@ -1075,9 +1075,9 @@ test("the list's bands by content width (1200/1016/700) and the wizard's layouts
   assert.match(calibration, /#cover-calibration-tab \{ container: caltab \/ inline-size; \}/, "the tab's width decides, not the window's");
   const widths = [...calibration.matchAll(/@(media|container caltab|container wizbar|container calbar|container calblock) ([^{]+)\{/g)].flatMap(([, kind, query]) =>
     [...query.matchAll(/(min|max)-width: (\d+)px/g)].map(([, edge, px]) => `${kind === "media" ? "window" : kind.endsWith("wizbar") ? "bar" : kind.endsWith("calbar") ? "filters" : kind.endsWith("calblock") ? "block" : "tab"} ${edge}-${px}`));
-  assert.deepEqual([...new Set(widths)].sort(), ["bar min-560", "block min-480", "filters max-379", "filters min-640", "tab max-1015", "tab max-599", "tab max-699", "tab max-999",
+  assert.deepEqual([...new Set(widths)].sort(), ["bar min-560", "block min-480", "filters min-640", "tab max-1015", "tab max-599", "tab max-699", "tab max-999",
     "tab min-1000", "tab min-1016", "tab min-1200", "tab min-700", "tab min-900", "window max-719", "window min-720"],
-    "the content at 1200/1016/900/700 (list, card headers), 600 (header buttons), 700 and 1000 (wizard); the actions bar at 560; a details block at 480 (pairs in two halves); the filter bar at 640 and 380; the window at 720 (phone, dialogs; with 500 px of height)");
+    "the content at 1200/1016/900/700 (list, card headers), 600 (header buttons), 700 and 1000 (wizard); the actions bar at 560; a details block at 480 (pairs in two halves); the filter bar at 640; the window at 720 (phone, dialogs; with 500 px of height)");
   // Q-3 parity: the script's list bands are the stylesheet's container rules.
   const { LIST_BANDS, listBand } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-layout.js");
   assert.match(calibration, new RegExp(`@container caltab \\(min-width: ${LIST_BANDS.table}px\\) \\{`));
@@ -1168,7 +1168,10 @@ test("one filter and order bar for the list, A-01 and the sequence: chips and «
   assert.equal(seq.querySelectorAll(".cal-batch-row input:checked").length, 0);
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /\.cal-filterbar \{ container: calbar \/ inline-size; \}/);
-  assert.match(css, /@container calbar \(min-width: 640px\) \{\s*\.cal-filterbar-row \{ display: flex;/);
+  assert.match(css, /@container calbar \(min-width: 640px\) \{\s*\.cal-filterbar \.cal-tab-summary \{ display: none; \}\s*\.cal-filterbar-row \{ display: flex; align-items: center; justify-content: space-between;/,
+    "Q-10: chips left, order right, no counts (the chips have them)");
+  assert.match(css, /\.cal-tab-compact \{ display: grid; grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1fr\); gap: 8px; \}/, "two drop-downs at 50 %, always");
+  assert.ok(list.querySelector(":scope > .cal-tab-summary + .cal-filterbar-row"), "the counts above the drop-downs");
   void panel;
 });
 
