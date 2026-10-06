@@ -427,8 +427,9 @@ export class CalibrationTab {
     const busy = rows.map((row) => row.session).find(Boolean) || (rows.some((row) => row.data && row.reserved && !row.sessionKnown) ? { unknown: true } : null);
     let html;
     if (!loading && !failed.length && !this._covers().length) {
-      html = `<div class="empty cal-tab-empty"><h2>${esc(t("calTabEmptyTitle"))}</h2><p class="muted">${esc(t("calTabEmptyBody"))}</p>
-        <details class="profile-meta"><summary>${esc(t("calTabHowItWorks"))}</summary><p class="muted">${esc(t("calTabHowItWorksBody"))}</p></details></div>`;
+      // T-04: no cover estimated from its travel times on the gateway(s); the tab's title stays above.
+      html = `<h3 class="cal-tab-title">${esc(t("calTabTitle"))}</h3>${this._emptyCard(t(gateways.length > 1 ? "wiz_T495" : "wiz_T492"), t("calTabEmptyBody"),
+        `<details class="cal-empty-how"><summary>${esc(t("calTabHowItWorks"))}</summary><p class="muted">${esc(t("calTabHowItWorksBody"))}</p></details>`, "cal-tab-empty")}`;
     } else {
       // The buttons line up with the introduction, not with the title above it.
       html = `<h3 class="cal-tab-title">${esc(t("calTabTitle"))}</h3><div class="cal-tab-head"><p class="muted cal-tab-intro">${esc(t("calTabIntro"))}</p>
@@ -446,7 +447,7 @@ export class CalibrationTab {
         ${failed.map((entry) => `<p class="notice error" role="alert">${esc(gateways.length > 1 ? `${entry.title}: ` : "")}${esc(t("calTabError"))}</p>`).join("")}
         ${failed.length ? `<button type="button" data-action="cal-tab-refresh">${esc(t("refresh"))}</button>` : ""}
         ${loading ? `<p class="muted" role="status">${esc(t("loading"))}</p>` : ""}
-        ${visible.length || loading ? "" : `<p class="muted">${esc(t("noResults"))}</p>`}
+        ${visible.length || loading ? "" : this._emptyCard(t("wiz_T493"), t("wiz_T494"), "", "cal-tab-no-match")}
         ${visible.length ? `<div class="cal-list">
           ${this._sortHeads(this._expandAll(visible))}
           <div class="cal-list-rows" role="list">${visible.map((item) => this._row(item, busy, language)).join("")}</div></div>` : ""}
@@ -456,6 +457,12 @@ export class CalibrationTab {
     morph(host, html);
     fitLines(host);
     this._syncHold();
+  }
+
+  /** T-04 / T-04b: an empty state as a card: the shutter icon, a title, its explanation and an optional extra. */
+  _emptyCard(title, body, extra = "", kind = "") {
+    return `<div class="cal-empty ${kind}" role="status"><span class="cal-empty-icon" aria-hidden="true"><ha-icon icon="mdi:window-shutter"></ha-icon></span>
+        <h4>${esc(title)}</h4><p class="muted">${esc(body)}</p>${extra}</div>`;
   }
 
   _row(item, busy, language) {

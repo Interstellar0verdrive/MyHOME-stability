@@ -871,6 +871,14 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-page .cal-details-grid h4 { margin: 0 0 12px; padding: 0; border: 0; font-size: 15px; font-weight: 600; color: var(--primary-text-color, #182b37); }
 .cal-page .cal-details-grid .cal-note { max-width: none; }
 .cal-tab-back { justify-self: start; }
+/* T-04 / T-04b: empty states as a card (no timed cover; nothing matches the filter). */
+.cal-empty { display: grid; justify-items: center; gap: 8px; padding: 32px 24px; border: 1px solid var(--panel-border); border-radius: var(--panel-radius);
+  background: var(--panel-surface); text-align: center; }
+.cal-empty-icon { display: inline-grid; place-items: center; width: 40px; height: 40px; margin-bottom: 4px; border-radius: 10px; background: var(--panel-accent-soft); color: var(--panel-text-2); }
+.cal-empty h4 { margin: 0; font-size: 16px; font-weight: 600; }
+.cal-empty > .muted { max-width: 480px; font-size: 13px; line-height: 1.5; }
+.cal-empty-how summary { display: inline-flex; min-height: 32px; align-items: center; cursor: pointer; color: var(--panel-accent); font-size: 13px; font-weight: 600; }
+.cal-empty-how > p { max-width: 480px; margin: 4px auto 0; font-size: 13px; line-height: 1.5; }
 .cal-dialog-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; padding-block: 18px 4px; }
 .cal-dialog-body > p { margin: 0; }
 /* Responsive map, one rule for every dialog of the tab and the wizard (profile, exit, Steps, Calibration in progress):

@@ -441,9 +441,24 @@ test("an empty gateway explains which covers need calibration", async () => {
   const data = overview();
   data.covers = data.covers.filter((cover) => cover.advanced);
   const { tab } = await mount({ data, language: "it" });
-  assert.equal(tab.querySelector(".cal-tab-empty h2").textContent, translations.it.calTabEmptyTitle);
-  assert.match(tab.querySelector(".cal-tab-empty").textContent, /sensore di posizione/);
+  // T-04: the tab's title, then a card with the shutter, its title, why, and how it works.
+  assert.equal(tab.querySelector(".cal-tab-title").textContent, "Calibrazione");
+  assert.equal(tab.querySelector(".cal-tab-empty h4").textContent, "Nessuna tapparella a tempo su questo gateway");
+  assert.match(tab.querySelector(".cal-tab-empty > .muted").textContent, /sensore di posizione/);
+  assert.equal(tab.querySelector(".cal-tab-empty .cal-empty-how summary").textContent, "Come funziona");
   assert.equal(tab.querySelector(".cal-list"), null);
+  assert.equal(tab.querySelector(".cal-filterbar"), null, "no filters for nothing");
+});
+
+test("a filter without results says so and keeps the filters (T-04b)", async () => {
+  const data = overview();
+  data.covers = data.covers.map((cover) => ({ ...cover, profile_id: null }));
+  const { tab } = await mount({ data, language: "it" });
+  tab.querySelector('.cal-chip[data-id="profile"]').click(); await tick();
+  assert.equal(tab.querySelector(".cal-list"), null);
+  assert.equal(tab.querySelector(".cal-tab-no-match h4").textContent, "Nessuna tapparella corrisponde al filtro");
+  assert.equal(tab.querySelector(".cal-tab-no-match > .muted").textContent, "Cambia o togli il filtro per vedere le altre tapparelle.");
+  assert.ok(tab.querySelector(".cal-tab-filters"), "the filters stay, to change it");
 });
 
 const targets = (extra = {}) => ({ revision: 7, max_batch: 20, targets: [
