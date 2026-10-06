@@ -589,7 +589,10 @@ export class CalibrationTab {
       return entity ? model.entityName(entity, hass) : id;
     }) : [];
     const scaled = ["opening", "closing"].some((direction) => effective[direction]?.origin === "profile");
-    const list = (items) => `<dl class="cal-facts">${items.map(([label, shown]) => `<div><dt>${esc(label)}</dt><dd>${esc(shown)}</dd></div>`).join("")}</dl>`;
+    // Q-2/Q-4: label and value as compact pairs; the pairs in two halves, side by side when the block is wide.
+    const pairs = (items) => `<dl class="cal-facts-col">${items.map(([label, shown]) => `<div><dt>${esc(label)}</dt><dd>${esc(shown)}</dd></div>`).join("")}</dl>`;
+    const list = (items) => { const half = Math.ceil(items.length / 2);
+      return `<div class="cal-facts">${pairs(items.slice(0, half))}${items.length > half ? pairs(items.slice(half)) : ""}</div>`; };
     const key = JSON.stringify([item.entry.entry_id, item.cover.entity_id]);
     // Each block ends with its own action, left-aligned under its content.
     const action = (button) => button ? `<div class="cal-block-action">${button}</div>` : "";

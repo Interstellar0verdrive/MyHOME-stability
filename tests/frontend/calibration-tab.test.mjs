@@ -1075,11 +1075,11 @@ test("the list's bands by content width (1200/1016/700) and the wizard's layouts
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   const calibration = css.slice(css.indexOf("/* ---------- WHO 2 · Calibration tab ---------- */"));
   assert.match(calibration, /#cover-calibration-tab \{ container: caltab \/ inline-size; \}/, "the tab's width decides, not the window's");
-  const widths = [...calibration.matchAll(/@(media|container caltab|container wizbar|container calbar|container caldetails) ([^{]+)\{/g)].flatMap(([, kind, query]) =>
-    [...query.matchAll(/(min|max)-width: (\d+)px/g)].map(([, edge, px]) => `${kind === "media" ? "window" : kind.endsWith("wizbar") ? "bar" : kind.endsWith("calbar") ? "filters" : kind.endsWith("caldetails") ? "details" : "tab"} ${edge}-${px}`));
-  assert.deepEqual([...new Set(widths)].sort(), ["bar min-560", "filters max-379", "filters min-640", "tab max-1015", "tab max-599", "tab max-699", "tab max-999",
+  const widths = [...calibration.matchAll(/@(media|container caltab|container wizbar|container calbar|container calblock) ([^{]+)\{/g)].flatMap(([, kind, query]) =>
+    [...query.matchAll(/(min|max)-width: (\d+)px/g)].map(([, edge, px]) => `${kind === "media" ? "window" : kind.endsWith("wizbar") ? "bar" : kind.endsWith("calbar") ? "filters" : kind.endsWith("calblock") ? "block" : "tab"} ${edge}-${px}`));
+  assert.deepEqual([...new Set(widths)].sort(), ["bar min-560", "block min-480", "filters max-379", "filters min-640", "tab max-1015", "tab max-599", "tab max-699", "tab max-999",
     "tab min-1000", "tab min-1016", "tab min-1200", "tab min-700", "window max-719", "window min-720"],
-    "the content at 1200/1016/700 (list), 600 (header buttons), 700 and 1000 (wizard); the actions bar at 560; the filter bar at 640 and 380; the window at 720 (phone, dialogs; with 500 px of height)");
+    "the content at 1200/1016/700 (list), 600 (header buttons), 700 and 1000 (wizard); the actions bar at 560; a details block at 480 (pairs in two halves); the filter bar at 640 and 380; the window at 720 (phone, dialogs; with 500 px of height)");
   // Q-3 parity: the script's list bands are the stylesheet's container rules.
   const { LIST_BANDS, listBand } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-layout.js");
   assert.match(calibration, new RegExp(`@container caltab \\(min-width: ${LIST_BANDS.table}px\\) \\{`));
@@ -1210,5 +1210,17 @@ test("back from a wizard opened on a cover's details page, the same page opens a
     panel._calibrationTab._backToList(); await tick();
     assert.equal(tab.querySelector(".cal-page"), null);
   } finally { globalThis.matchMedia = original; }
+});
+
+test("the details' pairs are compact: labels in one column, the value 26 px after, two halves side by side in a wide block (Q-2, Q-4, Q-6)", async () => {
+  const { tab } = await mount({ language: "it" });
+  row(tab, "cover.living_one").querySelector(".cal-row-toggle").click(); await tick();
+  const values = row(tab, "cover.living_one").querySelector(".cal-details-grid > section .cal-facts");
+  assert.deepEqual([...values.querySelectorAll(":scope > dl.cal-facts-col")].map((half) => half.querySelectorAll("dt").length), [3, 3], "six pairs in two halves of three");
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.cal-facts \{ display: grid; grid-template-columns: max-content minmax\(0, 1fr\); column-gap: 26px;/);
+  assert.match(css, /\.cal-facts-col \{ display: grid; grid-column: 1 \/ -1; grid-template-columns: subgrid;/, "one label column per block");
+  assert.match(css, /\.cal-facts dd \{[^}]*text-align: start;/);
+  assert.match(css, /@container calblock \(min-width: 480px\) \{\s*\.cal-facts \{ grid-template-columns: repeat\(auto-fill, minmax\(220px, 1fr\)\); column-gap: 32px; \}/);
 });
 

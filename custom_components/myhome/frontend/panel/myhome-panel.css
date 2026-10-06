@@ -797,10 +797,19 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 /* Block titles as large as the text under them, bold, over a divider as wide as the block (10 px above and below). */
 .cal-details-grid h4 { margin: 0 0 10px; padding-bottom: 10px; border-bottom: 1px solid var(--panel-border); font-size: 13px; font-weight: 700; color: var(--panel-text-2); }
 .cal-details-grid p { margin: 6px 0 0; font-size: 13px; }
-.cal-facts { display: grid; gap: 4px; margin: 0; font-size: 13px; }
-.cal-facts div { display: flex; justify-content: space-between; gap: 12px; }
+/* Q-2/Q-6: compact pairs. The labels in one column as wide as the block's longest, the value 26 px after it,
+   left-aligned (never pushed to the block's edge); both halves share the label column (subgrid). Q-4: in a block at
+   least 480 px wide the halves sit side by side (auto-fill 220 px, 32 px apart); notes and buttons stay full width. */
+.cal-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: 26px; row-gap: 4px; margin: 0; font-size: 13px; }
+.cal-facts-col { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; row-gap: 4px; margin: 0; }
+.cal-facts-col > div { display: contents; }
 .cal-facts dt { color: var(--panel-text-2); }
-.cal-facts dd { margin: 0; font-weight: 600; text-align: end; font-variant-numeric: tabular-nums; }
+.cal-facts dd { margin: 0; font-weight: 600; text-align: start; font-variant-numeric: tabular-nums; }
+.cal-details-grid > section { container: calblock / inline-size; }
+@container calblock (min-width: 480px) {
+  .cal-facts { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); column-gap: 32px; }
+  .cal-facts-col { grid-column: auto; grid-template-columns: max-content minmax(0, 1fr); column-gap: 26px; align-content: start; }
+}
 /* Each block's own action, under its content: no bottom space on the content, 20 px above the button. */
 .cal-block-action { display: grid; padding-top: 20px; }
 /* The blocks' secondary actions are the maintainer's outlined buttons: no surface fill, so they read the same on light and dark themes. */
