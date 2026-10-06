@@ -708,10 +708,6 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   .cal-tab-actions button { width: 100%; min-height: 48px; justify-content: center; font-size: 14px; }
   .cal-tab-actions button:not(.primary) { background: transparent; }
 }
-/* The one breakpoint of the Calibration list (responsive map): below 880 px of tab (a 1184 px window with Home
-   Assistant's sidebar) one column of cards, with the compact filter and order row; from 880 px the table. */
-@container caltab (max-width: 879px) {
-}
 /* M4-3: rings only for the keyboard, drawn on the wrapper of a borderless select; no grey flash on a tap. */
 .cal-tab, .wiz, dialog.cal-dialog { -webkit-tap-highlight-color: transparent; }
 .cal-compact-sort select:focus, .cal-compact-sort select:focus-visible { outline: none; box-shadow: none; border-color: transparent; }
@@ -812,7 +808,10 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-block-action button:not(.primary):hover { background: var(--panel-accent-soft); }
 /* As in the design, the action spans the whole width of its block. */
 .cal-block-action > button { width: 100%; justify-content: center; }
-@container caltab (max-width: 879px) {
+/* Q-3, the list by the tab's content width (container `caltab`; `LIST_BANDS` in panel-calibration-layout.js):
+   table with the actions column from 1200 px; table over three full-width columns 1016–1199; cards below, their three
+   detail blocks in one row from 700 px, one under the other below. The phone (window under 720 px) opens a page. */
+@container caltab (max-width: 1015px) {
   /* T-01 M: every cover is a card of its own, 12 px apart. First line: chevron, icon, name block and ⋮ at the top
      right; second line: status and profile on the left, Measure/Refine on the right. */
   .cal-list { border: 0; border-radius: 0; background: transparent; }
@@ -830,19 +829,24 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   .cal-row-action { grid-area: action; align-self: center; justify-self: end; white-space: nowrap; }
   .cal-row-main .cal-badge, .cal-row-main .cal-profile-chip { max-width: 100%; }
   .cal-row-last-inline { display: block; color: var(--panel-text-2); }
-  /* Responsive map: from 720 px of window a card opens in place. P-4: its three blocks are equal and shrink together,
-     side by side down to about 185 px each; below, all three one under the other (never two and one). */
+  /* Responsive map: from 720 px of window a card opens in place; its three blocks one under the other. */
   .cal-row.is-expanded .cal-row-main { border-radius: 11px 11px 0 0; }
-  .cal-row-details { container: caldetails / inline-size; border-radius: 0 0 11px 11px; }
-  .cal-details-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px 24px; }
+  .cal-row-details { border-radius: 0 0 11px 11px; }
+  .cal-details-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px 32px; }
   .cal-details-grid > section { max-width: none; }
   .cal-details-grid .cal-note { max-width: none; }
 }
-@container caldetails (min-width: 600px) { .cal-details-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+/* Cards from 700 px: the three blocks in one row, equal, compressed together (never two and one); the blocks' buttons
+   in their own row at the bottom. */
+@container caltab (min-width: 700px) and (max-width: 1015px) {
+  .cal-details-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .cal-details-grid > section { display: flex; flex-direction: column; }
+  .cal-details-grid .cal-block-action { margin-top: auto; }
+}
 /* P-4: the line under a name of a card shows «Stanza · Indirizzo · A · PL» when it fits on one line of the card's real
    width (measured by the script, `is-full`), «Indirizzo: 86» only when it does not; the table always has it all. */
 .cal-row-name > .muted:not(.is-full) .cal-row-address-ap { display: none; }
-@container caltab (min-width: 880px) { .cal-list:not(.cal-batch-list) .cal-row-name > .muted .cal-row-address-ap { display: inline; } }
+@container caltab (min-width: 1016px) { .cal-list:not(.cal-batch-list) .cal-row-name > .muted .cal-row-address-ap { display: inline; } }
 .cal-row-toggle .cal-row-name { flex: 1 1 auto; }
 /* On the phone (window under 720 px, not a landscape phone) a card opens a page, it does not unfold: no chevron
    (M2-3). Elsewhere the page never shows, so it can never cover Home Assistant's sidebar (D3). */
@@ -965,30 +969,30 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   /* GM2: on the phone the reading field takes the content's width (more specific than the base rule, which comes later). */
   .wiz-main .wiz-field { max-width: none; }
 }
-@container caltab (min-width: 880px) {
-  /* One column grid for header, rows and expanded details: [chevron+icon] | cover | status | profile | actions. The
-     details' three blocks sit under the cover, status and profile columns. Equal tracks for cover, status and profile
-     give the design's 350 : 270 : 270 at a 1168 px list (lead and gap included in the first); the actions column has
-     a fixed width so that every row (each its own grid) keeps the same columns. */
-  /* Rows have a 12 px padding and the same 12 px between chevron, icon and name: the name starts at
-     12 + 18 + 12 + 40 + 12 = 94 px. The first column is narrowed by the difference between the column gap and the
-     lead gap, so the lead overflows into the column gap and column 2 starts at the name. */
-  .cal-list { --cal-lead-gap: 12px; --cal-lead-box: calc(18px + var(--cal-lead-gap) + 40px); --cal-gap: 32px;
-    --cal-lead: calc(var(--cal-lead-box) + var(--cal-lead-gap) - var(--cal-gap));
-    --cal-cols: var(--cal-lead) minmax(160px, 1fr) minmax(160px, 1fr) minmax(160px, 1fr) 158px; }
+@container caltab (min-width: 1016px) {
+  /* One grid for header, rows and expanded details (Figma «R · Breakpoint» 1434/1016): three equal columns, cover
+     (chevron, icon and name) | status | profile, and from 1200 px the 158 px actions column. The details' three blocks
+     sit under the three columns, the first from the row's left edge; under the actions column a hole. */
+  .cal-list { --cal-lead-gap: 12px; --cal-gap: 32px; --cal-cols: repeat(3, minmax(0, 1fr)); }
   .cal-list-head, .cal-row-main, .cal-row-details { display: grid; grid-template-columns: var(--cal-cols); grid-template-areas: none;
     column-gap: var(--cal-gap); padding-inline: 12px; }
   .cal-list-head, .cal-row-main { align-items: center; }
   .cal-list-head { padding-block: 12px; border-bottom: 1px solid var(--panel-border); font-size: 12px; color: var(--panel-text-2); }
+  /* The column of «Tapparella» holds the expand-all button and its label (aligned with the names). */
+  .cal-list-head > .cal-head-lead { grid-column: 1; grid-row: 1; justify-self: start; }
+  .cal-list-head > .cal-sort-cell:nth-child(2) { grid-column: 1; grid-row: 1; padding-inline-start: 70px; }
+  .cal-list-head > :nth-child(3) { grid-column: 2; }
+  .cal-list-head > :nth-child(4) { grid-column: 3; }
+  .cal-list-head > :nth-child(5) { display: none; }
   .cal-row-main { padding-block: 12px; row-gap: 0; }
   /* The phone layout names grid areas: every cell goes back to row 1 and its own column. */
   .cal-row-chips { display: contents; }
   .cal-row-toggle, .cal-row-status, .cal-row-profile, .cal-row-actions { grid-area: auto; grid-row: 1; }
-  .cal-row-toggle { grid-column: 1 / 3; display: grid; grid-template-columns: var(--cal-lead-box) minmax(0, 1fr); column-gap: var(--cal-lead-gap);
-    align-items: center; padding: 0; }
-  .cal-row-status { grid-column: 3; padding: 0; }
-  .cal-row-profile { grid-column: 4; }
-  .cal-row-actions { grid-column: 5; }
+  .cal-row-toggle { grid-column: 1; display: flex; align-items: center; gap: var(--cal-lead-gap); padding: 0; }
+  .cal-row-status { grid-column: 2; padding: 0; }
+  .cal-row-profile { grid-column: 3; justify-self: start; }
+  /* 1016–1199: CTA and ⋮ at the right inside the profile column. */
+  .cal-row-actions { grid-column: 3; justify-self: end; }
   .cal-row-profile > .muted { display: block; font-size: 13px; }
   .cal-row-last-inline { display: none; }
   .cal-row-details { padding-block: 12px 20px; align-items: start; }
@@ -996,10 +1000,15 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   /* The three blocks share the row's height; each action sits at the bottom of its block, so they line up. */
   .cal-details-grid > section { grid-row: 1; max-width: none; align-self: stretch; display: flex; flex-direction: column; }
   .cal-details-grid .cal-block-action { margin-top: auto; }
-  .cal-details-grid > section:nth-child(1) { grid-column: 2; }
-  .cal-details-grid > section:nth-child(2) { grid-column: 3; }
-  .cal-details-grid > section:nth-child(3) { grid-column: 4; }
+  .cal-details-grid > section:nth-child(1) { grid-column: 1; }
+  .cal-details-grid > section:nth-child(2) { grid-column: 2; }
+  .cal-details-grid > section:nth-child(3) { grid-column: 3; }
   .cal-details-grid .cal-note { max-width: none; }
+}
+@container caltab (min-width: 1200px) {
+  .cal-list { --cal-cols: repeat(3, minmax(0, 1fr)) 158px; }
+  .cal-list-head > :nth-child(5) { display: block; grid-column: 4; }
+  .cal-row-actions { grid-column: 4; }
 }
 
 /* ---------- Calibration wizard (stepper · instruction · actions) ---------- */

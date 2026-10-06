@@ -16,7 +16,7 @@ function holdScroll(host) {
 
 /** WHO 2 "Calibration" view: what each timed cover uses, its measurement state and the ways to measure it. */
 const asset = (name) => { const url = new URL(name, import.meta.url); url.search = new URL(import.meta.url).search; return url.href; };
-const [{ escapeHtml: esc }, model, text, { CoverCalibration }, { CalibrationWizard }, { ProfileCatalogueEditor }, { morph }, { layout, SHEETS, fitLines }] = await Promise.all([
+const [{ escapeHtml: esc }, model, text, { CoverCalibration }, { CalibrationWizard }, { ProfileCatalogueEditor }, { morph }, { layout, SHEETS, fitLines, listBand, contentWidth }] = await Promise.all([
   import(asset("panel-dom.js")), import(asset("panel-model.js")), import(asset("panel-calibration-text.js")),
   import(asset("panel-cover-calibration.js")), import(asset("panel-calibration-wizard.js")), import(asset("panel-profile-catalogue-editor.js")),
   import(asset("panel-calibration-morph.js")), import(asset("panel-calibration-layout.js")),
@@ -157,7 +157,7 @@ export class CalibrationTab {
         let width = 0;
         new ResizeObserver(([entry]) => {
           const now = Math.round(entry.contentRect.width);
-          if (now !== width) { width = now; fitLines(host); }
+          if (now !== width) { width = now; this._band(); fitLines(host); }
         }).observe(host);
       }
     }
@@ -455,8 +455,17 @@ export class CalibrationTab {
     }
     // Patched in place (M3): the list, the details page and their scroll stay where they are.
     morph(host, html);
+    this._band();
     fitLines(host);
     this._syncHold();
+  }
+
+  /** Q-3: the list's band for the tab's content width, as the stylesheet's container rules choose it (`data-band`). */
+  _band() {
+    const host = this._context?.host, width = contentWidth(host);
+    if (!host || !width) return;
+    const band = listBand(width);
+    if (host.dataset.band !== band) host.dataset.band = band;
   }
 
   /** T-04 / T-04b: an empty state as a card: the shutter icon, a title, its explanation and an optional extra. */

@@ -884,8 +884,8 @@ test("a cover's details open in place outside the phone layout, a landscape phon
   } finally { globalThis.matchMedia = original; }
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /@media \(min-width: 720px\), \(max-height: 499px\) and \(orientation: landscape\) \{ \.cal-page \{ display: none; \} \}/, "never a page over the sidebar");
-  assert.match(css, /@container caldetails \(min-width: 600px\) \{ \.cal-details-grid \{ grid-template-columns: repeat\(3, minmax\(0, 1fr\)\); \} \}/,
-    "the card's three blocks side by side, equal, or all one under the other (P-4)");
+  assert.match(css, /@container caltab \(min-width: 700px\) and \(max-width: 1015px\) \{\s*\.cal-details-grid \{ grid-template-columns: repeat\(3, minmax\(0, 1fr\)\); \}/,
+    "cards from 700 px of content: the three blocks in one row, equal (Q-3)");
 });
 
 test("the tab's dialogs are centred from 720 × 500 px of window and sheets below, a landscape phone included (responsive map, D14)", async () => {
@@ -1071,20 +1071,30 @@ test("the stylesheet's braces balance (a stray one silently drops every rule aft
   assert.equal(depth, 0);
 });
 
-test("one breakpoint for the list (880 px of the tab itself) and the wizard's three layouts, no ad-hoc ones (M5-1, responsive map)", async () => {
+test("the list's bands by content width (1200/1016/700) and the wizard's layouts, no ad-hoc breakpoints (M5-1, Q-3)", async () => {
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   const calibration = css.slice(css.indexOf("/* ---------- WHO 2 · Calibration tab ---------- */"));
   assert.match(calibration, /#cover-calibration-tab \{ container: caltab \/ inline-size; \}/, "the tab's width decides, not the window's");
   const widths = [...calibration.matchAll(/@(media|container caltab|container wizbar|container calbar|container caldetails) ([^{]+)\{/g)].flatMap(([, kind, query]) =>
     [...query.matchAll(/(min|max)-width: (\d+)px/g)].map(([, edge, px]) => `${kind === "media" ? "window" : kind.endsWith("wizbar") ? "bar" : kind.endsWith("calbar") ? "filters" : kind.endsWith("caldetails") ? "details" : "tab"} ${edge}-${px}`));
-  assert.deepEqual([...new Set(widths)].sort(), ["bar min-560", "details min-600", "filters max-379", "filters min-640", "tab max-599", "tab max-699", "tab max-879", "tab max-999", "tab min-1000", "tab min-700", "tab min-880",
-    "window max-719", "window min-720"],
-    "the tab at 880 (list), 600 (header buttons), 380 (drop-downs), 700 and 1000 (wizard); the actions bar at 560; the filter bar at 640 (chips) and 380 (drop-downs); the window at 720 (phone, dialogs; with 500 px of height)");
+  assert.deepEqual([...new Set(widths)].sort(), ["bar min-560", "filters max-379", "filters min-640", "tab max-1015", "tab max-599", "tab max-699", "tab max-999",
+    "tab min-1000", "tab min-1016", "tab min-1200", "tab min-700", "window max-719", "window min-720"],
+    "the content at 1200/1016/700 (list), 600 (header buttons), 700 and 1000 (wizard); the actions bar at 560; the filter bar at 640 and 380; the window at 720 (phone, dialogs; with 500 px of height)");
+  // Q-3 parity: the script's list bands are the stylesheet's container rules.
+  const { LIST_BANDS, listBand } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-layout.js");
+  assert.match(calibration, new RegExp(`@container caltab \\(min-width: ${LIST_BANDS.table}px\\) \\{`));
+  assert.match(calibration, new RegExp(`@container caltab \\(min-width: ${LIST_BANDS.tableFull}px\\) \\{`));
+  assert.match(calibration, new RegExp(`@container caltab \\(max-width: ${LIST_BANDS.tableFull - 1}px\\) \\{`));
+  assert.match(calibration, new RegExp(`@container caltab \\(min-width: ${LIST_BANDS.cardsRow}px\\) and \\(max-width: ${LIST_BANDS.tableFull - 1}px\\) \\{`));
+  assert.deepEqual([1434, 1200, 1199, 1016, 1015, 700, 699, 366].map(listBand),
+    ["table", "table", "table-full", "table-full", "cards-row", "cards-row", "cards-stacked", "cards-stacked"]);
   assert.doesNotMatch(calibration, /container: wizmain/, "the wizard's lists are cards at every width");
   const { tab } = await mount();
   // P-1: in the table the cover, status and profile columns are equal, and the details' blocks sit under them.
-  assert.match(calibration, /--cal-cols: var\(--cal-lead\) minmax\(160px, 1fr\) minmax\(160px, 1fr\) minmax\(160px, 1fr\) 158px;/);
-  for (const n of [1, 2, 3]) assert.match(calibration, new RegExp(`\\.cal-details-grid > section:nth-child\\(${n}\\) \\{ grid-column: ${n + 1}; \\}`));
+  // Q-3/Q-5: three equal columns (cover with its chevron and icon, status, profile), from 1200 px the 158 px actions too.
+  assert.match(calibration, /--cal-cols: repeat\(3, minmax\(0, 1fr\)\);/);
+  assert.match(calibration, /@container caltab \(min-width: 1200px\) \{\s*\.cal-list \{ --cal-cols: repeat\(3, minmax\(0, 1fr\)\) 158px; \}/);
+  for (const n of [1, 2, 3]) assert.match(calibration, new RegExp(`\\.cal-details-grid > section:nth-child\\(${n}\\) \\{ grid-column: ${n}; \\}`));
   const address = row(tab, "cover.kitchen_two").querySelector(".cal-row-address");
   assert.equal(address.querySelector(".cal-row-address-ap").textContent, " · A: 9 · PL: 1", "A and PL apart, hidden on the cards");
 });

@@ -11,6 +11,26 @@ export const FULL_SCREEN = `(max-width: 719px), ${SHORT}`;
 /** Dialogs as sheets from the bottom: a window under 720 px wide or under 500 px high; centred otherwise. */
 export const SHEETS = "(max-width: 719px), (max-height: 499px)";
 
+/**
+ * Q-3: the Calibration list by the tab's content width (the stylesheet's `@container caltab` rules use the same
+ * numbers): the table with its actions column, the table over three full-width columns, cards with the three detail
+ * blocks in one row, cards with the blocks one under the other.
+ */
+export const LIST_BANDS = { table: 1200, tableFull: 1016, cardsRow: 700 };
+
+/** The list's band for a content width (px). */
+export function listBand(width) {
+  return width >= LIST_BANDS.table ? "table" : width >= LIST_BANDS.tableFull ? "table-full" : width >= LIST_BANDS.cardsRow ? "cards-row" : "cards-stacked";
+}
+
+/** The content width of the tab (`caltab`'s inline size: the box without its padding), 0 when it is not laid out. */
+export function contentWidth(host) {
+  const width = host?.clientWidth || 0;
+  if (!width) return 0;
+  const style = host.ownerDocument.defaultView.getComputedStyle(host);
+  return width - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0);
+}
+
 const matches = (query) => typeof matchMedia === "function" && matchMedia(query).matches;
 const still = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
