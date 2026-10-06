@@ -2269,3 +2269,11 @@ test("the wizard's layouts follow the content width as the layout module says, b
   assert.match(css, /\.wiz-actions \{ display: grid; grid-template-columns: minmax\(0, 1fr\); gap: 12px; align-content: start; padding: 24px;/);
 });
 
+test("a 40 px fade of the surface under every fixed or sticky action bar and at the landscape centre's edge (R-2)", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  const fades = css.match(/\.wiz-actions::before \{ content: ""; position: absolute; inset-inline: 0; bottom: calc\(100% \+ 1px\); height: 40px;/g) || [];
+  assert.equal(fades.length, 2, "the phone's fixed bar and the single column's sticky bar");
+  assert.match(css, /\.wiz-main::after \{ content: ""; flex: none; position: sticky;[^}]*height: 40px;/);
+  assert.match(css, /\.wiz-columns:has\(> \.wiz-actions\.has-more\) > \.wiz-main::after \{ opacity: 1; \}/);
+});
+

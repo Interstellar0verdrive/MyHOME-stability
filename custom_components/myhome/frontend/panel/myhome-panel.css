@@ -1289,6 +1289,9 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
     .wiz-actions { position: sticky; bottom: 0; z-index: 2; padding: 12px 16px; border-top: 1px solid var(--panel-border);
       border-radius: 0 0 var(--panel-radius) var(--panel-radius); background: var(--panel-surface); }
     .cal-batch-sticky { position: static; }
+    /* R-2: the text scrolls under the bar through a 40 px fade of the surface. */
+    .wiz-actions::before { content: ""; position: absolute; inset-inline: 0; bottom: calc(100% + 1px); height: 40px; pointer-events: none;
+      background: linear-gradient(to top, var(--panel-surface), transparent); }
   }
 }
 @container caltab (max-width: 999px) {
@@ -1328,7 +1331,7 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
   .wiz-actions { padding: 12px calc(16px + var(--cal-safe-right)) calc(12px + var(--cal-safe-bottom)) calc(16px + var(--cal-safe-left)); border-top: 1px solid var(--panel-border); background: var(--panel-surface); }
   /* A fade above the bar while the content goes on below it (`has-more`, set from the content's scroll). */
   .wiz-actions { position: relative; }
-  .wiz-actions::before { content: ""; position: absolute; inset-inline: 0; bottom: calc(100% + 1px); height: 28px; pointer-events: none;
+  .wiz-actions::before { content: ""; position: absolute; inset-inline: 0; bottom: calc(100% + 1px); height: 40px; pointer-events: none;
     background: linear-gradient(to top, var(--panel-surface), transparent); opacity: 0; transition: opacity var(--panel-ease); }
   .wiz-actions.has-more::before { opacity: 1; }
   /* The actions stack, one per line, as in every phone mockup: ① and ② are never side by side. */
@@ -1400,6 +1403,10 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
     border-inline-start: 1px solid var(--panel-border); background: var(--wiz-side);
     padding: 12px calc(16px + var(--cal-safe-right)) calc(12px + var(--cal-safe-bottom)) 16px; }
   .wiz-actions::before { display: none; }
+  /* R-2: the centre column fades into its bottom edge while it has more to scroll. */
+  .wiz-main::after { content: ""; flex: none; position: sticky; bottom: calc(-12px - var(--cal-safe-bottom)); height: 40px; margin-top: -40px;
+    pointer-events: none; background: linear-gradient(to top, var(--panel-surface), transparent); opacity: 0; transition: opacity var(--panel-ease); }
+  .wiz-columns:has(> .wiz-actions.has-more) > .wiz-main::after { opacity: 1; }
   .wiz-actions > [data-wiz="stop"] { order: -1; }
   .cal-batch-sticky { position: static; }
 }
