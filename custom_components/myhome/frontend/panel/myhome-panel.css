@@ -987,8 +987,7 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.2l2.3 2.3 4.7-4.9' fill='none' stroke='%23fff' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
 .cal-batch-lead input:focus-visible { outline: 2px solid var(--panel-accent); outline-offset: 2px; }
 .cal-batch-lead input:disabled { opacity: .45; cursor: not-allowed; }
-.cal-batch-lead .cal-row-icon { width: 32px; height: 32px; border-radius: 8px; }
-.cal-batch-lead .cal-row-icon ha-icon { --mdc-icon-size: 20px; }
+/* Q-11: the same 40 px cover icon as the list's, in A-01 and the sequence too. */
 .cal-batch-order { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; font-size: 12px; font-weight: 600;
   background: var(--panel-accent); color: var(--text-primary-color, #fff); font-variant-numeric: tabular-nums; }
 .cal-batch-order:empty { visibility: hidden; }
