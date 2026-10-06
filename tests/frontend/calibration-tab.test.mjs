@@ -1089,6 +1089,8 @@ test("the list's bands by content width (1200/1016/700) and the wizard's layouts
   assert.doesNotMatch(calibration, /container: wizmain/, "the wizard's lists are cards at every width");
   const { tab } = await mount();
   // P-1: in the table the cover, status and profile columns are equal, and the details' blocks sit under them.
+  // Q-21: «Tapparella» starts at the names' x (after the chevron, the icon and their two gaps).
+  assert.match(calibration, /\.cal-list-head > \.cal-sort-cell:nth-child\(2\) \{ grid-column: 1; grid-row: 1; padding-inline-start: calc\(18px \+ 40px \+ 2 \* var\(--cal-lead-gap\)\); \}/);
   // Q-3/Q-5: three equal columns (cover with its chevron and icon, status, profile), from 1200 px the 158 px actions too.
   assert.match(calibration, /--cal-cols: repeat\(3, minmax\(0, 1fr\)\);/);
   assert.match(calibration, /@container caltab \(min-width: 1200px\) \{\s*\.cal-list \{ --cal-cols: repeat\(3, minmax\(0, 1fr\)\) 158px; \}/);

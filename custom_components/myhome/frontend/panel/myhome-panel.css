@@ -1020,7 +1020,8 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   .cal-list-head { padding-block: 12px; border-bottom: 1px solid var(--panel-border); font-size: 12px; color: var(--panel-text-2); }
   /* The column of «Tapparella» holds the expand-all button and its label (aligned with the names). */
   .cal-list-head > .cal-head-lead { grid-column: 1; grid-row: 1; justify-self: start; }
-  .cal-list-head > .cal-sort-cell:nth-child(2) { grid-column: 1; grid-row: 1; padding-inline-start: 70px; }
+  /* Q-21: «Tapparella» starts where the names do, right of the chevron and the icon. */
+  .cal-list-head > .cal-sort-cell:nth-child(2) { grid-column: 1; grid-row: 1; padding-inline-start: calc(18px + 40px + 2 * var(--cal-lead-gap)); }
   .cal-list-head > :nth-child(3) { grid-column: 2; }
   .cal-list-head > :nth-child(4) { grid-column: 3; }
   .cal-list-head > :nth-child(5) { display: none; }
