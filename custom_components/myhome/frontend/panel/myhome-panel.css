@@ -768,7 +768,10 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-row-name strong { font-size: 14px; overflow-wrap: anywhere; }
 /* Responsive map §3.3: the line under a cover's name (list, A-01, sequence, details page, wizard header) wraps only
    between its units; the bus address is one unit that never breaks, and nothing ends in «…». */
-.cal-row-address { white-space: nowrap; }
+/* Q-15: the address's pairs are the units of the line; the wizard's header keeps its address whole. */
+.cal-row-address { white-space: normal; }
+.cal-row-address-part { white-space: nowrap; }
+.wiz-head-sub .cal-row-address { white-space: nowrap; }
 .cal-row-address-label { color: var(--panel-text-2); }
 .cal-row-address-value { color: var(--primary-text-color, #182b37); font-weight: 500; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; font-variant-numeric: tabular-nums; }
 .cal-row-status { grid-area: status; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding-inline-start: 4px; }
@@ -852,14 +855,30 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   .cal-details-grid > section { display: flex; flex-direction: column; }
   .cal-details-grid .cal-block-action { margin-top: auto; }
 }
-/* P-4: the line under a name of a card shows «Stanza · Indirizzo · A · PL» when it fits on one line of the card's real
-   width (measured by the script, `is-full`), «Indirizzo: 86» only when it does not; the table always has it all. */
-.cal-row-name > .muted:not(.is-full) .cal-row-address-ap { display: none; }
-@container caltab (min-width: 1016px) { .cal-list:not(.cal-batch-list) .cal-row-name > .muted .cal-row-address-ap { display: inline; } }
 .cal-row-toggle .cal-row-name { flex: 1 1 auto; }
-/* On the phone (window under 720 px, not a landscape phone) a card opens a page, it does not unfold: no chevron
-   (M2-3). Elsewhere the page never shows, so it can never cover Home Assistant's sidebar (D3). */
-@media (max-width: 719px) and (min-height: 500px), (max-width: 719px) and (orientation: portrait) { .cal-row-chevron { display: none; } }
+/* Q-13/Q-15, the cards' header outside the phone (Figma «R · Breakpoint», «Scheda tapparella»): no chevron (a card
+   opens by a tap anywhere), the icon and its texts filling the space (names wrap), the status and profile chips side
+   by side while they fit and one under the other when not, then the action (never wrapping) and ⋮. */
+@container caltab (max-width: 1015px) { .cal-row-chevron { display: none; } }
+@media (min-width: 720px), (max-height: 499px) and (orientation: landscape) {
+  @container caltab (max-width: 1015px) {
+    .cal-row-main { display: flex; flex-wrap: nowrap; align-items: center; gap: 12px 16px; }
+    .cal-row-toggle { flex: 1 1 200px; min-width: 0; padding: 0; }
+    .cal-row-chips { flex: 0 1 auto; min-width: min-content; padding: 0; justify-content: start; }
+    .cal-row-actions { display: flex; flex: none; gap: 8px; align-items: center; }
+    .cal-row-last-inline { display: none; }
+  }
+  /* From 900 px the third column holds the profile, the action and ⋮ on one line: the header lies on the blocks'
+     three columns (name over the first, status over the second, profile and action over the third). */
+  @container caltab (min-width: 900px) and (max-width: 1015px) {
+    .cal-row-main { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-areas: none; column-gap: 32px; }
+    .cal-row-chips { display: contents; }
+    .cal-row-toggle { grid-column: 1; grid-row: 1; }
+    .cal-row-status { grid-column: 2; grid-row: 1; justify-self: start; }
+    .cal-row-profile { grid-column: 3; grid-row: 1; justify-self: start; }
+    .cal-row-actions { grid-column: 3; grid-row: 1; justify-self: end; }
+  }
+}
 @media (min-width: 720px), (max-height: 499px) and (orientation: landscape) { .cal-page { display: none; } }
 /* T-05 M: a cover's details as a page over the list (phones only; wider windows and landscape phones open the row). */
 .cal-page { position: fixed; inset: 0; z-index: 8; display: flex; flex-direction: column; height: 100vh; height: 100dvh;

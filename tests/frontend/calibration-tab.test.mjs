@@ -1040,7 +1040,7 @@ test("on phones the full-screen wizard holds the page under it and lets it go wh
   } finally { globalThis.matchMedia = original; }
 });
 
-test("cards: status and profile side by side when they fit, stacked only when not, the action never wrapping (M4-6, P-4)", async () => {
+test("cards: icon and texts, chips side by side when they fit, action and ⋮; the line under the name always whole (M4-6, Q-13, Q-15)", async () => {
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /\.cal-row-main \{ grid-template-columns: minmax\(0, 1fr\) auto auto; grid-template-areas: "cover cover menu" "chips action action";/);
   assert.match(css, /\.cal-row-chips \{ grid-area: chips; display: flex; flex-wrap: wrap;/, "one wrapping row of chips");
@@ -1049,18 +1049,16 @@ test("cards: status and profile side by side when they fit, stacked only when no
   assert.match(css, /\.cal-row-action \{ grid-area: action; align-self: center; justify-self: end; white-space: nowrap; \}/);
   const { tab } = await mount();
   assert.deepEqual([...row(tab, "cover.kitchen_two").querySelectorAll(".cal-row-chips > span")].map((part) => part.className), ["cal-row-status", "cal-row-profile"]);
-  // The whole address when it fits one line of the card (here no layout: it is kept); the table always has it all.
-  assert.ok(row(tab, "cover.kitchen_two").querySelector(".cal-row-name > .muted").classList.contains("is-full"));
-  const { fitLines } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-layout.js");
-  const line = row(tab, "cover.kitchen_two").querySelector(".cal-row-name > .muted");
-  Object.defineProperty(line, "clientWidth", { configurable: true, get: () => 200 });
-  Object.defineProperty(line, "scrollWidth", { configurable: true, get: () => (line.style.whiteSpace === "nowrap" && line.classList.contains("is-full") ? 260 : 150) });
-  fitLines(row(tab, "cover.kitchen_two"));
-  assert.equal(line.classList.contains("is-full"), false, "too long for one line: «Indirizzo: 91» only");
-  assert.equal(line.getAttribute("style"), null, "the measure leaves no style behind");
-  Object.defineProperty(line, "clientWidth", { configurable: true, get: () => 300 });
-  fitLines(row(tab, "cover.kitchen_two"));
-  assert.equal(line.classList.contains("is-full"), true, "room enough: A and PL too");
+  // Q-13/Q-15: outside the phone the header is icon and texts (filling), the chips, then the action and ⋮; from 900 px
+  // it lies on the blocks' three columns. The line under the name is always whole.
+  assert.match(css, /\.cal-row-main \{ display: flex; flex-wrap: nowrap; align-items: center; gap: 12px 16px; \}/);
+  assert.match(css, /\.cal-row-chips \{ flex: 0 1 auto; min-width: min-content;/, "side by side while they fit, stacked when not");
+  assert.match(css, /@container caltab \(min-width: 900px\) and \(max-width: 1015px\) \{\s*\.cal-row-main \{ display: grid; grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/);
+  assert.equal(row(tab, "cover.kitchen_two").querySelector(".cal-row-address-ap"), null, "no short form");
+  assert.deepEqual([...row(tab, "cover.kitchen_two").querySelectorAll(".cal-row-address-part")].map((part) => part.textContent), ["Address: 91 ·", "A: 9 ·", "PL: 1"],
+    "each pair a unit, the «·» with the one before");
+  assert.match(css, /\.cal-row-address-part \{ white-space: nowrap; \}/);
+  assert.doesNotMatch(css, /is-full/);
 });
 
 test("the stylesheet's braces balance (a stray one silently drops every rule after it)", async () => {
@@ -1078,8 +1076,8 @@ test("the list's bands by content width (1200/1016/700) and the wizard's layouts
   const widths = [...calibration.matchAll(/@(media|container caltab|container wizbar|container calbar|container calblock) ([^{]+)\{/g)].flatMap(([, kind, query]) =>
     [...query.matchAll(/(min|max)-width: (\d+)px/g)].map(([, edge, px]) => `${kind === "media" ? "window" : kind.endsWith("wizbar") ? "bar" : kind.endsWith("calbar") ? "filters" : kind.endsWith("calblock") ? "block" : "tab"} ${edge}-${px}`));
   assert.deepEqual([...new Set(widths)].sort(), ["bar min-560", "block min-480", "filters max-379", "filters min-640", "tab max-1015", "tab max-599", "tab max-699", "tab max-999",
-    "tab min-1000", "tab min-1016", "tab min-1200", "tab min-700", "window max-719", "window min-720"],
-    "the content at 1200/1016/700 (list), 600 (header buttons), 700 and 1000 (wizard); the actions bar at 560; a details block at 480 (pairs in two halves); the filter bar at 640 and 380; the window at 720 (phone, dialogs; with 500 px of height)");
+    "tab min-1000", "tab min-1016", "tab min-1200", "tab min-700", "tab min-900", "window max-719", "window min-720"],
+    "the content at 1200/1016/900/700 (list, card headers), 600 (header buttons), 700 and 1000 (wizard); the actions bar at 560; a details block at 480 (pairs in two halves); the filter bar at 640 and 380; the window at 720 (phone, dialogs; with 500 px of height)");
   // Q-3 parity: the script's list bands are the stylesheet's container rules.
   const { LIST_BANDS, listBand } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-layout.js");
   assert.match(calibration, new RegExp(`@container caltab \\(min-width: ${LIST_BANDS.table}px\\) \\{`));
@@ -1096,7 +1094,7 @@ test("the list's bands by content width (1200/1016/700) and the wizard's layouts
   assert.match(calibration, /@container caltab \(min-width: 1200px\) \{\s*\.cal-list \{ --cal-cols: repeat\(3, minmax\(0, 1fr\)\) 158px; \}/);
   for (const n of [1, 2, 3]) assert.match(calibration, new RegExp(`\\.cal-details-grid > section:nth-child\\(${n}\\) \\{ grid-column: ${n}; \\}`));
   const address = row(tab, "cover.kitchen_two").querySelector(".cal-row-address");
-  assert.equal(address.querySelector(".cal-row-address-ap").textContent, " · A: 9 · PL: 1", "A and PL apart, hidden on the cards");
+  assert.equal(address.textContent, "Address: 91 · A: 9 · PL: 1", "always whole (Q-15)");
 });
 
 test("the sequence's status and Start stay in view while the list scrolls; on cards the place sits at the row's edge (M5-2)", async () => {

@@ -16,7 +16,7 @@ function holdScroll(host) {
 
 /** WHO 2 "Calibration" view: what each timed cover uses, its measurement state and the ways to measure it. */
 const asset = (name) => { const url = new URL(name, import.meta.url); url.search = new URL(import.meta.url).search; return url.href; };
-const [{ escapeHtml: esc }, model, text, { CoverCalibration }, { CalibrationWizard }, { ProfileCatalogueEditor }, { morph }, { layout, SHEETS, fitLines, listBand, contentWidth }] = await Promise.all([
+const [{ escapeHtml: esc }, model, text, { CoverCalibration }, { CalibrationWizard }, { ProfileCatalogueEditor }, { morph }, { layout, SHEETS, listBand, contentWidth }] = await Promise.all([
   import(asset("panel-dom.js")), import(asset("panel-model.js")), import(asset("panel-calibration-text.js")),
   import(asset("panel-cover-calibration.js")), import(asset("panel-calibration-wizard.js")), import(asset("panel-profile-catalogue-editor.js")),
   import(asset("panel-calibration-morph.js")), import(asset("panel-calibration-layout.js")),
@@ -151,13 +151,13 @@ export class CalibrationTab {
       context.host.addEventListener("click", (event) => this._click(event));
       context.host.addEventListener("keydown", (event) => this._keydown(event));
       context.host.addEventListener("change", (event) => this._change(event));
-      // P-4: a new width measures the lines under the names again (whole address when it fits).
+      // Q-3: a new width may change the list's band.
       if (typeof ResizeObserver === "function") {
         const host = context.host;
         let width = 0;
         new ResizeObserver(([entry]) => {
           const now = Math.round(entry.contentRect.width);
-          if (now !== width) { width = now; this._band(); fitLines(host); }
+          if (now !== width) { width = now; this._band(); }
         }).observe(host);
       }
     }
@@ -456,7 +456,6 @@ export class CalibrationTab {
     // Patched in place (M3): the list, the details page and their scroll stay where they are.
     morph(host, html);
     this._band();
-    fitLines(host);
     this._syncHold();
   }
 
@@ -513,23 +512,22 @@ export class CalibrationTab {
   /** "Address: 86 · A: 8 · PL: 6" with the device cards' style: grey labels, dark values. */
   _address(item) {
     const address = item.entity?.address, { t } = this._context;
-    if (!address?.raw) return "";
+    if (!address?.raw) return [];
     const fields = [[t("address"), address.raw], ...(address.a != null && address.pl != null ? [["A", address.a], ["PL", address.pl]] : [])];
-    // On the cards only «Address: 86»; A and PL in their own span.
-    const part = ([label, value]) => `<span><span class="cal-row-address-label">${esc(label)}:</span> <span class="cal-row-address-value">${esc(value)}</span></span>`;
-    const [first, ...rest] = fields;
-    return `${part(first)}${rest.length ? `<span class="cal-row-address-ap"> · ${rest.map(part).join(" · ")}</span>` : ""}`;
+    return fields.map(([label, value]) => `<span class="cal-row-address-label">${esc(label)}:</span> <span class="cal-row-address-value">${esc(value)}</span>`);
   }
 
   /**
-   * The line under a cover's name (responsive map §3.3): room, gateway, bus address as units. It wraps only between
-   * units (the «·» stays with the unit before it) and the address never breaks: two lines rather than «…».
+   * The line under a cover's name (responsive map §3.3, Q-15): room, gateway and the bus address always whole
+   * («Indirizzo: 86 · A: 8 · PL: 6», never a short form, never «…»). It wraps only between units, each pair of the
+   * address being one, and the «·» stays with the unit before it.
    */
   _subline(before, entity, after = []) {
-    const address = this._address({ entity });
-    const pieces = [...before.filter(Boolean).map((unit) => ["cal-row-unit", esc(unit)]), ...(address ? [["cal-row-address", address]] : []),
-      ...after.filter(Boolean).map((unit) => ["cal-row-unit", esc(unit)])];
-    return pieces.map(([kind, html], index) => `<span class="${kind}">${html}${index < pieces.length - 1 ? " ·" : ""}</span>`).join(" ");
+    const parts = this._address({ entity }), units = before.filter(Boolean).map(esc), tail = after.filter(Boolean).map(esc);
+    const dot = (last) => (last ? "" : " ·");
+    const address = parts.length ? [`<span class="cal-row-address">${parts.map((part, index) => `<span class="cal-row-address-part">${part}${dot(index === parts.length - 1 && !tail.length)}</span>`).join(" ")}</span>`] : [];
+    const lead = units.map((unit, index) => `<span class="cal-row-unit">${unit}${dot(index === units.length - 1 && !address.length && !tail.length)}</span>`);
+    return [...lead, ...address, ...tail.map((unit, index) => `<span class="cal-row-unit">${unit}${dot(index === tail.length - 1)}</span>`)].join(" ");
   }
 
   _area(item) { return item.area; }
@@ -1074,7 +1072,6 @@ export class CalibrationTab {
       batch.loading, batch.error, batch.entryId, max, gateways.length, this._sort, t("wiz_T364")]);
     if (host.querySelector(".cal-batch") && this._batchStructure === structure) this._patchBatch(summary, count, max);
     else { this._batchStructure = structure; morph(host, html); }
-    fitLines(host.querySelector(".cal-batch"));
     // The fade above the actions while the list goes on under them (phones, as M-5).
     const main = host.querySelector(".cal-batch .wiz-main"), actions = host.querySelector(".cal-batch .wiz-actions");
     if (main && actions && !main.dataset.watched) {

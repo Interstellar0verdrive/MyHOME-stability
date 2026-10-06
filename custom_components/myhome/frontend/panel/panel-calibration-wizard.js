@@ -4,7 +4,7 @@
  * `CalibrationGateway` (live session or local preview); it never builds a WebSocket message itself.
  */
 const asset = (name) => { const url = new URL(name, import.meta.url); url.search = new URL(import.meta.url).search; return url.href; };
-const [{ escapeHtml: esc }, text, screens, gateways, illustration, { morph }, { layout, fitLines }] = await Promise.all([
+const [{ escapeHtml: esc }, text, screens, gateways, illustration, { morph }, { layout }] = await Promise.all([
   import(asset("panel-dom.js")), import(asset("panel-calibration-text.js")), import(asset("panel-calibration-screens.js")),
   import(asset("panel-calibration-gateway.js")), import(asset("panel-calibration-illustration.js")), import(asset("panel-calibration-morph.js")), import(asset("panel-calibration-layout.js")),
 ]);
@@ -349,7 +349,6 @@ export class CalibrationWizard {
         this._pickerHtml = html;
         // Patched in place: the rows, the scroll and the focus stay (M3-4).
         morph(picker, html);
-        fitLines(picker);
         // A new choice opens its row with notes: the row stays in view.
         const chosen = picker.querySelector(".wiz-pick-row.is-selected");
         if (chosen && chosen.dataset.entity !== this._pickedEntity) chosen.scrollIntoView?.({ block: "nearest" });
