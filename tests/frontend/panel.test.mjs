@@ -1790,3 +1790,8 @@ test("an empty message area takes no room under the page", async () => {
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /#toast:empty \{ display: none; \}/);
 });
+
+test("the panel keeps its text sizes on a landscape iPhone (text-size-adjust)", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css.match(/^:host \{[^}]*\}/m)[0], /-webkit-text-size-adjust: 100%; text-size-adjust: 100%;/);
+});

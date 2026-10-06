@@ -5,6 +5,8 @@
   background: var(--primary-background-color, #f5f7f9);
   font-family: var(--paper-font-body1_-_font-family, Roboto, system-ui, sans-serif);
   -webkit-font-smoothing: antialiased;
+  /* Safari on iOS enlarges text in landscape unless the page opts out: the panel keeps its sizes. */
+  -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
   --panel-border: var(--divider-color, #e0e6ea);
   --panel-accent: var(--primary-color, #03a9f4);
   --panel-accent-soft: color-mix(in srgb, var(--panel-accent) 12%, transparent);
