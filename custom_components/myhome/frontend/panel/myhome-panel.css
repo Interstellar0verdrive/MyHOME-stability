@@ -645,7 +645,9 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 /* M6-2: iOS safe areas (Dynamic Island, home indicator, landscape notch), through variables so a harness can emulate
    them; the full-screen views, their bars and the sheets keep their content clear of them. */
 :host { --cal-safe-top: env(safe-area-inset-top, 0px); --cal-safe-right: env(safe-area-inset-right, 0px);
-  --cal-safe-bottom: env(safe-area-inset-bottom, 0px); --cal-safe-left: env(safe-area-inset-left, 0px); }
+  --cal-safe-bottom: env(safe-area-inset-bottom, 0px); --cal-safe-left: env(safe-area-inset-left, 0px);
+  /* Q-18: our buttons and controls take the shell's 8 px radius (chips, counts and the progress bar stay round). */
+  --cal-btn-radius: 8px; }
 /* M5-1: the tab's own width decides its layout, not the window's (Home Assistant's sidebar takes ~256 px: a 1390 px
    window leaves the tab ~1130 px). Below 768 px of window the wizard and the details go full screen. */
 #cover-calibration-tab { container: caltab / inline-size; }
@@ -740,7 +742,7 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   .cal-tab-chips { display: flex; flex: 1 1 auto; min-width: 0; }
   .cal-tab-compact { display: flex; flex: none; margin-inline-start: auto; }
   .cal-tab-compact .cal-compact-filter { display: none; }
-  .cal-filterbar-sort { gap: 4px; min-height: 36px; padding-inline-start: 14px; border-radius: 999px; font-size: 13px; color: var(--panel-text-2); }
+  .cal-filterbar-sort { gap: 4px; min-height: 36px; padding-inline-start: 14px; border-radius: var(--cal-btn-radius); font-size: 13px; color: var(--panel-text-2); }
   .cal-filterbar-sort select { min-height: 34px; padding-inline-end: 22px; font-size: 13px; font-weight: 500; color: var(--primary-text-color, #182b37); }
   .cal-sort-short { display: none; }
   .cal-sort-long { display: inline; }
@@ -1191,7 +1193,7 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-notice[data-tone="warning"] { border-color: color-mix(in srgb, var(--panel-warning) 45%, transparent); background: color-mix(in srgb, var(--panel-warning) 10%, var(--panel-surface)); }
 .wiz-notice[data-tone="error"] { color: var(--panel-error); border-color: color-mix(in srgb, var(--panel-error) 40%, transparent); background: color-mix(in srgb, var(--panel-error) 8%, transparent); }
 .wiz-actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; align-content: start; padding: 20px; background: var(--wiz-side); }
-.wiz-action { width: 100%; min-height: 56px; border-radius: 999px; font-size: 15px; }
+.wiz-action { width: 100%; min-height: 56px; border-radius: var(--cal-btn-radius); font-size: 15px; }
 /* D7: a label too long for a narrow column takes two even lines inside the pill, never one word alone. */
 .wiz-action, .wiz-take { padding-block: 8px; line-height: 1.2; text-wrap: balance; }
 /* D18: in a wide bottom bar (phone in portrait from 560 px, the column in the page) the actions keep 480 px, centred. */
@@ -1219,7 +1221,7 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 /* S-07: plain text at the top of the actions column, then Take control (outlined while the owner is present). */
 .wiz-readonly { display: grid; gap: 16px; }
 .wiz-readonly p { margin: 0; font-size: 14px; line-height: 1.5; }
-.wiz-take { width: 100%; min-height: 56px; border-radius: 999px; font-size: 15px; }
+.wiz-take { width: 100%; min-height: 56px; border-radius: var(--cal-btn-radius); font-size: 15px; }
 .wiz-take.secondary { border-color: var(--panel-accent); color: var(--panel-accent); background: transparent; }
 /* S-01…S-05: the motor's state as plain lines under the text. */
 .wiz-status p { margin: 0; line-height: 1.55; }
@@ -1288,7 +1290,7 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
   .wiz-compact { display: flex; align-items: center; gap: 10px; padding: 8px 16px; background: var(--panel-surface-2); border-bottom: 1px solid var(--panel-border); font-size: 13px; }
   .wiz-compact-line { flex: 1; }
   .wiz-dot { width: 14px; height: 14px; border-radius: 50%; box-sizing: border-box; }
-  .wiz-steps-button { min-height: 32px; padding: 4px 12px; border-radius: 999px; border-color: var(--panel-accent); color: var(--panel-accent); font-weight: 600; text-transform: uppercase; font-size: 12px; }
+  .wiz-steps-button { min-height: 32px; padding: 4px 12px; border-radius: var(--cal-btn-radius); border-color: var(--panel-accent); color: var(--panel-accent); font-weight: 600; text-transform: uppercase; font-size: 12px; }
   .wiz-steps { display: none; }
 }
 @container caltab (min-width: 1000px) {
@@ -1383,7 +1385,7 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
     background: var(--panel-surface-2); border-bottom: 1px solid var(--panel-border); font-size: 13px; }
   .wiz-compact-line { flex: 1; }
   .wiz-dot { width: 14px; height: 14px; border-radius: 50%; box-sizing: border-box; }
-  .wiz-steps-button { min-height: 32px; padding: 4px 12px; border-radius: 999px; border-color: var(--panel-accent); color: var(--panel-accent); font-weight: 600; text-transform: uppercase; font-size: 12px; }
+  .wiz-steps-button { min-height: 32px; padding: 4px 12px; border-radius: var(--cal-btn-radius); border-color: var(--panel-accent); color: var(--panel-accent); font-weight: 600; text-transform: uppercase; font-size: 12px; }
   .wiz-columns { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) calc(clamp(240px, 35%, 280px) + var(--cal-safe-right));
     grid-template-rows: minmax(0, 1fr); }
   .wiz-main { min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column;

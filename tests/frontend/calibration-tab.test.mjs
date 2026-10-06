@@ -1140,7 +1140,7 @@ test("the sequence's Steps sheet closes on a tap outside its card (M6-1, R7-7)",
 
 test("the full-screen views, their bars and the sheets keep clear of the iOS safe areas (M6-2)", async () => {
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
-  assert.match(css, /:host \{ --cal-safe-top: env\(safe-area-inset-top, 0px\); --cal-safe-right: env\(safe-area-inset-right, 0px\);\s*--cal-safe-bottom: env\(safe-area-inset-bottom, 0px\); --cal-safe-left: env\(safe-area-inset-left, 0px\); \}/);
+  assert.match(css, /:host \{ --cal-safe-top: env\(safe-area-inset-top, 0px\); --cal-safe-right: env\(safe-area-inset-right, 0px\);\s*--cal-safe-bottom: env\(safe-area-inset-bottom, 0px\); --cal-safe-left: env\(safe-area-inset-left, 0px\);[^}]*\}/);
   for (const rule of [/\.wiz-head \{ padding: calc\(12px \+ var\(--cal-safe-top\)\) calc\(16px \+ var\(--cal-safe-right\)\) 12px calc\(16px \+ var\(--cal-safe-left\)\); \}/,
     /\.wiz-actions \{ padding: 12px calc\(16px \+ var\(--cal-safe-right\)\) calc\(12px \+ var\(--cal-safe-bottom\)\) calc\(16px \+ var\(--cal-safe-left\)\);/,
     /\.cal-page-head \{[^}]*padding: calc\(16px \+ var\(--cal-safe-top\)\) calc\(16px \+ var\(--cal-safe-right\)\) 16px calc\(16px \+ var\(--cal-safe-left\)\);/,
