@@ -919,7 +919,7 @@ test("radios are plain rows, the advice badge is accent blue, links and Exit wit
   assert.match(rule(".wiz-recommended"), /color: var\(--panel-accent\)/);
   assert.match(rule(".wiz-action.link"), /color: var\(--panel-error\)/);
   assert.match(rule(".wiz-action.danger"), /background: var\(--panel-error\)/);
-  assert.match(rule(".wiz-leave"), /margin-inline-end: auto; color: var\(--panel-error\); border: 0/);
+  assert.match(rule(".wiz-leave"), /color: var\(--panel-error\); border: 0/);
 });
 
 test("a step's problem says the motor's state as plain lines under the text, S-05 with the stopwatch, and keeps Stop", () => {
@@ -1466,7 +1466,8 @@ test("leaving the tab with a live session open asks: continue, leave and resume 
     assert.equal(nav().querySelector("h4").textContent, "Calibration in progress");
     assert.equal(nav().querySelector("#wiz-nav-body").textContent,
       "If you leave now, the calibration will stay open for 30 minutes and you will be able to resume it from the Calibration tab. If you cancel it, the measurements taken so far will be lost.");
-    assert.deepEqual([...nav().querySelectorAll("button")].map((button) => [button.dataset.wiz, button.textContent, button.className]),
+    assert.equal(nav().querySelector(".wiz-dialog-x").hidden, true, "centred: no ✕ (R-5)");
+    assert.deepEqual([...nav().querySelectorAll(".actions button")].map((button) => [button.dataset.wiz, button.textContent, button.className]),
       [["nav-discard", "Leave without saving", "wiz-leave"], ["nav-later", "Leave and resume later", ""], ["nav-stay", "Continue calibration", "primary"]]);
     assert.equal(root.activeElement, nav().querySelector('[data-wiz="nav-stay"]'));
     nav().querySelector('[data-wiz="nav-stay"]').click(); await tick();
@@ -2293,5 +2294,25 @@ test("«Passi» has its title and ✕: a centred card, a sheet from the bottom, 
 test("every wizard, block and dialog button centres its label and takes the shell's radius (R-4)", async () => {
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /\.wiz-action, \.wiz-take, \.wiz-dialog-card \.actions button, dialog\.cal-dialog \.dialog-foot button, \.cal-block-action > button \{\s*justify-content: center; text-align: center; border-radius: var\(--cal-btn-radius\); \}/);
+});
+
+test("dialogs are 560 px centred cards, and sheets with a handle, a ✕ that keeps the calibration and stacked buttons (R-5)", async () => {
+  const { wiz, press, startFor } = await mount();
+  await startFor("cover.living_one");
+  await press("begin");
+  const original = globalThis.matchMedia;
+  try {
+    globalThis.matchMedia = (query) => ({ matches: query.includes("max-width") });
+    wiz().querySelector(".wiz-head .wiz-x").click(); await tick();
+    const exit = wiz().querySelector(".wiz-dialog:not(.wiz-nav-dialog)");
+    assert.equal(exit.querySelector(".wiz-dialog-x").hidden, false, "a sheet has its ✕");
+    exit.querySelector(".wiz-dialog-x").click(); await tick();
+    await new Promise((resolve) => setTimeout(resolve, 260));
+    assert.equal(exit.hidden, true, "✕ keeps the calibration");
+  } finally { globalThis.matchMedia = original; }
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.wiz-dialog-card \{ box-sizing: border-box; width: min\(100%, 560px\); padding: 24px;/);
+  assert.match(css, /dialog\.cal-dialog::before, \.wiz-dialog \.wiz-dialog-card::before \{ content: ""; display: block; flex: none; width: 40px; height: 4px;/, "the sheets' handle");
+  assert.match(css, /dialog\.cal-dialog \{ width: min\(100%, 560px\); margin: auto auto 0; \}/, "landscape: a 560 px sheet, centred");
 });
 

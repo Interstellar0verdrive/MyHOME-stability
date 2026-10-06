@@ -936,9 +936,13 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
     padding-bottom: var(--cal-safe-bottom); }
   dialog.cal-dialog::backdrop { background: rgb(0 0 0 / 55%); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
   dialog.cal-dialog > * { padding-inline: calc(16px + var(--cal-safe-left)) calc(16px + var(--cal-safe-right)); }
-  dialog.cal-dialog .dialog-icon { display: none; }
   dialog.cal-dialog .dialog-foot { flex-direction: column-reverse; align-items: stretch; }
-  dialog.cal-dialog .dialog-foot button { width: 100%; min-height: 48px; justify-content: center; }
+  dialog.cal-dialog .dialog-head { padding-top: 12px; }
+  dialog.cal-dialog::before, .wiz-dialog .wiz-dialog-card::before { content: ""; display: block; flex: none; width: 40px; height: 4px; border-radius: 2px;
+    background: var(--panel-border); }
+  dialog.cal-dialog::before { margin: 10px 0 0 calc(20px + var(--cal-safe-left)); }
+  .wiz-dialog .wiz-dialog-card::before { margin: -12px 0 12px; }
+  dialog.cal-dialog .dialog-foot button { width: 100%; justify-content: center; }
   /* M2-6: the sheet holds its place; only its body scrolls, the footer stays at the bottom with the fade above it. */
   dialog.cal-dialog[open] { display: flex; flex-direction: column; overflow: hidden; overscroll-behavior: contain; }
   dialog.cal-dialog .dialog-head, dialog.cal-dialog .dialog-foot { flex: none; }
@@ -1261,14 +1265,25 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-sheet.is-leaving { animation: wiz-scrim-out 220ms ease-in forwards; }
 @media (prefers-reduced-motion: reduce) { .wiz-sheet, .wiz-sheet .wiz-sheet-card { animation: none !important; } }
 .wiz-dialog { align-items: center; justify-content: center; padding: 20px; }
-.wiz-dialog-card { width: min(100%, 460px); padding: 22px; border-radius: 18px; background: var(--panel-surface); box-shadow: var(--panel-shadow-hover); }
-.wiz-dialog-card h4 { margin: 0 0 8px; font-size: 18px; }
+/* R-5 (Figma «R · Breakpoint», «Dialoghi»): centred cards 560 px wide, 24 px inside, the buttons on the right; as
+   sheets (phone, landscape) a handle on top, the title with ✕, the buttons stacked with the primary first (phone) or
+   side by side (landscape, the sheet 560 px wide and centred). */
+.wiz-dialog-card { box-sizing: border-box; width: min(100%, 560px); padding: 24px; border-radius: 18px; background: var(--panel-surface); box-shadow: var(--panel-shadow-hover); }
+.wiz-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 8px; }
+.wiz-dialog-card h4 { margin: 0; font-size: 18px; }
+.wiz-dialog-x, .cal-dialog-x { display: inline-flex; flex: none; width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0; margin: -10px -10px -10px 0;
+  justify-content: center; border: 0; background: transparent; color: var(--panel-text-2); }
+.wiz-dialog-x ha-icon, .cal-dialog-x ha-icon { --mdc-icon-size: 24px; }
+.wiz-dialog-x[hidden], .cal-dialog-x[hidden] { display: none; }
+dialog.cal-dialog > * { padding-inline: 24px; }
+dialog.cal-dialog .dialog-icon { display: none; }
+dialog.cal-dialog .dialog-head { justify-content: space-between; padding-block: 24px 12px; }
 .wiz-dialog-card .actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: end; margin-top: 16px; }
 /* "Calibration in progress": wide enough on desktop for its three buttons on one row (Figma S-08b, 592 px). */
 .wiz-nav-dialog .wiz-dialog-card { width: min(100%, 592px); box-sizing: border-box; }
 @media (min-width: 720px) and (min-height: 500px) { .wiz-nav-dialog .wiz-dialog-card .actions { flex-wrap: nowrap; } }
-/* S-08: "Exit without saving" as red text on the left, the primary on the right. */
-.wiz-leave { margin-inline-end: auto; color: var(--panel-error); border: 0; background: transparent; box-shadow: none; }
+/* S-08: "Exit without saving" as red text beside the primary, both on the right (R-5, Figma «Dialoghi»). */
+.wiz-leave { color: var(--panel-error); border: 0; background: transparent; box-shadow: none; }
 .wiz-leave:hover { background: color-mix(in srgb, var(--panel-error) 8%, transparent); }
 /* Drawings of the steps: Figma size, never wider than the column. */
 .wiz-illustration { display: block; max-width: 100%; height: auto; margin: 0; }
@@ -1363,7 +1378,7 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
   .wiz-dialog .wiz-dialog-card { width: 100%; max-width: none; box-sizing: border-box; border-radius: 18px 18px 0 0;
     padding: 22px calc(16px + var(--cal-safe-right)) calc(16px + var(--cal-safe-bottom)) calc(16px + var(--cal-safe-left)); }
   .wiz-dialog .actions { flex-direction: column-reverse; align-items: stretch; flex-wrap: nowrap; }
-  .wiz-dialog .actions button { width: 100%; min-height: 48px; justify-content: center; }
+  .wiz-dialog .actions button { width: 100%; justify-content: center; }
   .wiz-dialog .wiz-leave { margin: 0; }
   .wiz-dialog:not([hidden]) { animation: wiz-scrim-in 220ms ease-out; }
   .wiz-dialog:not([hidden]) .wiz-dialog-card { animation: wiz-sheet-in 220ms cubic-bezier(.2, 0, 0, 1); }
@@ -1376,6 +1391,9 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
    side, so the content keeps its room (D14). */
 @media (max-height: 499px) and (orientation: landscape) {
   dialog.cal-dialog { max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); }
+  dialog.cal-dialog { width: min(100%, 560px); margin: auto auto 0; }
+  .wiz-dialog { justify-content: center; }
+  .wiz-dialog .wiz-dialog-card { width: min(100%, 560px); }
   .wiz-dialog .wiz-dialog-card, .wiz-sheet .wiz-sheet-card { max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); }
   dialog.cal-dialog .dialog-foot, .wiz-dialog .actions { flex-direction: row; justify-content: end; }
   dialog.cal-dialog .dialog-foot button, .wiz-dialog .actions button { flex: 1 1 0; width: auto; min-width: 0; }
@@ -1384,6 +1402,7 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
    shell's radius through `--cal-btn-radius`. */
 .wiz-action, .wiz-take, .wiz-dialog-card .actions button, dialog.cal-dialog .dialog-foot button, .cal-block-action > button {
   justify-content: center; text-align: center; border-radius: var(--cal-btn-radius); }
+.wiz-dialog-card .actions button, dialog.cal-dialog .dialog-foot button { min-height: 44px; }
 .wiz-action-note { margin: -4px 8px 4px; font-size: 12px; line-height: 1.4; text-align: center; }
 /* Responsive map §3.2, a landscape phone (under 500 px high, whatever its width): the wizard and the sequence full
    screen with the tablet's layout, so the content keeps its room (D11) and Stop stays in view (D12). A 44 px header with

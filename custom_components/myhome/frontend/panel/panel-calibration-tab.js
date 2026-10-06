@@ -835,11 +835,13 @@ export class CalibrationTab {
     const { dialogHost, t } = this._context;
     dialogHost.innerHTML = `<dialog class="cover-profile-dialog cal-dialog" aria-labelledby="cal-dialog-title">
       <header class="dialog-head"><div class="dialog-icon" aria-hidden="true"><ha-icon icon="${esc(icon)}"></ha-icon></div>
-        <div class="dialog-head-text"><h2 id="cal-dialog-title">${esc(title)}</h2>${subtitle ? `<p class="muted">${esc(subtitle)}</p>` : ""}</div></header>
+        <div class="dialog-head-text"><h2 id="cal-dialog-title">${esc(title)}</h2>${subtitle ? `<p class="muted">${esc(subtitle)}</p>` : ""}</div>
+        <button type="button" class="icon-button cal-dialog-x" ${layout.sheets() ? "" : "hidden"} aria-label="${esc(t("close"))}" title="${esc(t("close"))}"><ha-icon icon="mdi:close" aria-hidden="true"></ha-icon></button></header>
       <div class="cal-dialog-body"></div>
       <footer class="dialog-foot"><button type="button" class="cal-dialog-close">${esc(t("close"))}</button></footer></dialog>`;
     const dialog = dialogHost.querySelector("dialog");
     dialog.querySelector(".cal-dialog-close").onclick = () => this._dialogDone();
+    dialog.querySelector(".cal-dialog-x").onclick = () => this._dialogDone();
     dialog.oncancel = (event) => { event.preventDefault(); this._dialogDone(); };
     // A click on the backdrop (outside the dialog's box) closes it as Escape does, applying nothing.
     dialog.addEventListener("click", (event) => {

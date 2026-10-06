@@ -276,11 +276,11 @@ export class CalibrationWizard {
           <div class="wiz-sheet-head"><h4 class="wiz-sheet-title">${esc(t("wiz_T274"))}</h4><button type="button" class="icon-button wiz-sheet-close" data-wiz="steps-close" aria-label="${esc(t("close"))}"><ha-icon icon="mdi:close" aria-hidden="true"></ha-icon></button></div>
           <div class="wiz-sheet-steps"></div></div></div>
         <div class="wiz-dialog" role="alertdialog" aria-modal="true" aria-labelledby="wiz-dialog-title" aria-describedby="wiz-dialog-body" hidden><div class="wiz-dialog-card">
-          <h4 id="wiz-dialog-title">${esc(t("wiz_T267"))}</h4><p id="wiz-dialog-body"></p>
+          <div class="wiz-dialog-head"><h4 id="wiz-dialog-title">${esc(t("wiz_T267"))}</h4><button type="button" class="icon-button wiz-dialog-x" data-wiz="dialog-x" hidden aria-label="${esc(t("close"))}" title="${esc(t("close"))}"><ha-icon icon="mdi:close" aria-hidden="true"></ha-icon></button></div><p id="wiz-dialog-body"></p>
           <div class="actions"><button type="button" class="wiz-leave" data-wiz="leave">${esc(t("wiz_T270"))}</button>
             <button type="button" class="primary" data-wiz="stay">${esc(t("wiz_T269"))}</button></div></div></div>
         <div class="wiz-dialog wiz-nav-dialog" role="alertdialog" aria-modal="true" aria-labelledby="wiz-nav-title" aria-describedby="wiz-nav-body" hidden><div class="wiz-dialog-card">
-          <h4 id="wiz-nav-title">${esc(t("wiz_T408"))}</h4><p id="wiz-nav-body"></p>
+          <div class="wiz-dialog-head"><h4 id="wiz-nav-title">${esc(t("wiz_T408"))}</h4><button type="button" class="icon-button wiz-dialog-x" data-wiz="dialog-x" hidden aria-label="${esc(t("close"))}" title="${esc(t("close"))}"><ha-icon icon="mdi:close" aria-hidden="true"></ha-icon></button></div><p id="wiz-nav-body"></p>
           <div class="actions"><button type="button" class="wiz-leave" data-wiz="nav-discard">${esc(t("wiz_T411"))}</button>
             <button type="button" data-wiz="nav-later">${esc(t("wiz_T410"))}</button>
             <button type="button" class="primary" data-wiz="nav-stay">${esc(t("wiz_T269"))}</button></div></div></div>`;
@@ -606,6 +606,8 @@ export class CalibrationWizard {
     if (id === "exit") { this._exit(); return; }
     if (id === "back") { this._back(); return; }
     if (id.startsWith("pick-filter:")) { local.pickFilter = id.slice(12); return this._render(); }
+    // R-5: the ✕ of a confirmation shown as a sheet keeps the calibration, as «Continua la calibrazione».
+    if (id === "dialog-x") { this._act(this._frame.querySelector(".wiz-nav-dialog")?.hidden === false ? "nav-stay" : "stay"); return; }
     if (id === "stay") { this._closeDialog(); return; }
     if (id === "nav-stay") { this._navAnswer(false); return; }
     if (id === "nav-later") { this._navAnswer(true); return; }
@@ -1020,6 +1022,7 @@ export class CalibrationWizard {
     const minutes = Math.max(1, Math.round((Number.isFinite(seconds) ? seconds : IDLE_LEASE_SECONDS) / 60));
     dialog.querySelector("#wiz-nav-body").textContent = text.fill(t("wiz_T409"), { minutes, tab: t("calTabTab") });
     this._closeDialog(false);
+    dialog.querySelector(".wiz-dialog-x").hidden = !layout.sheets();
     dialog.hidden = false;
     this._root.classList.add("has-dialog");
     dialog.querySelector('[data-wiz="nav-stay"]').focus();
@@ -1070,6 +1073,8 @@ export class CalibrationWizard {
     if (STAGES_BEFORE_SESSION.includes(this._local.stage) || !this._sessionOpen()) { this._finish(); return; }
     const dialog = this._frame.querySelector(".wiz-dialog"), { t } = this._context;
     dialog.querySelector("#wiz-dialog-body").textContent = t(this._gateway.preview ? "wiz_T268" : "wizExitBodyLive");
+    // R-5: a sheet (window under 720 × 500 px) has its ✕ in the title row.
+    dialog.querySelector(".wiz-dialog-x").hidden = !layout.sheets();
     dialog.hidden = false;
     this._root.classList.add("has-dialog");
     dialog.querySelector('[data-wiz="stay"]').focus();
