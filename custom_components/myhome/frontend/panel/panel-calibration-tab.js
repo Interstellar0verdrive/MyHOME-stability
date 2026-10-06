@@ -82,7 +82,17 @@ export class CalibrationTab {
     this.__mode = mode;
     // The phone's details page belongs to the list: a wizard, a sequence or a session closes it.
     if (mode?.kind !== "list") this._page = null;
-    const hold = mode?.kind === "wizard" || mode?.kind === "batch", roots = [document.documentElement, document.body].filter(Boolean);
+    this._syncHold();
+  }
+
+  /**
+   * The views over the page hold it: the wizard and the sequence (always no pull-to-refresh; held still when full
+   * screen, M4-4) and the phone's details page (P-5: held still too, only its body scrolls).
+   */
+  _syncHold() {
+    const mode = this.__mode;
+    const full = mode?.kind === "wizard" || mode?.kind === "batch", page = mode?.kind === "list" && !!this._page;
+    const hold = full || page, roots = [document.documentElement, document.body].filter(Boolean);
     if (hold && !this._overscroll) {
       this._overscroll = roots.map((element) => [element, element.style.overscrollBehaviorY]);
       for (const element of roots) element.style.overscrollBehaviorY = "none";
@@ -91,9 +101,10 @@ export class CalibrationTab {
       this._overscroll = null;
     }
     // M4-4: the full-screen wizard (a phone, or a landscape phone: the stylesheet's rule) holds the page under it still;
-    // only its content area scrolls. Elsewhere the wizard sits in the page.
-    if (hold && layout.fullScreen() && this._context?.host && !this._fullHold) this._fullHold = holdScroll(this._context.host);
-    else if (!hold && this._fullHold) { this._fullHold(); this._fullHold = null; }
+    // only its content area scrolls. Elsewhere the wizard sits in the page. The details page exists only on the phone.
+    const still = (full && layout.fullScreen()) || page;
+    if (still && this._context?.host && !this._fullHold) this._fullHold = holdScroll(this._context.host);
+    else if (!still && this._fullHold) { this._fullHold(); this._fullHold = null; }
   }
 
   /** Replace the wizard (tests use a faster preview); `null` leaves only sessions and groups. */
@@ -108,6 +119,7 @@ export class CalibrationTab {
     this._calibration.close();
     this._wizard?.close();
     this._rows.clear();
+    this._page = null;
     this._mode = { kind: "list" };
     this._batch = null;
     this._menu = null;
@@ -441,6 +453,7 @@ export class CalibrationTab {
     // Patched in place (M3): the list, the details page and their scroll stay where they are.
     morph(host, html);
     fitLines(host);
+    this._syncHold();
   }
 
   _row(item, busy, language) {

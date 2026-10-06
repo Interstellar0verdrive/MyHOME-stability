@@ -864,6 +864,7 @@ test("a cover's details open in place outside the phone layout, a landscape phon
       row(tab, "cover.living_one").querySelector(".cal-row-toggle").click(); await tick();
       assert.equal(!!tab.querySelector(".cal-page"), page, `${width}×${height}: ${page ? "a page" : "in place"}`);
       assert.equal(row(tab, "cover.living_one").querySelector(".cal-row-details").hidden, page);
+      tab.querySelector(".cal-page-close")?.click(); await tick();
     }
   } finally { globalThis.matchMedia = original; }
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
@@ -1146,5 +1147,24 @@ test("one filter and order bar for the list, A-01 and the sequence: chips and «
   assert.match(css, /\.cal-filterbar \{ container: calbar \/ inline-size; \}/);
   assert.match(css, /@container calbar \(min-width: 640px\) \{\s*\.cal-filterbar-row \{ display: flex;/);
   void panel;
+});
+
+test("the phone's details page holds the page under it like the wizard, and lets it go when it closes (P-5)", async () => {
+  const original = globalThis.matchMedia;
+  globalThis.matchMedia = viewport(390, 844);
+  try {
+    const { tab } = await mount({ language: "it" });
+    document.documentElement.style.overflow = "";
+    row(tab, "cover.living_one").querySelector(".cal-row-toggle").click(); await tick();
+    assert.ok(tab.querySelector(".cal-page"));
+    assert.equal(document.documentElement.style.overflow, "hidden");
+    assert.equal(document.body.style.overflow, "hidden");
+    assert.equal(document.documentElement.style.overscrollBehaviorY, "none", "no pull to refresh under it");
+    tab.querySelector(".cal-page-close").click(); await tick();
+    assert.equal(tab.querySelector(".cal-page"), null);
+    assert.equal(document.documentElement.style.overflow, "");
+    assert.equal(document.body.style.overflow, "");
+    assert.equal(document.documentElement.style.overscrollBehaviorY, "");
+  } finally { globalThis.matchMedia = original; }
 });
 
