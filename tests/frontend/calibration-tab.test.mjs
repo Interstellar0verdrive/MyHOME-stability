@@ -304,7 +304,7 @@ test("notes are opaque, so they never blend with the row that hosts them, and A-
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /background: color-mix\(in srgb, var\(--panel-accent\) 8%, var\(--panel-surface\)\); color: var\(--panel-text-2\);/, "info");
   assert.match(css, /background: color-mix\(in srgb, var\(--panel-warning\) 8%, var\(--panel-surface\)\);/, "warning");
-  assert.match(css, /\.wiz-pick-row\.is-selected \{ background: color-mix\(in srgb, var\(--primary-text-color, #182b37\) 4%, transparent\); \}/, "the grey row stays");
+  assert.match(css, /\.wiz-pick-row\.is-selected \{ background: color-mix\(in srgb, var\(--primary-text-color, #182b37\) 4%, var\(--panel-surface\)\); \}/, "the grey row stays");
   assert.match(css, /\.cal-note \{[^}]*border: 1px solid color-mix\(in srgb, var\(--panel-accent\) 75%, transparent\); border-inline-start-width: 3px;/, "info: 1 px border, 3 px bar");
   assert.match(css, /\.cal-note\.is-warning \{ border-color: color-mix\(in srgb, var\(--panel-warning\) 75%, transparent\);/, "warning: the same in yellow");
 });
@@ -1077,9 +1077,9 @@ test("the list's bands by content width (1200/1016/700) and the wizard's layouts
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   const calibration = css.slice(css.indexOf("/* ---------- WHO 2 · Calibration tab ---------- */"));
   assert.match(calibration, /#cover-calibration-tab \{ container: caltab \/ inline-size; \}/, "the tab's width decides, not the window's");
-  const widths = [...calibration.matchAll(/@(media|container caltab|container wizbar|container calblock) ([^{]+)\{/g)].flatMap(([, kind, query]) =>
-    [...query.matchAll(/(min|max)-width: (\d+)px/g)].map(([, edge, px]) => `${kind === "media" ? "window" : kind.endsWith("wizbar") ? "bar" : kind.endsWith("calblock") ? "block" : "tab"} ${edge}-${px}`));
-  assert.deepEqual([...new Set(widths)].sort(), ["bar min-560", "block min-480", "tab max-1015", "tab max-599", "tab max-699", "tab max-999",
+  const widths = [...calibration.matchAll(/@(media|container caltab|container wizbar|container calblock|container calcards) ([^{]+)\{/g)].flatMap(([, kind, query]) =>
+    [...query.matchAll(/(min|max)-width: (\d+)px/g)].map(([, edge, px]) => `${kind === "media" ? "window" : kind.endsWith("wizbar") ? "bar" : kind.endsWith("calblock") ? "block" : kind.endsWith("calcards") ? "cards" : "tab"} ${edge}-${px}`));
+  assert.deepEqual([...new Set(widths)].sort(), ["bar min-560", "block min-480", "cards min-600", "tab max-1015", "tab max-599", "tab max-699", "tab max-999",
     "tab min-1000", "tab min-1016", "tab min-1200", "tab min-700", "window max-719", "window min-720"],
     "the content at 1200/1016/700 (list), 600 (header buttons), 700 and 1000 (wizard); the actions bar at 560; a details block at 480 (pairs in two halves); the filter bar measured (Q-24); the window at 720 (phone, dialogs; with 500 px of height)");
   // Q-3 parity: the script's list bands are the stylesheet's container rules.
@@ -1285,5 +1285,14 @@ test("a profile chip is cut at 180 px with its whole name in the tooltip, whole 
   assert.match(css, /\.cal-profile-chip \{ --cal-chip: var\(--panel-accent\); max-width: 180px; \}/);
   assert.match(css, /\.cal-chip-text \{ min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; \}/);
   assert.match(css, /\.cal-details-grid \.cal-chip-text \{ white-space: normal; overflow-wrap: anywhere; \}/);
+});
+
+test("the lists in the wizard are cards, with the bar's counts above its drop-downs (R-6)", async () => {
+  const { tab } = await openBatch();
+  assert.match(tab.querySelector(".cal-batch-filterbar > .cal-tab-summary").textContent, /^\d+ tapparell[ae] · /);
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.cal-batch-rows \{ display: grid; gap: 12px; container: calcards \/ inline-size; \}/);
+  assert.match(css, /\.cal-batch-row \{[^}]*border: 1px solid var\(--panel-border\); border-radius: 12px; background: var\(--panel-surface\);/);
+  assert.match(css, /@container calcards \(min-width: 600px\) \{\s*\.cal-batch-row \{ grid-template-columns: auto minmax\(0, 1fr\) auto; grid-template-areas: "lead name status"; \}/);
 });
 

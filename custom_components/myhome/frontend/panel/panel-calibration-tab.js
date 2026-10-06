@@ -323,6 +323,13 @@ export class CalibrationTab {
           <div class="cal-tab-compact${compactClass}">${select}${this._compactSort(sortAttribute)}</div></div></div>`;
   }
 
+  /** «12 tapparelle · 7 calibrate · 5 da calibrare»: the counts above the bar's drop-downs (Q-10, R-6). */
+  _countLine(counts) {
+    const { t } = this._context;
+    return [["calTabCountCovers", counts.all], ["calTabCountCalibrated", counts.calibrated], ["calTabCountToMeasure", counts.to_measure]]
+      .map(([key, count]) => fill(t(count === 1 ? `${key}_one` : key), { n: count })).join(" · ");
+  }
+
   /** The filter drop-down of the narrow bar (T-01c M): the four filters with their counts. */
   _filterSelect(counts, current, attribute = "data-filter") {
     const { t } = this._context;
@@ -377,7 +384,7 @@ export class CalibrationTab {
         <span class="cal-batch-profile">${profile(item)}</span></span>
         ${chosen && notes.length ? `<span class="wiz-pick-notes">${notes.map((note) => `<span class="cal-note${note.tone === "warning" ? " is-warning" : ""}">${esc(note.text)}</span>`).join("")}</span>` : ""}</label>`;
     }).join("");
-    return `${this._filterBar({ chipsClass: " wiz-pick-chips", sortAttribute: "data-pick-sort", extra: " wiz-pick-bar",
+    return `${this._filterBar({ chipsClass: " wiz-pick-chips", sortAttribute: "data-pick-sort", extra: " wiz-pick-bar", count: this._countLine(counts),
         chips: FILTERS.map((id) => `<button type="button" class="cal-chip" data-wiz="pick-filter:${id}" aria-pressed="${filter === id}">${esc(t(`calTabFilter_${id}`))} <span class="count">${counts[id]}</span></button>`).join(""),
         select: this._filterSelect(counts, filter, "data-pick-filter") })}
       <div class="cal-list cal-batch-list wiz-pick-list">
@@ -439,8 +446,7 @@ export class CalibrationTab {
           ${this._wizard ? `<button type="button" class="primary" data-action="cal-tab-measure" ${busy || loading || !counts.all ? "disabled" : ""}><ha-icon icon="mdi:ruler" aria-hidden="true"></ha-icon><span>${esc(t("calTabMeasureOne"))}</span></button>` : ""}
         </div></div>
         ${this._filterBar({ extra: " cal-tab-filters", select: this._filterSelect(counts, this._filter),
-          count: [["calTabCountCovers", counts.all], ["calTabCountCalibrated", counts.calibrated], ["calTabCountToMeasure", counts.to_measure]]
-            .map(([key, count]) => fill(t(count === 1 ? `${key}_one` : key), { n: count })).join(" · "),
+          count: this._countLine(counts),
           chips: FILTERS.map((filter) => `<button type="button" class="cal-chip" data-action="cal-tab-filter" data-id="${filter}" aria-pressed="${this._filter === filter}">${esc(t(`calTabFilter_${filter}`))} <span class="count">${counts[filter]}</span></button>`).join("") })}
         ${this._done ? `<p class="notice cal-tab-done" role="status"><ha-icon icon="mdi:check-circle-outline" aria-hidden="true"></ha-icon><span>${esc(this._done)}</span></p>` : ""}
         ${busy ? `<p class="notice cal-tab-busy" role="status"><ha-icon icon="mdi:information-outline" aria-hidden="true"></ha-icon><span>${esc(t("calTabBusy"))}</span></p>` : ""}
@@ -1100,6 +1106,8 @@ export class CalibrationTab {
             ${batch.loading ? `<p class="muted" role="status">${esc(t("loading"))}</p>` : ""}
             ${!batch.loading && !batch.error && !targets.length ? `<p class="muted">${esc(t("calBatchEmpty"))}</p>` : ""}
             ${targets.length ? `${this._filterBar({ extra: " cal-batch-filterbar", compactClass: " cal-batch-compact", label: t("wiz_T383"),
+              count: this._countLine({ all: targets.length, calibrated: targets.filter((target) => target.status && target.status !== "to_measure").length,
+                to_measure: targets.filter((target) => target.status === "to_measure").length }),
               chips: picks.map(([id, label]) => `<button type="button" class="cal-chip" data-action="cal-tab-batch-pick" data-id="${id}">${esc(label)}</button>`).join(""),
               select: `<label class="cal-compact-sort cal-compact-filter cal-compact-select"><select data-batch-pick aria-label="${esc(select)}">
                 <option value="" selected>${esc(select)}</option>${picks.map(([id, label]) => `<option value="${id}">${esc(label)}</option>`).join("")}</select></label>` })}

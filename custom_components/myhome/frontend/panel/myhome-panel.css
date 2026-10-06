@@ -971,8 +971,9 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 }
 /* The place in the sequence goes to the row's right edge; no gap is left between circle and icon. A long status
    wraps inside its column rather than run under the place (D8). */
-.cal-batch-wiz .cal-batch-row { position: relative; padding-inline-end: 44px; }
-.cal-batch-wiz .cal-batch-order { position: absolute; inset-inline-end: 12px; top: 50%; transform: translateY(-50%); }
+.cal-batch-wiz .cal-batch-row { position: relative; padding-inline-end: 48px; }
+/* The place sits at the card's right edge, level with the icon row (the card is 12 px inside, the icon row 40 px). */
+.cal-batch-wiz .cal-batch-order { position: absolute; inset-inline-end: 12px; top: 20px; }
 .cal-batch-status { min-width: 0; }
 .cal-batch-status .badge { max-width: 100%; white-space: normal; }
 .cal-batch-wiz .cal-batch-summary { margin: 0; font-size: 14px; font-weight: 500; text-align: center; }
@@ -981,12 +982,19 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-batch-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
 .cal-batch-shortcuts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; font-size: 12px; }
 .cal-batch-capacity { margin: 0; font-size: 12px; }
-.cal-batch-rows { display: grid; }
-.cal-batch-row { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "lead name" "lead status"; align-items: center; gap: 4px 12px;
-  min-height: 48px; padding: 8px 12px; border-top: 1px solid var(--panel-border); cursor: pointer; font-size: 13px; font-weight: 400; color: inherit; }
-.cal-batch-row:first-child { border-top: 0; }
+/* R-6 (Figma «R · Breakpoint», «Liste nel wizard»): A-01's and the sequence's covers are cards, 12 px apart, as the
+   list's: [circle][icon][name and its line] with the chips beside them while they fit (side by side, or one under the
+   other), under them on a narrow list. */
+.cal-batch-rows { display: grid; gap: 12px; container: calcards / inline-size; }
+.cal-batch-row { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "lead name" "status status"; align-items: center; gap: 8px 12px;
+  min-height: 48px; padding: 12px; border: 1px solid var(--panel-border); border-radius: 12px; background: var(--panel-surface); cursor: pointer;
+  font-size: 13px; font-weight: 400; color: inherit; }
+@container calcards (min-width: 600px) {
+  .cal-batch-row { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "lead name status"; }
+  .cal-batch-chips { justify-content: end; }
+}
 .cal-batch-row:hover { background: var(--panel-accent-soft); }
-.cal-batch-row.is-selected { background: color-mix(in srgb, var(--panel-accent) 6%, transparent); }
+.cal-batch-row.is-selected { background: color-mix(in srgb, var(--panel-accent) 6%, var(--panel-surface)); }
 .cal-batch-lead { grid-area: lead; display: inline-flex; align-items: center; gap: 12px; }
 /* M3-6: the selection is a clean circle (no native square under a radius): a ring when empty, the accent with a white
    check when ticked; focus as the radios'. The same in light and dark. */
@@ -1007,7 +1015,7 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 /* Responsive map: the lists inside the wizard (A-01, the sequence) are cards at every width, in their frame (D19,
    D21): the profile as a chip under the status, no column headers (Sort by is a drop-down above the list). */
 .cal-batch-row .cal-batch-profile:has(.cal-profile-chip) { display: block; max-width: 100%; }
-.wiz-main .cal-list { border: 1px solid var(--panel-border); border-radius: var(--panel-radius); background: var(--panel-surface); }
+.wiz-main .cal-list { border: 0; border-radius: 0; background: transparent; }
 .cal-batch-limit:empty { display: none; }
 .cal-batch .cal-tab-intro { flex: none; }
 @media (max-width: 719px), (max-height: 499px) and (orientation: landscape) {
@@ -1061,7 +1069,7 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 /* A-01: the covers as the sequence view's rows, one radio each; the chosen row opens with its notes. */
 .wiz-picker { display: grid; gap: 12px; margin-top: 4px; }
 /* The choice is already in the radio and the opened row: a neutral tint, so its notes keep their own colour. */
-.wiz-pick-row.is-selected { background: color-mix(in srgb, var(--primary-text-color, #182b37) 4%, transparent); }
+.wiz-pick-row.is-selected { background: color-mix(in srgb, var(--primary-text-color, #182b37) 4%, var(--panel-surface)); }
 .wiz-pick-chips { margin: 0; }
 .wiz-pick-row .cal-batch-lead { gap: 12px; }
 .wiz-pick-notes { grid-column: 1 / -1; display: grid; gap: 6px; padding-bottom: 4px; }
