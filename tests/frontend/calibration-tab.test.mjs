@@ -868,7 +868,8 @@ test("a cover's details open in place outside the phone layout, a landscape phon
   } finally { globalThis.matchMedia = original; }
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /@media \(min-width: 720px\), \(max-height: 499px\) and \(orientation: landscape\) \{ \.cal-page \{ display: none; \} \}/, "never a page over the sidebar");
-  assert.match(css, /\.cal-details-grid \{ display: grid; grid-template-columns: repeat\(auto-fit, minmax\(min\(240px, 100%\), 1fr\)\);/, "the card's blocks side by side");
+  assert.match(css, /@container caldetails \(min-width: 600px\) \{ \.cal-details-grid \{ grid-template-columns: repeat\(3, minmax\(0, 1fr\)\); \} \}/,
+    "the card's three blocks side by side, equal, or all one under the other (P-4)");
 });
 
 test("the tab's dialogs are centred from 720 × 500 px of window and sheets below, a landscape phone included (responsive map, D14)", async () => {
@@ -1023,11 +1024,27 @@ test("on phones the full-screen wizard holds the page under it and lets it go wh
   } finally { globalThis.matchMedia = original; }
 });
 
-test("phone cards: one chip centred on the action, two chips stacked beside it, the action never wrapping (M4-6)", async () => {
+test("cards: status and profile side by side when they fit, stacked only when not, the action never wrapping (M4-6, P-4)", async () => {
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
-  assert.match(css, /\.cal-row-main:has\(\.cal-row-profile \.cal-profile-chip\) \{ grid-template-areas: "cover cover menu" "status action action" "profile action action"; \}/);
-  assert.match(css, /\.cal-row-main:not\(:has\(\.cal-row-profile \.cal-profile-chip\)\) \.cal-row-status \{ align-self: center; \}/);
+  assert.match(css, /\.cal-row-main \{ grid-template-columns: minmax\(0, 1fr\) auto auto; grid-template-areas: "cover cover menu" "chips action action";/);
+  assert.match(css, /\.cal-row-chips \{ grid-area: chips; display: flex; flex-wrap: wrap;/, "one wrapping row of chips");
+  assert.match(css, /\.cal-batch-chips \{ grid-area: status; display: flex; flex-wrap: wrap;/, "the same in A-01 and the sequence");
+  assert.match(css, /\.cal-row-chips \{ display: contents; \}/, "the table keeps its status and profile columns");
   assert.match(css, /\.cal-row-action \{ grid-area: action; align-self: center; justify-self: end; white-space: nowrap; \}/);
+  const { tab } = await mount();
+  assert.deepEqual([...row(tab, "cover.kitchen_two").querySelectorAll(".cal-row-chips > span")].map((part) => part.className), ["cal-row-status", "cal-row-profile"]);
+  // The whole address when it fits one line of the card (here no layout: it is kept); the table always has it all.
+  assert.ok(row(tab, "cover.kitchen_two").querySelector(".cal-row-name > .muted").classList.contains("is-full"));
+  const { fitLines } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-layout.js");
+  const line = row(tab, "cover.kitchen_two").querySelector(".cal-row-name > .muted");
+  Object.defineProperty(line, "clientWidth", { configurable: true, get: () => 200 });
+  Object.defineProperty(line, "scrollWidth", { configurable: true, get: () => (line.style.whiteSpace === "nowrap" && line.classList.contains("is-full") ? 260 : 150) });
+  fitLines(row(tab, "cover.kitchen_two"));
+  assert.equal(line.classList.contains("is-full"), false, "too long for one line: «Indirizzo: 91» only");
+  assert.equal(line.getAttribute("style"), null, "the measure leaves no style behind");
+  Object.defineProperty(line, "clientWidth", { configurable: true, get: () => 300 });
+  fitLines(row(tab, "cover.kitchen_two"));
+  assert.equal(line.classList.contains("is-full"), true, "room enough: A and PL too");
 });
 
 test("the stylesheet's braces balance (a stray one silently drops every rule after it)", async () => {
@@ -1042,9 +1059,9 @@ test("one breakpoint for the list (880 px of the tab itself) and the wizard's th
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   const calibration = css.slice(css.indexOf("/* ---------- WHO 2 · Calibration tab ---------- */"));
   assert.match(calibration, /#cover-calibration-tab \{ container: caltab \/ inline-size; \}/, "the tab's width decides, not the window's");
-  const widths = [...calibration.matchAll(/@(media|container caltab|container wizbar|container calbar) ([^{]+)\{/g)].flatMap(([, kind, query]) =>
-    [...query.matchAll(/(min|max)-width: (\d+)px/g)].map(([, edge, px]) => `${kind === "media" ? "window" : kind.endsWith("wizbar") ? "bar" : kind.endsWith("calbar") ? "filters" : "tab"} ${edge}-${px}`));
-  assert.deepEqual([...new Set(widths)].sort(), ["bar min-560", "filters max-379", "filters min-640", "tab max-599", "tab max-699", "tab max-879", "tab max-999", "tab min-1000", "tab min-700", "tab min-880",
+  const widths = [...calibration.matchAll(/@(media|container caltab|container wizbar|container calbar|container caldetails) ([^{]+)\{/g)].flatMap(([, kind, query]) =>
+    [...query.matchAll(/(min|max)-width: (\d+)px/g)].map(([, edge, px]) => `${kind === "media" ? "window" : kind.endsWith("wizbar") ? "bar" : kind.endsWith("calbar") ? "filters" : kind.endsWith("caldetails") ? "details" : "tab"} ${edge}-${px}`));
+  assert.deepEqual([...new Set(widths)].sort(), ["bar min-560", "details min-600", "filters max-379", "filters min-640", "tab max-599", "tab max-699", "tab max-879", "tab max-999", "tab min-1000", "tab min-700", "tab min-880",
     "window max-719", "window min-720"],
     "the tab at 880 (list), 600 (header buttons), 380 (drop-downs), 700 and 1000 (wizard); the actions bar at 560; the filter bar at 640 (chips) and 380 (drop-downs); the window at 720 (phone, dialogs; with 500 px of height)");
   assert.doesNotMatch(calibration, /container: wizmain/, "the wizard's lists are cards at every width");

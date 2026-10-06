@@ -711,8 +711,6 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 /* The one breakpoint of the Calibration list (responsive map): below 880 px of tab (a 1184 px window with Home
    Assistant's sidebar) one column of cards, with the compact filter and order row; from 880 px the table. */
 @container caltab (max-width: 879px) {
-  /* The address keeps «Address: 86»; A and PL return with the table. */
-  .cal-row-address-ap { display: none; }
 }
 /* M4-3: rings only for the keyboard, drawn on the wrapper of a borderless select; no grey flash on a tap. */
 .cal-tab, .wiz, dialog.cal-dialog { -webkit-tap-highlight-color: transparent; }
@@ -821,26 +819,31 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   .cal-list-rows { display: grid; gap: 12px; }
   .cal-row, .cal-row:first-of-type, .cal-list-head + .cal-row { border: 1px solid var(--panel-border); border-radius: 12px; background: var(--panel-surface); }
   .cal-row.is-running { border-color: color-mix(in srgb, var(--panel-warning) 60%, transparent); }
-  /* M4-6: the chips on the left, the action on the right and never wrapping. One chip: centred on the action; two
-     (status and profile): stacked, the action centred on both. */
-  .cal-row-main { grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "cover cover menu" "status action action"; row-gap: 6px; border-radius: 11px; }
-  .cal-row-main:has(.cal-row-profile .cal-profile-chip) { grid-template-areas: "cover cover menu" "status action action" "profile action action"; }
+  /* M4-6 + P-4: the chips on the left, the action on the right and never wrapping, centred on the chips. Status and
+     profile side by side while they fit the card, one under the other only when they do not. */
+  .cal-row-main { grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "cover cover menu" "chips action action"; row-gap: 6px; border-radius: 11px; }
   .cal-row-actions { display: contents; }
   .cal-menu-wrap { grid-area: menu; align-self: start; justify-self: end; }
-  .cal-row-status { grid-area: status; align-self: end; min-width: 0; }
-  .cal-row-main:not(:has(.cal-row-profile .cal-profile-chip)) .cal-row-status { align-self: center; }
-  .cal-row-profile { grid-area: profile; align-self: start; min-width: 0; padding-inline-start: 4px; }
+  .cal-row-chips { grid-area: chips; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; align-self: center; min-width: 0; padding-inline-start: 4px; }
+  .cal-row-status, .cal-row-profile { min-width: 0; max-width: 100%; padding: 0; }
   .cal-row-main:not(:has(.cal-row-profile .cal-profile-chip)) .cal-row-profile { display: none; }
   .cal-row-action { grid-area: action; align-self: center; justify-self: end; white-space: nowrap; }
   .cal-row-main .cal-badge, .cal-row-main .cal-profile-chip { max-width: 100%; }
   .cal-row-last-inline { display: block; color: var(--panel-text-2); }
-  /* Responsive map: from 720 px of window a card opens in place, its blocks side by side while they fit (240 px each). */
+  /* Responsive map: from 720 px of window a card opens in place. P-4: its three blocks are equal and shrink together,
+     side by side down to about 185 px each; below, all three one under the other (never two and one). */
   .cal-row.is-expanded .cal-row-main { border-radius: 11px 11px 0 0; }
-  .cal-row-details { border-radius: 0 0 11px 11px; }
-  .cal-details-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 20px 24px; }
+  .cal-row-details { container: caldetails / inline-size; border-radius: 0 0 11px 11px; }
+  .cal-details-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px 24px; }
   .cal-details-grid > section { max-width: none; }
   .cal-details-grid .cal-note { max-width: none; }
 }
+@container caldetails (min-width: 600px) { .cal-details-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+/* P-4: the line under a name of a card shows «Stanza · Indirizzo · A · PL» when it fits on one line of the card's real
+   width (measured by the script, `is-full`), «Indirizzo: 86» only when it does not; the table always has it all. */
+.cal-row-name > .muted:not(.is-full) .cal-row-address-ap { display: none; }
+@container caltab (min-width: 880px) { .cal-list:not(.cal-batch-list) .cal-row-name > .muted .cal-row-address-ap { display: inline; } }
+.cal-row-toggle .cal-row-name { flex: 1 1 auto; }
 /* On the phone (window under 720 px, not a landscape phone) a card opens a page, it does not unfold: no chevron
    (M2-3). Elsewhere the page never shows, so it can never cover Home Assistant's sidebar (D3). */
 @media (max-width: 719px) and (min-height: 500px), (max-width: 719px) and (orientation: portrait) { .cal-row-chevron { display: none; } }
@@ -941,14 +944,13 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   background: var(--panel-accent); color: var(--text-primary-color, #fff); font-variant-numeric: tabular-nums; }
 .cal-batch-order:empty { visibility: hidden; }
 .cal-batch-row .cal-row-name { grid-area: name; }
-.cal-batch-status { grid-area: status; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.cal-batch-chips { grid-area: status; display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; min-width: 0; }
+.cal-batch-status { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .cal-batch-profile { display: none; }
 /* Responsive map: the lists inside the wizard (A-01, the sequence) are cards at every width, in their frame (D19,
    D21): the profile as a chip under the status, no column headers (Sort by is a drop-down above the list). */
-.cal-batch-row:has(.cal-batch-profile .cal-profile-chip) { grid-template-areas: "lead name" "lead status" "lead profile"; }
-.cal-batch-row .cal-batch-profile:has(.cal-profile-chip) { display: block; grid-area: profile; }
+.cal-batch-row .cal-batch-profile:has(.cal-profile-chip) { display: block; max-width: 100%; }
 .wiz-main .cal-list { border: 1px solid var(--panel-border); border-radius: var(--panel-radius); background: var(--panel-surface); }
-.wiz-main .cal-row-address-ap { display: none; }
 .cal-batch-limit:empty { display: none; }
 .cal-batch .cal-tab-intro { flex: none; }
 @media (max-width: 719px), (max-height: 499px) and (orientation: landscape) {
@@ -972,6 +974,7 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   .cal-list-head { padding-block: 12px; border-bottom: 1px solid var(--panel-border); font-size: 12px; color: var(--panel-text-2); }
   .cal-row-main { padding-block: 12px; row-gap: 0; }
   /* The phone layout names grid areas: every cell goes back to row 1 and its own column. */
+  .cal-row-chips { display: contents; }
   .cal-row-toggle, .cal-row-status, .cal-row-profile, .cal-row-actions { grid-area: auto; grid-row: 1; }
   .cal-row-toggle { grid-column: 1 / 3; display: grid; grid-template-columns: var(--cal-lead-box) minmax(0, 1fr); column-gap: var(--cal-lead-gap);
     align-items: center; padding: 0; }

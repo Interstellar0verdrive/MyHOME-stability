@@ -16,7 +16,7 @@ function holdScroll(host) {
 
 /** WHO 2 "Calibration" view: what each timed cover uses, its measurement state and the ways to measure it. */
 const asset = (name) => { const url = new URL(name, import.meta.url); url.search = new URL(import.meta.url).search; return url.href; };
-const [{ escapeHtml: esc }, model, text, { CoverCalibration }, { CalibrationWizard }, { ProfileCatalogueEditor }, { morph }, { layout, SHEETS }] = await Promise.all([
+const [{ escapeHtml: esc }, model, text, { CoverCalibration }, { CalibrationWizard }, { ProfileCatalogueEditor }, { morph }, { layout, SHEETS, fitLines }] = await Promise.all([
   import(asset("panel-dom.js")), import(asset("panel-model.js")), import(asset("panel-calibration-text.js")),
   import(asset("panel-cover-calibration.js")), import(asset("panel-calibration-wizard.js")), import(asset("panel-profile-catalogue-editor.js")),
   import(asset("panel-calibration-morph.js")), import(asset("panel-calibration-layout.js")),
@@ -137,6 +137,15 @@ export class CalibrationTab {
       context.host.addEventListener("click", (event) => this._click(event));
       context.host.addEventListener("keydown", (event) => this._keydown(event));
       context.host.addEventListener("change", (event) => this._change(event));
+      // P-4: a new width measures the lines under the names again (whole address when it fits).
+      if (typeof ResizeObserver === "function") {
+        const host = context.host;
+        let width = 0;
+        new ResizeObserver(([entry]) => {
+          const now = Math.round(entry.contentRect.width);
+          if (now !== width) { width = now; fitLines(host); }
+        }).observe(host);
+      }
     }
     if (changed) {
       const generation = this._generation;
@@ -349,8 +358,8 @@ export class CalibrationTab {
         <span class="cal-batch-lead"><input type="radio" name="cover" value="${esc(key)}" ${chosen ? "checked" : ""}>
           <span class="cal-row-icon" aria-hidden="true"><ha-icon icon="mdi:window-shutter"></ha-icon></span></span>
         <span class="cal-row-name"><strong>${esc(item.name)}</strong><span class="muted">${this._subline([item.area, gateways.length > 1 ? item.entry.title : ""], item.entity)}</span></span>
-        <span class="cal-batch-status"><span class="badge cal-badge" data-status="${item.status}">${esc(t(`calTabStatus_${item.status}`))}</span></span>
-        <span class="cal-batch-profile">${profile(item)}</span>
+        <span class="cal-batch-chips"><span class="cal-batch-status"><span class="badge cal-badge" data-status="${item.status}">${esc(t(`calTabStatus_${item.status}`))}</span></span>
+        <span class="cal-batch-profile">${profile(item)}</span></span>
         ${chosen && notes.length ? `<span class="wiz-pick-notes">${notes.map((note) => `<span class="cal-note${note.tone === "warning" ? " is-warning" : ""}">${esc(note.text)}</span>`).join("")}</span>` : ""}</label>`;
     }).join("");
     return `${this._filterBar({ chipsClass: " wiz-pick-chips", sortAttribute: "data-pick-sort", extra: " wiz-pick-bar",
@@ -431,6 +440,7 @@ export class CalibrationTab {
     }
     // Patched in place (M3): the list, the details page and their scroll stay where they are.
     morph(host, html);
+    fitLines(host);
   }
 
   _row(item, busy, language) {
@@ -454,8 +464,8 @@ export class CalibrationTab {
         <button type="button" class="cal-row-toggle" data-action="cal-tab-toggle" data-id="${esc(key)}" aria-expanded="${expanded}" aria-controls="${esc(id)}">
           <span class="cal-row-lead" aria-hidden="true"><ha-icon class="cal-row-chevron" icon="mdi:chevron-right"></ha-icon><span class="cal-row-icon"><ha-icon icon="mdi:window-shutter"></ha-icon></span></span>
           <span class="cal-row-name"><strong>${esc(item.name)}</strong><span class="muted">${this._subline([this._area(item), gateways.length > 1 ? item.entry.title : ""], item.entity)}</span><span class="cal-row-last-inline">${esc(last || t("wiz_T418"))}</span></span></button>
-        <span class="cal-row-status">${badge}</span>
-        <span class="cal-row-profile">${profile}</span>
+        <span class="cal-row-chips"><span class="cal-row-status">${badge}</span>
+        <span class="cal-row-profile">${profile}</span></span>
         <span class="cal-row-actions">${action}
           <span class="cal-menu-wrap"><button type="button" class="icon-button" data-action="cal-tab-menu" data-id="${esc(key)}" aria-haspopup="menu" aria-expanded="${menuOpen}" aria-label="${esc(t("calTabMore"))}: ${esc(item.name)}" title="${esc(t("calTabMore"))}"><ha-icon icon="mdi:dots-vertical" aria-hidden="true"></ha-icon></button>
           <span class="cal-menu" role="menu" ${menuOpen ? "" : "hidden"}>
@@ -973,8 +983,8 @@ export class CalibrationTab {
           <span class="cal-batch-order" aria-hidden="true">${place >= 0 ? place + 1 : ""}</span>
           <span class="cal-row-icon" aria-hidden="true"><ha-icon icon="mdi:window-shutter"></ha-icon></span></span>
         <span class="cal-row-name"><strong>${esc(target.name)}</strong><span class="muted">${this._subline([target.area], target.entity, target.reason ? [t(`profileError_${target.reason}`)] : [])}</span></span>
-        <span class="cal-batch-status">${statusBadge(target.item)}</span>
-        <span class="cal-batch-profile">${profile(target.item)}</span></label>`;
+        <span class="cal-batch-chips"><span class="cal-batch-status">${statusBadge(target.item)}</span>
+        <span class="cal-batch-profile">${profile(target.item)}</span></span></label>`;
     }).join("");
     const summary = count === 0 ? t("wiz_T386") : count === 1 ? t("wiz_T385") : fill(t("wiz_T384"), { count });
     const select = t("wiz_T383").replace(/\s*:\s*$/, "");
@@ -1027,6 +1037,7 @@ export class CalibrationTab {
       batch.loading, batch.error, batch.entryId, max, gateways.length, this._sort, t("wiz_T364")]);
     if (host.querySelector(".cal-batch") && this._batchStructure === structure) this._patchBatch(summary, count, max);
     else { this._batchStructure = structure; morph(host, html); }
+    fitLines(host.querySelector(".cal-batch"));
     // The fade above the actions while the list goes on under them (phones, as M-5).
     const main = host.querySelector(".cal-batch .wiz-main"), actions = host.querySelector(".cal-batch .wiz-actions");
     if (main && actions && !main.dataset.watched) {
