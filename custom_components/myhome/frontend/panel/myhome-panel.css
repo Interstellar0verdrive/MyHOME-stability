@@ -794,7 +794,12 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-badge[data-status="times"], .cal-badge[data-status="rolls"] { --cal-chip: var(--panel-accent); }
 .cal-badge[data-status="verified"] { --cal-chip: var(--panel-success); }
 .cal-badge[data-status="running"] { --cal-chip: var(--panel-warning); white-space: normal; }
-.cal-profile-chip { --cal-chip: var(--panel-accent); }
+/* Q-22: in rows, cards and headers a profile's name is cut at 180 px («…», whole in the tooltip); the details'
+   «Profilo» block shows it whole. */
+.cal-profile-chip { --cal-chip: var(--panel-accent); max-width: 180px; }
+.cal-chip-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-details-grid .cal-profile-chip { max-width: 100%; }
+.cal-details-grid .cal-chip-text { white-space: normal; overflow-wrap: anywhere; }
 .cal-profile-chip ha-icon { --mdc-icon-size: 8px; }
 /* Details start 12 px below the row (24 px under the cover icon) and end 20 px under the lowest block action. */
 .cal-row-details { padding: 12px 14px 20px; }
@@ -845,7 +850,8 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   .cal-row-status, .cal-row-profile { min-width: 0; max-width: 100%; padding: 0; }
   .cal-row-main:not(:has(.cal-row-profile .cal-profile-chip)) .cal-row-profile { display: none; }
   .cal-row-action { grid-area: action; align-self: center; justify-self: end; white-space: nowrap; }
-  .cal-row-main .cal-badge, .cal-row-main .cal-profile-chip { max-width: 100%; }
+  .cal-row-main .cal-badge { max-width: 100%; }
+  .cal-row-main .cal-profile-chip { max-width: min(100%, 180px); }
   .cal-row-last-inline { display: block; color: var(--panel-text-2); }
   /* Responsive map: from 720 px of window a card opens in place; its three blocks one under the other. */
   .cal-row.is-expanded .cal-row-main { border-radius: 11px 11px 0 0; }
@@ -881,16 +887,9 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
     .cal-row.is-aligned .cal-facts { grid-template-columns: calc(var(--cal-col2) - 32px) minmax(0, 1fr); column-gap: 32px; }
   }
   .cal-row.is-measuring .cal-row-main .cal-row-name, .cal-row.is-measuring .cal-row-main .cal-row-name * { white-space: nowrap; }
-  /* From 900 px the third column holds the profile, the action and ⋮ on one line: the header lies on the blocks'
-     three columns (name over the first, status over the second, profile and action over the third). */
-  @container caltab (min-width: 900px) and (max-width: 1015px) {
-    .cal-row-main { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-areas: none; column-gap: 32px; }
-    .cal-row-chips { display: contents; }
-    .cal-row-toggle { grid-column: 1; grid-row: 1; }
-    .cal-row-status { grid-column: 2; grid-row: 1; justify-self: start; }
-    .cal-row-profile { grid-column: 3; grid-row: 1; justify-self: start; }
-    .cal-row-actions { grid-column: 3; grid-row: 1; justify-self: end; }
-  }
+  /* Q-22: the three-column header over the blocks needs its third column to hold the widest profile chip (180), the
+     widest action and ⋮ on one line: CARD_HEADER_COLUMNS in panel-calibration-layout.js gives 1160 px of content,
+     beyond the cards' band (up to 1015 px), so the cards keep this header at every width. */
 }
 @media (min-width: 720px), (max-height: 499px) and (orientation: landscape) { .cal-page { display: none; } }
 /* T-05 M: a cover's details as a page over the list (phones only; wider windows and landscape phones open the row). */

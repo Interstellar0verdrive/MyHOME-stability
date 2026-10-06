@@ -365,7 +365,7 @@ export class CalibrationTab {
       calibrated: all.filter((item) => item.status !== "to_measure").length, profile: all.filter((item) => item.profile).length };
     const visible = this._sorted(all, language).filter((item) => filter === "all" || (filter === "to_measure" ? item.status === "to_measure"
       : filter === "calibrated" ? item.status !== "to_measure" : !!item.profile));
-    const profile = (item) => item.profile ? `<span class="chip cal-profile-chip"><ha-icon icon="mdi:circle" aria-hidden="true"></ha-icon>${esc(item.profile.name)}</span>`
+    const profile = (item) => item.profile ? `${this._profileChip(item.profile.name)}`
       : `<span class="muted" aria-label="${esc(t("calTabProfileNone"))}">—</span>`;
     const rows = visible.map((item) => {
       const key = JSON.stringify([item.entry.entry_id, item.cover.entity_id]), chosen = key === selected;
@@ -461,6 +461,14 @@ export class CalibrationTab {
     this._syncHold();
   }
 
+  /**
+   * Q-22: a profile chip: at most 180 px in rows, cards and headers, its name cut with «…» and whole in the tooltip;
+   * the details' «Profilo» block shows it whole.
+   */
+  _profileChip(name) {
+    return `<span class="chip cal-profile-chip" title="${esc(name)}"><ha-icon icon="mdi:circle" aria-hidden="true"></ha-icon><span class="cal-chip-text">${esc(name)}</span></span>`;
+  }
+
   /** Q-3: the list's band for the tab's content width, as the stylesheet's container rules choose it (`data-band`). */
   _band() {
     const host = this._context?.host, width = contentWidth(host);
@@ -523,7 +531,7 @@ export class CalibrationTab {
     const badge = session ? `<span class="badge cal-badge" data-status="running">${esc(t(session.waiting_for_stop ? "calTabRunning_waiting"
       : session.phase === "paused" ? "calTabRunning_paused" : session.owner_present ?? session.attached ? "calTabRunning_present" : "calTabRunning_absent"))}</span>`
       : `<span class="badge cal-badge" data-status="${item.status}">${esc(t(`calTabStatus_${item.status}`))}</span>`;
-    const profile = item.profile ? `<span class="chip cal-profile-chip"><ha-icon icon="mdi:circle" aria-hidden="true"></ha-icon>${esc(item.profile.name)}</span>` : `<span class="muted" aria-label="${esc(t("calTabProfileNone"))}">—</span>`;
+    const profile = item.profile ? `${this._profileChip(item.profile.name)}` : `<span class="muted" aria-label="${esc(t("calTabProfileNone"))}">—</span>`;
     const last = item.last ? fill(t("calTabMeasuredOn"), { date: dateText(item.last, language) }) : "";
     const action = session
       ? (session.waiting_for_stop || session.recoverable === false ? "" : `<button type="button" class="cal-row-action" data-action="cal-tab-session" data-id="${esc(item.entry.entry_id)}">${esc(t("calOpenSession"))}</button>`)
@@ -645,7 +653,7 @@ export class CalibrationTab {
         <section><h4>${esc(t("calTabColLast"))}</h4>${list([[t("calTabDate"), item.last ? dateText(item.last, language) : "—"],
           [t("calTabMethod"), t(`calTabMethod_${item.method || "none"}`)]])}
           ${item.profile && scaled ? `<p class="${note}">${esc(fill(t("calTabInheritedNote"), { profile: item.profile.name }))}</p>` : ""}${action(measure)}</section>
-        <section><h4>${esc(t("calTabColProfile"))}</h4>${item.profile ? `<p><span class="chip cal-profile-chip"><ha-icon icon="mdi:circle" aria-hidden="true"></ha-icon>${esc(item.profile.name)}</span></p>
+        <section><h4>${esc(t("calTabColProfile"))}</h4>${item.profile ? `<p>${this._profileChip(item.profile.name)}</p>
           <p>${esc(followers.length ? fill(t("calTabFollowers"), { names: names(followers, language) }) : t("calTabFollowersNone"))}</p>
           <p class="${note}">${esc(t("calTabProfileNote"))}</p>` : `<p class="muted">${esc(t("calTabProfileNone"))}</p>`}${action(assign)}</section>
       </div>`;
@@ -1049,7 +1057,7 @@ export class CalibrationTab {
     // The same order as the list (shared choice); the place in the sequence stays the order of the ticks.
     const targets = this._batchTargets();
     const statusBadge = (item) => item ? `<span class="badge cal-badge" data-status="${item.status}">${esc(t(`calTabStatus_${item.status}`))}</span>` : "";
-    const profile = (item) => item?.profile ? `<span class="chip cal-profile-chip"><ha-icon icon="mdi:circle" aria-hidden="true"></ha-icon>${esc(item.profile.name)}</span>`
+    const profile = (item) => item?.profile ? `${this._profileChip(item.profile.name)}`
       : `<span class="muted" aria-label="${esc(t("calTabProfileNone"))}">—</span>`;
     const rows = targets.map((target) => {
       const place = batch.order.indexOf(target.entity_id);

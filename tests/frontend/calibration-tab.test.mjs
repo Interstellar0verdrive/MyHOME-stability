@@ -1053,7 +1053,11 @@ test("cards: icon and texts, chips side by side when they fit, action and ⋮; t
   // it lies on the blocks' three columns. The line under the name is always whole.
   assert.match(css, /\.cal-row-main \{ display: flex; flex-wrap: nowrap; align-items: center; gap: 12px 16px; \}/);
   assert.match(css, /\.cal-row-chips \{ flex: 0 1 auto; min-width: min-content;/, "side by side while they fit, stacked when not");
-  assert.match(css, /@container caltab \(min-width: 900px\) and \(max-width: 1015px\) \{\s*\.cal-row-main \{ display: grid; grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/);
+  // Q-22: the three-column header needs more content than the cards ever have: they keep this header.
+  const { CARD_HEADER_COLUMNS, LIST_BANDS } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-layout.js");
+  assert.equal(CARD_HEADER_COLUMNS, 1160);
+  assert.ok(CARD_HEADER_COLUMNS >= LIST_BANDS.tableFull);
+  assert.doesNotMatch(css, /@container caltab \(min-width: 900px\)/);
   assert.equal(row(tab, "cover.kitchen_two").querySelector(".cal-row-address-ap"), null, "no short form");
   assert.deepEqual([...row(tab, "cover.kitchen_two").querySelectorAll(".cal-row-address-part")].map((part) => part.textContent), ["Address: 91 ·", "A: 9 ·", "PL: 1"],
     "each pair a unit, the «·» with the one before");
@@ -1076,8 +1080,8 @@ test("the list's bands by content width (1200/1016/700) and the wizard's layouts
   const widths = [...calibration.matchAll(/@(media|container caltab|container wizbar|container calbar|container calblock) ([^{]+)\{/g)].flatMap(([, kind, query]) =>
     [...query.matchAll(/(min|max)-width: (\d+)px/g)].map(([, edge, px]) => `${kind === "media" ? "window" : kind.endsWith("wizbar") ? "bar" : kind.endsWith("calbar") ? "filters" : kind.endsWith("calblock") ? "block" : "tab"} ${edge}-${px}`));
   assert.deepEqual([...new Set(widths)].sort(), ["bar min-560", "block min-480", "filters min-640", "tab max-1015", "tab max-599", "tab max-699", "tab max-999",
-    "tab min-1000", "tab min-1016", "tab min-1200", "tab min-700", "tab min-900", "window max-719", "window min-720"],
-    "the content at 1200/1016/900/700 (list, card headers), 600 (header buttons), 700 and 1000 (wizard); the actions bar at 560; a details block at 480 (pairs in two halves); the filter bar at 640; the window at 720 (phone, dialogs; with 500 px of height)");
+    "tab min-1000", "tab min-1016", "tab min-1200", "tab min-700", "window max-719", "window min-720"],
+    "the content at 1200/1016/700 (list), 600 (header buttons), 700 and 1000 (wizard); the actions bar at 560; a details block at 480 (pairs in two halves); the filter bar at 640; the window at 720 (phone, dialogs; with 500 px of height)");
   // Q-3 parity: the script's list bands are the stylesheet's container rules.
   const { LIST_BANDS, listBand } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-layout.js");
   assert.match(calibration, new RegExp(`@container caltab \\(min-width: ${LIST_BANDS.table}px\\) \\{`));
@@ -1255,7 +1259,18 @@ test("status, profile and filter chips share one shape: 24 px, 12 px text, their
   for (const part of ["min-height: 24px", "padding: 3px 10px", "border: 1px solid color-mix(in srgb, var(--cal-chip) 20%, transparent)",
     "background: color-mix(in srgb, var(--cal-chip) 12%, transparent)", "font-size: 12px", "line-height: 16px"]) assert.ok(rule.includes(part), part);
   assert.match(css, /\.cal-badge\[data-status="verified"\] \{ --cal-chip: var\(--panel-success\); \}/);
-  assert.match(css, /\.cal-profile-chip \{ --cal-chip: var\(--panel-accent\); \}/);
+  assert.match(css, /\.cal-profile-chip \{ --cal-chip: var\(--panel-accent\);/);
   assert.match(css, /\.cal-chip\[aria-pressed="true"\] \{ --cal-chip: var\(--panel-accent\); \}/);
+});
+
+test("a profile chip is cut at 180 px with its whole name in the tooltip, whole in the details' block (Q-22)", async () => {
+  const { tab } = await mount();
+  const chip = row(tab, "cover.kitchen_two").querySelector(".cal-row-profile .cal-profile-chip");
+  assert.equal(chip.getAttribute("title"), "tall_two_leaf");
+  assert.equal(chip.querySelector(".cal-chip-text").textContent, "tall_two_leaf");
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.cal-profile-chip \{ --cal-chip: var\(--panel-accent\); max-width: 180px; \}/);
+  assert.match(css, /\.cal-chip-text \{ min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; \}/);
+  assert.match(css, /\.cal-details-grid \.cal-chip-text \{ white-space: normal; overflow-wrap: anywhere; \}/);
 });
 

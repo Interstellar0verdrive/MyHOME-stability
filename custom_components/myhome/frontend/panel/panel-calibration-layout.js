@@ -18,6 +18,17 @@ export const SHEETS = "(max-width: 719px), (max-height: 499px)";
  */
 export const LIST_BANDS = { table: 1200, tableFull: 1016, cardsRow: 700 };
 
+/**
+ * Q-22: the content width from which a card's header could lie on the blocks' three columns: its third column must
+ * hold the widest profile chip (180 px, cut beyond), the widest action («Apri sessione», ~120 px at 14 px semibold with
+ * its 14 px padding), ⋮ (40 px) and two 8 px gaps = 356 px; three such columns, two 32 px gaps and the card's 2 × 14 px
+ * padding = 1160 px. That is past the cards' band (they end at 1015 px, `LIST_BANDS.tableFull`): the cards keep the
+ * header [icon + texts][chips][action ⋮] at every width, and the table takes over from 1016 px.
+ */
+export const CARD_HEADER = { chip: 180, action: 120, menu: 40, gap: 8, columnGap: 32, padding: 14 };
+export const CARD_HEADER_COLUMNS = 3 * (CARD_HEADER.chip + CARD_HEADER.action + CARD_HEADER.menu + 2 * CARD_HEADER.gap)
+  + 2 * CARD_HEADER.columnGap + 2 * CARD_HEADER.padding;
+
 /** The list's band for a content width (px). */
 export function listBand(width) {
   return width >= LIST_BANDS.table ? "table" : width >= LIST_BANDS.tableFull ? "table-full" : width >= LIST_BANDS.cardsRow ? "cards-row" : "cards-stacked";
