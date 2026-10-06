@@ -1044,11 +1044,14 @@ test("one breakpoint for the list (880 px of the tab itself) and the wizard's th
   assert.match(calibration, /#cover-calibration-tab \{ container: caltab \/ inline-size; \}/, "the tab's width decides, not the window's");
   const widths = [...calibration.matchAll(/@(media|container caltab|container wizbar) ([^{]+)\{/g)].flatMap(([, kind, query]) =>
     [...query.matchAll(/(min|max)-width: (\d+)px/g)].map(([, edge, px]) => `${kind === "media" ? "window" : kind.endsWith("wizbar") ? "bar" : "tab"} ${edge}-${px}`));
-  assert.deepEqual([...new Set(widths)].sort(), ["bar min-560", "tab max-1099", "tab max-379", "tab max-599", "tab max-699", "tab max-879", "tab max-999", "tab min-1000", "tab min-700", "tab min-880",
+  assert.deepEqual([...new Set(widths)].sort(), ["bar min-560", "tab max-379", "tab max-599", "tab max-699", "tab max-879", "tab max-999", "tab min-1000", "tab min-700", "tab min-880",
     "window max-719", "window min-720"],
-    "the tab at 880 (list), 1100 (details' blocks), 600 (header buttons), 380 (drop-downs), 700 and 1000 (wizard); the actions bar at 560; the window at 720 (phone, dialogs; with 500 px of height)");
+    "the tab at 880 (list), 600 (header buttons), 380 (drop-downs), 700 and 1000 (wizard); the actions bar at 560; the window at 720 (phone, dialogs; with 500 px of height)");
   assert.doesNotMatch(calibration, /container: wizmain/, "the wizard's lists are cards at every width");
   const { tab } = await mount();
+  // P-1: in the table the cover, status and profile columns are equal, and the details' blocks sit under them.
+  assert.match(calibration, /--cal-cols: var\(--cal-lead\) minmax\(160px, 1fr\) minmax\(160px, 1fr\) minmax\(160px, 1fr\) 158px;/);
+  for (const n of [1, 2, 3]) assert.match(calibration, new RegExp(`\\.cal-details-grid > section:nth-child\\(${n}\\) \\{ grid-column: ${n + 1}; \\}`));
   const address = row(tab, "cover.kitchen_two").querySelector(".cal-row-address");
   assert.equal(address.querySelector(".cal-row-address-ap").textContent, " · A: 9 · PL: 1", "A and PL apart, hidden on the cards");
 });

@@ -963,7 +963,7 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
      lead gap, so the lead overflows into the column gap and column 2 starts at the name. */
   .cal-list { --cal-lead-gap: 12px; --cal-lead-box: calc(18px + var(--cal-lead-gap) + 40px); --cal-gap: 32px;
     --cal-lead: calc(var(--cal-lead-box) + var(--cal-lead-gap) - var(--cal-gap));
-    --cal-cols: var(--cal-lead) minmax(220px, 1.6fr) minmax(150px, 1fr) minmax(110px, 1fr) 158px; }
+    --cal-cols: var(--cal-lead) minmax(160px, 1fr) minmax(160px, 1fr) minmax(160px, 1fr) 158px; }
   .cal-list-head, .cal-row-main, .cal-row-details { display: grid; grid-template-columns: var(--cal-cols); grid-template-areas: none;
     column-gap: var(--cal-gap); padding-inline: 12px; }
   .cal-list-head, .cal-row-main { align-items: center; }
@@ -987,14 +987,6 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   .cal-details-grid > section:nth-child(2) { grid-column: 3; }
   .cal-details-grid > section:nth-child(3) { grid-column: 4; }
   .cal-details-grid .cal-note { max-width: none; }
-}
-/* D2: in a narrower table the blocks leave the status and profile columns, too narrow for them, and share the row
-   from the cover column to the actions, 240 px at least each. */
-@container caltab (min-width: 880px) and (max-width: 1099px) {
-  .cal-details-grid { display: grid; grid-column: 2 / -1; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px var(--cal-gap); }
-  .cal-details-grid > section:nth-child(n) { grid-row: auto; grid-column: auto; }
-}
-@container caltab (min-width: 880px) {
 }
 
 /* ---------- Calibration wizard (stepper · instruction · actions) ---------- */
