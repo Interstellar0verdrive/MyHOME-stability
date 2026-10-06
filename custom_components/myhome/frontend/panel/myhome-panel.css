@@ -1401,7 +1401,10 @@ dialog.cal-dialog .dialog-head { justify-content: space-between; padding-block: 
   dialog.cal-dialog { max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); }
   dialog.cal-dialog { width: min(100%, 560px); margin: auto auto 0; }
   .wiz-dialog { justify-content: center; }
-  .wiz-dialog .wiz-dialog-card { width: min(100%, 560px); }
+  .wiz-dialog .wiz-dialog-card { width: min(100%, 560px); padding: 24px 20px calc(16px + var(--cal-safe-bottom)); }
+  /* The 560 px sheet is centred, clear of the side safe areas: its own 20 px inside. */
+  dialog.cal-dialog > * { padding-inline: 20px; }
+  dialog.cal-dialog::before { margin-inline-start: 20px; }
   .wiz-dialog .wiz-dialog-card, .wiz-sheet .wiz-sheet-card { max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); }
   dialog.cal-dialog .dialog-foot, .wiz-dialog .actions { flex-direction: row; justify-content: end; }
   dialog.cal-dialog .dialog-foot button, .wiz-dialog .actions button { flex: 1 1 0; width: auto; min-width: 0; }
