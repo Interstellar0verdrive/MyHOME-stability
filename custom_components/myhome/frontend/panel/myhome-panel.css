@@ -655,16 +655,17 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-tab-head { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; justify-content: space-between; }
 .cal-tab-intro { flex: 1 1 420px; min-width: 0; }
 .cal-tab-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-/* Filter chips with a count (Figma chip 509:23167): the count badge takes the chip's colour at 12 %. The maintainer's
-   category chips are left as they are. */
-.cal-chip { gap: 6px; min-height: 0; padding: 6px 10px; border: 1px solid var(--panel-border); border-radius: 16px;
-  background: var(--panel-surface); color: var(--panel-text-2); font-size: 12px; font-weight: 500; line-height: 16px; }
-.cal-chip[aria-pressed="true"] { background: var(--panel-accent-soft); color: var(--panel-accent); border-color: var(--panel-accent); }
-.cal-chip .count { padding: 1px 6px; border-radius: 999px; font-size: 11px; font-weight: 500; line-height: 14px;
-  background: color-mix(in srgb, var(--panel-text-2) 12%, transparent); color: var(--panel-text-2); }
-/* The dark accent of the mockup (about rgb(0, 131, 169) in light) mixed towards the text colour, so it darkens on a
-   light theme and stays readable on a dark one, where darkening with black would lose contrast. */
-.cal-chip[aria-pressed="true"] .count { background: var(--panel-accent-soft); color: color-mix(in srgb, var(--panel-accent) 70%, var(--primary-text-color, #182b37)); }
+/* Q-12 (Figma «R · Breakpoint», «Chip»): status, profile and filter chips are one shape: 24 px high, 4 px × 10 px
+   inside (3 px plus the 1 px border), 12 px text, filled with their colour at 12 % and bordered with it at 20 %:
+   grey, blue (accent), green and orange. The maintainer's category chips are left as they are. */
+.cal-chip, .cal-badge, .cal-profile-chip { --cal-chip: var(--panel-text-2); box-sizing: border-box; display: inline-flex; align-items: center; gap: 6px;
+  min-height: 24px; padding: 3px 10px; border: 1px solid color-mix(in srgb, var(--cal-chip) 20%, transparent); border-radius: 999px;
+  background: color-mix(in srgb, var(--cal-chip) 12%, transparent); color: var(--cal-chip); font-size: 12px; font-weight: 500; line-height: 16px;
+  vertical-align: middle; }
+.cal-chip:hover { background: color-mix(in srgb, var(--cal-chip) 18%, transparent); }
+.cal-chip[aria-pressed="true"] { --cal-chip: var(--panel-accent); }
+.cal-chip .count { padding: 0 6px; border-radius: 999px; font-size: 11px; font-weight: 500; line-height: 14px;
+  background: color-mix(in srgb, var(--cal-chip) 16%, transparent); color: inherit; }
 .cal-tab .notice { display: flex; gap: 10px; align-items: start; margin: 0; }
 .cal-tab .notice ha-icon { --mdc-icon-size: 18px; flex-shrink: 0; }
 .cal-tab-busy { border-color: color-mix(in srgb, var(--panel-warning) 45%, transparent); background: color-mix(in srgb, var(--panel-warning) 12%, var(--panel-surface)); }
@@ -788,11 +789,10 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-menu { position: absolute; inset-inline-end: 0; top: calc(100% + 4px); z-index: 3; display: grid; min-width: 200px; padding: 6px; border: 1px solid var(--panel-border); border-radius: 12px; background: var(--panel-surface); box-shadow: var(--panel-shadow-hover); }
 .cal-menu button { justify-content: start; border: 0; background: transparent; }
 .cal-menu button:hover, .cal-menu button:focus-visible { background: var(--panel-accent-soft); }
-.cal-badge[data-status="to_measure"] { color: var(--panel-text-2); }
-.cal-badge[data-status="times"], .cal-badge[data-status="rolls"] { background: var(--panel-accent-soft); color: var(--panel-accent); }
-.cal-badge[data-status="verified"] { background: color-mix(in srgb, var(--panel-success) 14%, transparent); color: var(--panel-success); }
-.cal-badge[data-status="running"] { background: color-mix(in srgb, var(--panel-warning) 20%, transparent); color: var(--primary-text-color, #182b37); white-space: normal; }
-.cal-profile-chip { background: var(--panel-accent-soft); color: var(--panel-accent); }
+.cal-badge[data-status="times"], .cal-badge[data-status="rolls"] { --cal-chip: var(--panel-accent); }
+.cal-badge[data-status="verified"] { --cal-chip: var(--panel-success); }
+.cal-badge[data-status="running"] { --cal-chip: var(--panel-warning); white-space: normal; }
+.cal-profile-chip { --cal-chip: var(--panel-accent); }
 .cal-profile-chip ha-icon { --mdc-icon-size: 8px; }
 /* Details start 12 px below the row (24 px under the cover icon) and end 20 px under the lowest block action. */
 .cal-row-details { padding: 12px 14px 20px; }

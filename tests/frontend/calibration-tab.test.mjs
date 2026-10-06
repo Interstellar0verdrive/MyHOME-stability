@@ -1243,3 +1243,13 @@ test("every row and card shows the same 40 px cover icon, the sequence's too (Q-
   assert.doesNotMatch(css, /\.cal-batch-lead \.cal-row-icon \{/, "no smaller icon in the wizard's lists");
 });
 
+test("status, profile and filter chips share one shape: 24 px, 12 px text, their colour at 12 % with a 20 % border (Q-12)", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  const rule = css.match(/\.cal-chip, \.cal-badge, \.cal-profile-chip \{([^}]*)\}/)?.[1] || "";
+  for (const part of ["min-height: 24px", "padding: 3px 10px", "border: 1px solid color-mix(in srgb, var(--cal-chip) 20%, transparent)",
+    "background: color-mix(in srgb, var(--cal-chip) 12%, transparent)", "font-size: 12px", "line-height: 16px"]) assert.ok(rule.includes(part), part);
+  assert.match(css, /\.cal-badge\[data-status="verified"\] \{ --cal-chip: var\(--panel-success\); \}/);
+  assert.match(css, /\.cal-profile-chip \{ --cal-chip: var\(--panel-accent\); \}/);
+  assert.match(css, /\.cal-chip\[aria-pressed="true"\] \{ --cal-chip: var\(--panel-accent\); \}/);
+});
+
