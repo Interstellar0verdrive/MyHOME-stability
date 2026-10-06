@@ -459,6 +459,7 @@ test("a filter without results says so and keeps the filters (T-04b)", async () 
   assert.equal(tab.querySelector(".cal-tab-no-match h4").textContent, "Nessuna tapparella corrisponde al filtro");
   assert.equal(tab.querySelector(".cal-tab-no-match > .muted").textContent, "Cambia o togli il filtro per vedere le altre tapparelle.");
   assert.ok(tab.querySelector(".cal-tab-filters"), "the filters stay, to change it");
+  assert.equal(tab.querySelector(".cal-tab-no-match .cal-empty-how summary").textContent, "Come funziona", "R-7: as Figma T-04b");
 });
 
 const targets = (extra = {}) => ({ revision: 7, max_batch: 20, targets: [

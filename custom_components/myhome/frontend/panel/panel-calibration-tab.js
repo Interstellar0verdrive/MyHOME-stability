@@ -437,7 +437,7 @@ export class CalibrationTab {
     if (!loading && !failed.length && !this._covers().length) {
       // T-04: no cover estimated from its travel times on the gateway(s); the tab's title stays above.
       html = `<h3 class="cal-tab-title">${esc(t("calTabTitle"))}</h3>${this._emptyCard(t(gateways.length > 1 ? "wiz_T495" : "wiz_T492"), t("calTabEmptyBody"),
-        `<details class="cal-empty-how"><summary>${esc(t("calTabHowItWorks"))}</summary><p class="muted">${esc(t("calTabHowItWorksBody"))}</p></details>`, "cal-tab-empty")}`;
+        this._howItWorks(), "cal-tab-empty")}`;
     } else {
       // The buttons line up with the introduction, not with the title above it.
       html = `<h3 class="cal-tab-title">${esc(t("calTabTitle"))}</h3><div class="cal-tab-head"><p class="muted cal-tab-intro">${esc(t("calTabIntro"))}</p>
@@ -454,7 +454,7 @@ export class CalibrationTab {
         ${failed.map((entry) => `<p class="notice error" role="alert">${esc(gateways.length > 1 ? `${entry.title}: ` : "")}${esc(t("calTabError"))}</p>`).join("")}
         ${failed.length ? `<button type="button" data-action="cal-tab-refresh">${esc(t("refresh"))}</button>` : ""}
         ${loading ? `<p class="muted" role="status">${esc(t("loading"))}</p>` : ""}
-        ${visible.length || loading ? "" : this._emptyCard(t("wiz_T493"), t("wiz_T494"), "", "cal-tab-no-match")}
+        ${visible.length || loading ? "" : this._emptyCard(t("wiz_T493"), t("wiz_T494"), this._howItWorks(), "cal-tab-no-match")}
         ${visible.length ? `<div class="cal-list">
           ${this._sortHeads(this._expandAll(visible))}
           <div class="cal-list-rows" role="list">${visible.map((item) => this._row(item, busy, language)).join("")}</div></div>` : ""}
@@ -520,6 +520,12 @@ export class CalibrationTab {
       card.style.setProperty("--cal-col2", `${edge}px`);
       card.classList.add("is-aligned");
     }
+  }
+
+  /** «Come funziona» under an empty state (T-04, T-04b; R-7): it opens in place. */
+  _howItWorks() {
+    const { t } = this._context;
+    return `<details class="cal-empty-how"><summary>${esc(t("calTabHowItWorks"))}</summary><p class="muted">${esc(t("calTabHowItWorksBody"))}</p></details>`;
   }
 
   /** T-04 / T-04b: an empty state as a card: the shutter icon, a title, its explanation and an optional extra. */
