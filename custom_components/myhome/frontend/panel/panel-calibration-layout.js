@@ -29,6 +29,19 @@ export const CARD_HEADER = { chip: 180, action: 120, menu: 40, gap: 8, columnGap
 export const CARD_HEADER_COLUMNS = 3 * (CARD_HEADER.chip + CARD_HEADER.action + CARD_HEADER.menu + 2 * CARD_HEADER.gap)
   + 2 * CARD_HEADER.columnGap + 2 * CARD_HEADER.padding;
 
+/**
+ * R-1: the wizard and the sequence by the tab's content width (`@container caltab`): three columns (stepper 240 · centre ·
+ * actions clamp(240px, 30 %, 320px)) from 1000 px, the steps strip with centre and actions column from 700 px, one
+ * column with the actions in a sticky bottom bar below. Window rules stay media queries: the phone (`PHONE`, under
+ * 720 px, full screen, fixed bar whose actions keep 480 px centred from a 560 px bar) and the landscape phone (`SHORT`).
+ */
+export const WIZARD_BANDS = { threeColumns: 1000, intermediate: 700, wideBar: 560 };
+
+/** The wizard's layout for a content width, given the window rules. */
+export function wizardBand(width, { phone = false, short = false } = {}) {
+  return short ? "landscape" : phone ? "phone" : width >= WIZARD_BANDS.threeColumns ? "three-columns" : width >= WIZARD_BANDS.intermediate ? "intermediate" : "single-column";
+}
+
 /** The list's band for a content width (px). */
 export function listBand(width) {
   return width >= LIST_BANDS.table ? "table" : width >= LIST_BANDS.tableFull ? "table-full" : width >= LIST_BANDS.cardsRow ? "cards-row" : "cards-stacked";

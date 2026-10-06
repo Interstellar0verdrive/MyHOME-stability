@@ -808,7 +808,7 @@ test("on the phone the run's ① and ② stack, never side by side", async () =>
   assert.match(css, /@media \(hover: hover\) \{ \.wiz-action\.stop:hover \{/, "a tap leaves no tint on Stop");
   assert.match(css, /\.wiz-main \{ flex: 1; min-height: 0; overflow-y: auto;[^}]*display: flex; flex-direction: column; \}/, "the phone's content scrolls between the strip and the bar");
   assert.match(css, /\.wiz-main > \* \{ flex-shrink: 0; min-width: 0; \}/, "blocks keep their height: a drawing never covers the text");
-  assert.match(css, /\.wiz-action\.stop, \.wiz-action\.link \{ min-height: 48px; background: transparent; \}/, "plain red text, the bar's height");
+  assert.match(css, /\.wiz-action\.stop, \.wiz-action\.link \{ min-height: 44px; background: transparent; \}/, "plain red text, the bar's height");
 });
 
 test("1 px dividers separate the side columns from the centre on the wide layout only", async () => {
@@ -2252,5 +2252,20 @@ test("the wizard's actions, Take control, PASSI and the compact order take the s
   for (const rule of [/\.wiz-action \{[^}]*border-radius: var\(--cal-btn-radius\);/, /\.wiz-take \{[^}]*border-radius: var\(--cal-btn-radius\);/,
     /\.cal-filterbar-sort \{[^}]*border-radius: var\(--cal-btn-radius\);/]) assert.match(css, rule);
   assert.equal(css.match(/\.wiz-steps-button \{[^}]*border-radius: var\(--cal-btn-radius\);/g)?.length, 2, "PASSI in both layouts");
+});
+
+test("the wizard's layouts follow the content width as the layout module says, buttons 44 px (R-1)", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  const { WIZARD_BANDS, wizardBand, SHORT } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-layout.js");
+  assert.match(css, new RegExp(`@container caltab \\(min-width: ${WIZARD_BANDS.threeColumns}px\\) \\{\\s*\\.wiz-columns \\{ grid-template-columns: 240px minmax\\(0, 1fr\\) clamp\\(240px, 30%, 320px\\);`));
+  assert.match(css, new RegExp(`@container caltab \\(min-width: ${WIZARD_BANDS.intermediate}px\\) and \\(max-width: ${WIZARD_BANDS.threeColumns - 1}px\\) \\{\\s*\\.wiz-columns \\{ grid-template-columns: minmax\\(0, 1fr\\) clamp\\(240px, 30%, 320px\\);`));
+  assert.match(css, new RegExp(`@container caltab \\(max-width: ${WIZARD_BANDS.intermediate - 1}px\\) \\{\\s*/\\*[^*]*\\*/\\s*\\.wiz, \\.wiz\\.cal-batch-wiz \\{ overflow: clip; \\}`));
+  assert.match(css, new RegExp(`@container wizbar \\(min-width: ${WIZARD_BANDS.wideBar}px\\)`));
+  assert.ok(css.includes(`@media ${SHORT} {`));
+  assert.deepEqual([1200, 1000, 999, 700, 699].map((width) => wizardBand(width)), ["three-columns", "three-columns", "intermediate", "intermediate", "single-column"]);
+  assert.equal(wizardBand(390, { phone: true }), "phone");
+  assert.equal(wizardBand(844, { short: true }), "landscape");
+  assert.match(css, /\.wiz-action \{ width: 100%; min-height: 44px;/);
+  assert.match(css, /\.wiz-actions \{ display: grid; grid-template-columns: minmax\(0, 1fr\); gap: 12px; align-content: start; padding: 24px;/);
 });
 

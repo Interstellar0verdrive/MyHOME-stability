@@ -1196,8 +1196,9 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-notice { margin: 0; }
 .wiz-notice[data-tone="warning"] { border-color: color-mix(in srgb, var(--panel-warning) 45%, transparent); background: color-mix(in srgb, var(--panel-warning) 10%, var(--panel-surface)); }
 .wiz-notice[data-tone="error"] { color: var(--panel-error); border-color: color-mix(in srgb, var(--panel-error) 40%, transparent); background: color-mix(in srgb, var(--panel-error) 8%, transparent); }
-.wiz-actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; align-content: start; padding: 20px; background: var(--wiz-side); }
-.wiz-action { width: 100%; min-height: 56px; border-radius: var(--cal-btn-radius); font-size: 15px; }
+/* R-1 (Figma «R · Breakpoint», Wizard): the actions column 24 px inside, its buttons 44 px high, 12 px apart. */
+.wiz-actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-content: start; padding: 24px; background: var(--wiz-side); }
+.wiz-action { width: 100%; min-height: 44px; border-radius: var(--cal-btn-radius); font-size: 15px; }
 /* D7: a label too long for a narrow column takes two even lines inside the pill, never one word alone. */
 .wiz-action, .wiz-take { padding-block: 8px; line-height: 1.2; text-wrap: balance; }
 /* D18: in a wide bottom bar (phone in portrait from 560 px, the column in the page) the actions keep 480 px, centred. */
@@ -1225,7 +1226,7 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 /* S-07: plain text at the top of the actions column, then Take control (outlined while the owner is present). */
 .wiz-readonly { display: grid; gap: 16px; }
 .wiz-readonly p { margin: 0; font-size: 14px; line-height: 1.5; }
-.wiz-take { width: 100%; min-height: 56px; border-radius: var(--cal-btn-radius); font-size: 15px; }
+.wiz-take { width: 100%; min-height: 44px; border-radius: var(--cal-btn-radius); font-size: 15px; }
 .wiz-take.secondary { border-color: var(--panel-accent); color: var(--panel-accent); background: transparent; }
 /* S-01…S-05: the motor's state as plain lines under the text. */
 .wiz-status p { margin: 0; line-height: 1.55; }
@@ -1332,7 +1333,7 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
   .wiz-actions.has-more::before { opacity: 1; }
   /* The actions stack, one per line, as in every phone mockup: ① and ② are never side by side. */
   /* Stop (and the red links) as plain red text: no tint left by a tap (hover tints only with a real pointer), the bar's height. */
-  .wiz-action.stop, .wiz-action.link { min-height: 48px; background: transparent; }
+  .wiz-action.stop, .wiz-action.link { min-height: 44px; background: transparent; }
 }
 /* The wizard's sheets: the Steps sheet and the confirmations (S-08, Calibration in progress) from the bottom on a phone or a
    short window (S-08 M); centred cards otherwise. */
@@ -1378,7 +1379,7 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
   .wiz-head { box-sizing: border-box; min-height: 44px; align-items: center; gap: 8px;
     padding: var(--cal-safe-top) calc(8px + var(--cal-safe-right)) 0 calc(12px + var(--cal-safe-left)); }
   .wiz-back { margin: 0 -4px 0 -4px; }
-  .wiz-head-text { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 10px; }
+  .wiz-head-text { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: center; column-gap: 10px; }
   .wiz-cover { font-size: 16px; }
   .wiz-head .muted { margin: 0; font-size: 12px; }
   .wiz-discard { display: none; }
