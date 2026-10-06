@@ -1380,6 +1380,10 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
   dialog.cal-dialog .dialog-foot, .wiz-dialog .actions { flex-direction: row; justify-content: end; }
   dialog.cal-dialog .dialog-foot button, .wiz-dialog .actions button { flex: 1 1 0; width: auto; min-width: 0; }
 }
+/* R-4 (Q-17): every button of the wizard, the sequence, the blocks and the dialogs has its label centred, and the
+   shell's radius through `--cal-btn-radius`. */
+.wiz-action, .wiz-take, .wiz-dialog-card .actions button, dialog.cal-dialog .dialog-foot button, .cal-block-action > button {
+  justify-content: center; text-align: center; border-radius: var(--cal-btn-radius); }
 .wiz-action-note { margin: -4px 8px 4px; font-size: 12px; line-height: 1.4; text-align: center; }
 /* Responsive map §3.2, a landscape phone (under 500 px high, whatever its width): the wizard and the sequence full
    screen with the tablet's layout, so the content keeps its room (D11) and Stop stays in view (D12). A 44 px header with

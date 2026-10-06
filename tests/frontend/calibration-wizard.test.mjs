@@ -2290,3 +2290,8 @@ test("«Passi» has its title and ✕: a centred card, a sheet from the bottom, 
   assert.match(short, /animation: wiz-panel-in/);
 });
 
+test("every wizard, block and dialog button centres its label and takes the shell's radius (R-4)", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.wiz-action, \.wiz-take, \.wiz-dialog-card \.actions button, dialog\.cal-dialog \.dialog-foot button, \.cal-block-action > button \{\s*justify-content: center; text-align: center; border-radius: var\(--cal-btn-radius\); \}/);
+});
+
