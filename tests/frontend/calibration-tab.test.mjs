@@ -1222,3 +1222,15 @@ test("the details' pairs are compact: labels in one column, the value 26 px afte
   assert.match(css, /@container calblock \(min-width: 480px\) \{\s*\.cal-facts \{ grid-template-columns: repeat\(auto-fill, minmax\(220px, 1fr\)\); column-gap: 32px; \}/);
 });
 
+test("an open card with stacked blocks shares one edge between its chips and the pairs' second half (Q-14)", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /@container caltab \(max-width: 699px\) \{\s*\.cal-row\.is-aligned \.cal-row-toggle \{ flex: 0 0 calc\(var\(--cal-col2\) - 16px\); \}\s*\.cal-row\.is-aligned \.cal-facts \{ grid-template-columns: calc\(var\(--cal-col2\) - 32px\) minmax\(0, 1fr\); column-gap: 32px; \}/);
+  // Without a layout (no width) nothing is measured nor set.
+  const { tab, panel } = await mount();
+  row(tab, "cover.living_one").querySelector(".cal-row-toggle").click(); await tick();
+  tab.dataset.band = "cards-stacked";
+  panel._calibrationTab._alignCards();
+  assert.equal(row(tab, "cover.living_one").classList.contains("is-aligned"), false);
+  assert.equal(row(tab, "cover.living_one").getAttribute("style"), null);
+});
+

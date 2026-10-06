@@ -868,6 +868,13 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
     .cal-row-actions { display: flex; flex: none; gap: 8px; align-items: center; }
     .cal-row-last-inline { display: none; }
   }
+  /* Q-14: an open card with stacked blocks: the chips and the pairs' second half share one left edge (`--cal-col2`,
+     measured by the script: the wider of the header's texts and the pairs' first half). */
+  @container caltab (max-width: 699px) {
+    .cal-row.is-aligned .cal-row-toggle { flex: 0 0 calc(var(--cal-col2) - 16px); }
+    .cal-row.is-aligned .cal-facts { grid-template-columns: calc(var(--cal-col2) - 32px) minmax(0, 1fr); column-gap: 32px; }
+  }
+  .cal-row.is-measuring .cal-row-main .cal-row-name, .cal-row.is-measuring .cal-row-main .cal-row-name * { white-space: nowrap; }
   /* From 900 px the third column holds the profile, the action and ⋮ on one line: the header lies on the blocks'
      three columns (name over the first, status over the second, profile and action over the third). */
   @container caltab (min-width: 900px) and (max-width: 1015px) {

@@ -157,7 +157,7 @@ export class CalibrationTab {
         let width = 0;
         new ResizeObserver(([entry]) => {
           const now = Math.round(entry.contentRect.width);
-          if (now !== width) { width = now; this._band(); }
+          if (now !== width) { width = now; this._band(); this._alignCards(); }
         }).observe(host);
       }
     }
@@ -456,6 +456,7 @@ export class CalibrationTab {
     // Patched in place (M3): the list, the details page and their scroll stay where they are.
     morph(host, html);
     this._band();
+    this._alignCards();
     this._syncHold();
   }
 
@@ -465,6 +466,44 @@ export class CalibrationTab {
     if (!host || !width) return;
     const band = listBand(width);
     if (host.dataset.band !== band) host.dataset.band = band;
+  }
+
+  /**
+   * Q-14: an open card with its blocks one under the other lays its header and its pairs on one two-column grid: the
+   * chips start where the pairs' second half starts. That edge is the wider of what the header's texts and the first
+   * half of the pairs need (whichever pushes more decides), but never so far right that the chips and the action no
+   * longer fit. Measured, and kept in `--cal-col2` on the card (`is-aligned`).
+   */
+  _alignCards() {
+    const host = this._context?.host;
+    if (!host) return;
+    const active = host.dataset.band === "cards-stacked" && !layout.phone();
+    for (const card of host.querySelectorAll(".cal-row.is-expanded")) {
+      card.classList.remove("is-aligned");
+      card.style.removeProperty("--cal-col2");
+      if (!card.getAttribute("style")) card.removeAttribute("style");
+      const main = card.querySelector(".cal-row-main"), name = card.querySelector(".cal-row-main .cal-row-name");
+      const chips = card.querySelector(".cal-row-chips"), actions = card.querySelector(".cal-row-actions");
+      if (!active || !main || !name || !chips || !actions || !main.clientWidth) continue;
+      const box = main.getBoundingClientRect(), style = main.ownerDocument.defaultView.getComputedStyle(main);
+      const left = box.left + (parseFloat(style.paddingLeft) || 0), right = box.right - (parseFloat(style.paddingRight) || 0);
+      const width = (element) => { const range = element.ownerDocument.createRange(); range.selectNodeContents(element); return range.getBoundingClientRect().width; };
+      // The texts on one line: the name block's own width without wrapping.
+      card.classList.add("is-measuring");
+      const text = name.getBoundingClientRect().left - left + name.scrollWidth;
+      card.classList.remove("is-measuring");
+      let pairs = 0;
+      for (const half of card.querySelectorAll(".cal-row-details .cal-facts > .cal-facts-col:first-child")) {
+        const labels = [...half.querySelectorAll("dt")].map(width), values = [...half.querySelectorAll("dd")].map(width);
+        pairs = Math.max(pairs, Math.max(0, ...labels) + 26 + Math.max(0, ...values));
+      }
+      const widest = Math.max(0, ...[...chips.children].filter((chip) => chip.getClientRects().length).map((chip) => chip.getBoundingClientRect().width));
+      const cap = right - left - actions.getBoundingClientRect().width - 16 - widest;
+      const edge = Math.round(Math.min(Math.max(text, pairs) + 32, cap));
+      if (edge <= 0) continue;
+      card.style.setProperty("--cal-col2", `${edge}px`);
+      card.classList.add("is-aligned");
+    }
   }
 
   /** T-04 / T-04b: an empty state as a card: the shutter icon, a title, its explanation and an optional extra. */
