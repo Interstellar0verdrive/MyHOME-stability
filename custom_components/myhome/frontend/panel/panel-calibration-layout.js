@@ -52,3 +52,37 @@ export const layout = {
   /** The full-screen views and the sheets slide in and out, unless motion is reduced. */
   slides: (query = FULL_SCREEN) => matches(query) && !still(),
 };
+
+/**
+ * Q-24: the filter and order bar shows its chips (and «Ordina per» on the right) only when the chips on one line, the
+ * order control and at least `BAR_GAP` px between them fit the bar's width; otherwise its two drop-downs. Measured, not
+ * a container query: the chips' width depends on their labels and counts. Each bar is measured again when its width
+ * changes (a ResizeObserver per bar).
+ */
+export const BAR_GAP = 16;
+const watched = new WeakSet();
+let observer = null;
+
+function fitBar(bar) {
+  const chips = bar.querySelector(".cal-tab-chips"), compact = bar.querySelector(".cal-tab-compact");
+  const room = bar.clientWidth;
+  if (!chips || !compact || !room) return;
+  bar.classList.add("is-chips", "is-measuring");
+  const need = chips.getBoundingClientRect().width + BAR_GAP + compact.getBoundingClientRect().width;
+  bar.classList.remove("is-measuring");
+  bar.classList.toggle("is-chips", need <= room);
+  bar.dataset.width = String(room);
+}
+
+export function fitBars(root) {
+  for (const bar of root?.querySelectorAll?.(".cal-filterbar") || []) {
+    fitBar(bar);
+    if (typeof ResizeObserver !== "function" || watched.has(bar)) continue;
+    observer ||= new ResizeObserver((entries) => {
+      for (const { target } of entries) if (target.isConnected && String(target.clientWidth) !== target.dataset.width) fitBar(target);
+    });
+    observer.observe(bar);
+    watched.add(bar);
+  }
+}
+

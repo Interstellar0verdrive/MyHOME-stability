@@ -724,30 +724,31 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-compact-sort select { flex: 1; min-width: 0; width: auto; min-height: 42px; padding: 0 18px 0 0;
   background-position: calc(100% - 9px) 50%, calc(100% - 4px) 50%; border: 0; background-color: transparent;
   color: inherit; font-size: 14px; text-overflow: ellipsis; }
-/* P-3: one filter and order bar for the Calibration list, A-01 and the sequence, in two states by its own width.
-   Narrow (T-01c M): two 44 px native drop-downs at 50 % (filter or selection, and order), one per row below 380 px so
-   «Ordina: Tapparella ↑» is never cut (D16). Wide (from 640 px of bar, a 680 px column with its padding: the four chips and the order on one line; T-06w D): the chips on the left, «Ordina per» as a
-   compact pill on the right. */
-.cal-filterbar { container: calbar / inline-size; }
+/* P-3/Q-24: one filter and order bar for the Calibration list, A-01 and the sequence, in two states chosen by measure
+   (`fitBars` in panel-calibration-layout.js, `is-chips`): the chips (filters with their counts, or the sequence's
+   selection shortcuts) on the left and «Ordina per» on the right whenever both fit on the bar's line with at least
+   16 px between them; otherwise two native drop-downs, the counts above them (T-01c M). */
 .cal-filterbar-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .cal-tab-chips { display: none; flex-wrap: wrap; align-items: center; gap: 6px; }
 .cal-filterbar-label { margin-inline-end: 4px; font-size: 13px; color: var(--panel-text-2); }
-/* Q-10/Q-23: the two drop-downs always side by side, 8 px apart, the counts above them: the order hugs its longest
-   choice («Ordina: Tapparella ↑», at most 55 %), the filter or the selection takes the rest. */
-.cal-tab-compact { display: grid; grid-template-columns: minmax(0, 1fr) fit-content(55%); gap: 8px; }
+/* Q-24 (b): the two drop-downs are equal, 50 % each net of the 8 px gap; only when the order's longest choice needs
+   more than half does it take exactly the extra from the filter or the selection. */
+.cal-tab-compact { display: flex; gap: 8px; }
+.cal-tab-compact > .cal-compact-filter { flex: 1 1 0; min-width: 0; }
+.cal-tab-compact > .cal-filterbar-sort { flex: 1 1 0; min-width: max-content; }
 .cal-filterbar .cal-tab-summary { margin: 0 0 8px; }
 .cal-sort-long { display: none; }
-@container calbar (min-width: 640px) {
-  .cal-filterbar .cal-tab-summary { display: none; }
-  .cal-filterbar-row { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; }
-  .cal-tab-chips { display: flex; flex: 1 1 auto; min-width: 0; }
-  .cal-tab-compact { display: flex; flex: none; margin-inline-start: auto; }
-  .cal-tab-compact .cal-compact-filter { display: none; }
-  .cal-filterbar-sort { gap: 4px; min-height: 36px; padding-inline-start: 14px; border-radius: var(--cal-btn-radius); font-size: 13px; color: var(--panel-text-2); }
-  .cal-filterbar-sort select { min-height: 34px; padding-inline-end: 22px; font-size: 13px; font-weight: 500; color: var(--primary-text-color, #182b37); }
-  .cal-sort-short { display: none; }
-  .cal-sort-long { display: inline; }
-}
+.cal-filterbar.is-chips .cal-tab-summary { display: none; }
+.cal-filterbar.is-chips .cal-filterbar-row { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.cal-filterbar.is-chips .cal-tab-chips { display: flex; flex: 1 1 auto; min-width: 0; }
+.cal-filterbar.is-chips .cal-tab-compact { display: flex; flex: none; margin-inline-start: auto; }
+.cal-filterbar.is-chips .cal-tab-compact .cal-compact-filter { display: none; }
+.cal-filterbar.is-chips .cal-filterbar-sort { flex: none; gap: 4px; min-height: 36px; padding-inline-start: 14px; border-radius: var(--cal-btn-radius); font-size: 13px; color: var(--panel-text-2); }
+.cal-filterbar.is-chips .cal-filterbar-sort select { min-height: 34px; padding-inline-end: 22px; font-size: 13px; font-weight: 500; color: var(--primary-text-color, #182b37); }
+.cal-filterbar.is-chips .cal-sort-short { display: none; }
+.cal-filterbar.is-chips .cal-sort-long { display: inline; }
+/* While measuring, the chips keep one line at their own width. */
+.cal-filterbar.is-measuring .cal-tab-chips { flex: none; flex-wrap: nowrap; }
 .cal-row { border-top: 1px solid var(--panel-border); }
 .cal-row:first-of-type, .cal-list-head + .cal-row { border-top: 0; }
 .cal-row-main { cursor: pointer; transition: background var(--panel-ease); }

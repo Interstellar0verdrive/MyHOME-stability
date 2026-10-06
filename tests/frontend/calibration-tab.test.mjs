@@ -1077,11 +1077,11 @@ test("the list's bands by content width (1200/1016/700) and the wizard's layouts
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   const calibration = css.slice(css.indexOf("/* ---------- WHO 2 · Calibration tab ---------- */"));
   assert.match(calibration, /#cover-calibration-tab \{ container: caltab \/ inline-size; \}/, "the tab's width decides, not the window's");
-  const widths = [...calibration.matchAll(/@(media|container caltab|container wizbar|container calbar|container calblock) ([^{]+)\{/g)].flatMap(([, kind, query]) =>
-    [...query.matchAll(/(min|max)-width: (\d+)px/g)].map(([, edge, px]) => `${kind === "media" ? "window" : kind.endsWith("wizbar") ? "bar" : kind.endsWith("calbar") ? "filters" : kind.endsWith("calblock") ? "block" : "tab"} ${edge}-${px}`));
-  assert.deepEqual([...new Set(widths)].sort(), ["bar min-560", "block min-480", "filters min-640", "tab max-1015", "tab max-599", "tab max-699", "tab max-999",
+  const widths = [...calibration.matchAll(/@(media|container caltab|container wizbar|container calblock) ([^{]+)\{/g)].flatMap(([, kind, query]) =>
+    [...query.matchAll(/(min|max)-width: (\d+)px/g)].map(([, edge, px]) => `${kind === "media" ? "window" : kind.endsWith("wizbar") ? "bar" : kind.endsWith("calblock") ? "block" : "tab"} ${edge}-${px}`));
+  assert.deepEqual([...new Set(widths)].sort(), ["bar min-560", "block min-480", "tab max-1015", "tab max-599", "tab max-699", "tab max-999",
     "tab min-1000", "tab min-1016", "tab min-1200", "tab min-700", "window max-719", "window min-720"],
-    "the content at 1200/1016/700 (list), 600 (header buttons), 700 and 1000 (wizard); the actions bar at 560; a details block at 480 (pairs in two halves); the filter bar at 640; the window at 720 (phone, dialogs; with 500 px of height)");
+    "the content at 1200/1016/700 (list), 600 (header buttons), 700 and 1000 (wizard); the actions bar at 560; a details block at 480 (pairs in two halves); the filter bar measured (Q-24); the window at 720 (phone, dialogs; with 500 px of height)");
   // Q-3 parity: the script's list bands are the stylesheet's container rules.
   const { LIST_BANDS, listBand } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-layout.js");
   assert.match(calibration, new RegExp(`@container caltab \\(min-width: ${LIST_BANDS.table}px\\) \\{`));
@@ -1173,10 +1173,23 @@ test("one filter and order bar for the list, A-01 and the sequence: chips and «
   seq.querySelector('.cal-batch-filterbar .cal-chip[data-id="none"]').click(); await tick();
   assert.equal(seq.querySelectorAll(".cal-batch-row input:checked").length, 0);
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
-  assert.match(css, /\.cal-filterbar \{ container: calbar \/ inline-size; \}/);
-  assert.match(css, /@container calbar \(min-width: 640px\) \{\s*\.cal-filterbar \.cal-tab-summary \{ display: none; \}\s*\.cal-filterbar-row \{ display: flex; align-items: center; justify-content: space-between;/,
+  // Q-24: the state is measured (`is-chips`), not a container query; the drop-downs are equal unless the order needs more.
+  assert.doesNotMatch(css, /container: calbar/);
+  assert.match(css, /\.cal-filterbar\.is-chips \.cal-tab-summary \{ display: none; \}\s*\.cal-filterbar\.is-chips \.cal-filterbar-row \{ display: flex; align-items: center; justify-content: space-between;/,
     "Q-10: chips left, order right, no counts (the chips have them)");
-  assert.match(css, /\.cal-tab-compact \{ display: grid; grid-template-columns: minmax\(0, 1fr\) fit-content\(55%\); gap: 8px; \}/, "the order hugs its longest choice (Q-23)");
+  assert.match(css, /\.cal-tab-compact > \.cal-compact-filter \{ flex: 1 1 0; min-width: 0; \}\s*\.cal-tab-compact > \.cal-filterbar-sort \{ flex: 1 1 0; min-width: max-content; \}/);
+  const { fitBars, BAR_GAP } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-layout.js");
+  assert.equal(BAR_GAP, 16);
+  const measure = (bar, room, chips, sort) => {
+    Object.defineProperty(bar, "clientWidth", { configurable: true, get: () => room });
+    bar.querySelector(".cal-tab-chips").getBoundingClientRect = () => ({ width: chips });
+    bar.querySelector(".cal-tab-compact").getBoundingClientRect = () => ({ width: sort });
+    fitBars(bar.parentElement);
+    return bar.classList.contains("is-chips");
+  };
+  assert.equal(measure(list, 640, 430, 194), true, "430 + 16 + 194 = 640: the chips");
+  assert.equal(measure(list, 639, 430, 194), false, "one pixel short: the drop-downs");
+  assert.equal(list.classList.contains("is-measuring"), false);
   assert.ok(list.querySelector(":scope > .cal-tab-summary + .cal-filterbar-row"), "the counts above the drop-downs");
   void panel;
 });
