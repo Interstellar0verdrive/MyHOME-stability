@@ -81,7 +81,8 @@ export class CalibrationTab {
   set _mode(mode) {
     this.__mode = mode;
     // The phone's details page belongs to the list: a wizard, a sequence or a session closes it.
-    if (mode?.kind !== "list") this._page = null;
+    // The details page it closed comes back when the list does (`_backToList`).
+    if (mode?.kind !== "list") { if (this._page) this._pageReturn = this._page; this._page = null; }
     this._syncHold();
   }
 
@@ -120,6 +121,7 @@ export class CalibrationTab {
     this._wizard?.close();
     this._rows.clear();
     this._page = null;
+    this._pageReturn = null;
     this._mode = { kind: "list" };
     this._batch = null;
     this._menu = null;
@@ -721,6 +723,9 @@ export class CalibrationTab {
     }
     this._mode = { kind: "list" };
     if (!this._context) return;
+    // Back from the wizard opened on a cover's details page: the same page again (a row opened in place stays open).
+    if (this._pageReturn && layout.phone()) this._page = this._pageReturn;
+    this._pageReturn = null;
     this._context.host.innerHTML = "";
     this._render();
     this.refresh();

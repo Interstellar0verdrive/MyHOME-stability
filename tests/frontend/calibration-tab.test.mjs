@@ -1168,3 +1168,22 @@ test("the phone's details page holds the page under it like the wizard, and lets
   } finally { globalThis.matchMedia = original; }
 });
 
+test("back from a wizard opened on a cover's details page, the same page opens again", async () => {
+  const original = globalThis.matchMedia;
+  globalThis.matchMedia = viewport(390, 844);
+  try {
+    const { tab, panel } = await mount({ language: "it" });
+    row(tab, "cover.living_one").querySelector(".cal-row-toggle").click(); await tick();
+    tab.querySelector('.cal-page [data-action="cal-tab-measure-cover"]').click(); await tick();
+    assert.equal(panel._calibrationTab._mode.kind, "wizard");
+    assert.equal(tab.querySelector(".cal-page"), null, "the wizard replaces it");
+    panel._calibrationTab._backToList(); await tick();
+    assert.equal(tab.querySelector(".cal-page")?.dataset.entity, "cover.living_one");
+    tab.querySelector(".cal-page-close").click(); await tick();
+    // From the list, a wizard brings no page back.
+    tab.querySelector('[data-action="cal-tab-measure"]').click(); await tick();
+    panel._calibrationTab._backToList(); await tick();
+    assert.equal(tab.querySelector(".cal-page"), null);
+  } finally { globalThis.matchMedia = original; }
+});
+
