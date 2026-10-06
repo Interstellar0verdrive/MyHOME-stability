@@ -345,7 +345,7 @@ export class CalibrationWizard {
         // The list is redrawn in place: the control that had the focus (a radio, a chip, a header) gets it back.
         const active = root.getRootNode().activeElement;
         const focus = active && picker.contains(active) ? (active.dataset.wiz ? ["wiz", active.dataset.wiz] : active.name === "cover" ? ["cover", active.value]
-          : active.dataset.pickSort ? ["pickSort", active.dataset.pickSort] : null) : null;
+          : active.dataset.pickSort ? ["pickSort", active.dataset.pickSort] : active.matches("[data-pick-filter]") ? ["pickFilter", ""] : null) : null;
         this._pickerHtml = html;
         // Patched in place: the rows, the scroll and the focus stay (M3-4).
         morph(picker, html);
@@ -571,6 +571,7 @@ export class CalibrationWizard {
     else if (name === "slats") this._local.slats = value !== "no";
     else if (name === "case") this._local.scope = value;
     else if (name === "cover") { this._local.coverKey = value; this._local.coverPicked = true; this._render(); }
+    else if (event.target.matches?.("select[data-pick-filter]")) { this._local.pickFilter = value; this._render(); }
     else if (event.target.dataset?.pickSort) {
       // The phone's "Sort by" bar of A-01: the list's shared order, as in the tab.
       const [key, dir] = value.split(":");

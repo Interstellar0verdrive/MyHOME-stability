@@ -286,37 +286,33 @@ export class CalibrationTab {
     this._setSort(key, dir === "desc" ? "desc" : "asc");
   }
 
-  /** The phone's "Sort by" control (T-01 M): one pill with the six column × order choices of the headers. */
-  _sortBar(attribute = "data-sort") {
-    const { t } = this._context;
-    const column = (key) => t({ cover: "calTabColCover", status: "calTabColStatus", profile: "calTabColProfile" }[key]);
-    const options = SORT_KEYS.flatMap((key) => ["asc", "desc"].map((dir) => {
-      const chosen = this._sort.key === key && this._sort.dir === dir;
-      return `<option value="${key}:${dir}" ${chosen ? "selected" : ""}>${esc(column(key))} ${dir === "asc" ? "↑" : "↓"}</option>`;
-    })).join("");
-    return `<div class="cal-sort-bar">
-          <label class="cal-sort-pill"><span>${esc(t("wiz_T379"))}:</span><select ${attribute}="order" aria-label="${esc(t("wiz_T379"))}">${options}</select></label></div>`;
-  }
-
   /**
-   * T-01c M: on phones the filter chips and the Sort by pill become one row of two drop-downs. The filter opens a sheet
-   * with the four filters and their counts; the order is a native select with the six choices.
+   * P-3: the one filter and order bar of the Calibration list, A-01 and the sequence. Two states, chosen by the bar's own
+   * width (`@container calbar`, 640 px: a 680 px column less its padding): wide, the chips on the left (filters, or the
+   * sequence's selection shortcuts) and «Ordina per» as a compact drop-down on the right; narrow, two native drop-downs at 50 % (the chips' drop-down and
+   * the order). The order is the same `<select>` in both states.
    */
-  _compactFilters(counts) {
+  _filterBar({ chips, chipsClass = "", label = "", select, compactClass = "", sortAttribute = "data-sort", extra = "" }) {
     const { t } = this._context;
-    return `<div class="cal-tab-compact">
-            <label class="cal-compact-sort cal-compact-filter"><span>${esc(t("wiz_T474"))}</span><select data-filter aria-label="${esc(t("calTabFilterLabel"))}">${FILTERS.map((filter) =>
-              `<option value="${filter}" ${this._filter === filter ? "selected" : ""}>${esc(t(`calTabFilter_${filter}`))} (${counts[filter]})</option>`).join("")}</select></label>
-            ${this._compactSort()}</div>`;
+    return `<div class="cal-filterbar${extra}"><div class="cal-filterbar-row">
+          <div class="cal-tab-chips${chipsClass}" role="group" aria-label="${esc(t("calTabFilterLabel"))}">${label ? `<span class="cal-filterbar-label">${esc(label)}</span>` : ""}${chips}</div>
+          <div class="cal-tab-compact${compactClass}">${select}${this._compactSort(sortAttribute)}</div></div></div>`;
   }
 
-  /** «Sort: Cover ↑ ⌄»: the phone's order control of every list (T-01c, T-06c). */
-  _compactSort() {
+  /** The filter drop-down of the narrow bar (T-01c M): the four filters with their counts. */
+  _filterSelect(counts, current, attribute = "data-filter") {
+    const { t } = this._context;
+    return `<label class="cal-compact-sort cal-compact-filter"><span>${esc(t("wiz_T474"))}</span><select ${attribute} aria-label="${esc(t("calTabFilterLabel"))}">${FILTERS.map((filter) =>
+      `<option value="${filter}" ${current === filter ? "selected" : ""}>${esc(t(`calTabFilter_${filter}`))} (${counts[filter]})</option>`).join("")}</select></label>`;
+  }
+
+  /** «Ordina: Tapparella ↑ ⌄» (narrow) or «Ordina per: Tapparella ↑ ⌄» (wide): the order control of every list. */
+  _compactSort(attribute = "data-sort") {
     const { t } = this._context;
     const column = (key) => t({ cover: "calTabColCover", status: "calTabColStatus", profile: "calTabColProfile" }[key]);
     const options = SORT_KEYS.flatMap((key) => ["asc", "desc"].map((dir) =>
       `<option value="${key}:${dir}" ${this._sort.key === key && this._sort.dir === dir ? "selected" : ""}>${esc(column(key))} ${dir === "asc" ? "↑" : "↓"}</option>`)).join("");
-    return `<label class="cal-compact-sort"><span>${esc(t("wiz_T450"))}</span><select data-sort="order" aria-label="${esc(t("wiz_T379"))}">${options}</select></label>`;
+    return `<label class="cal-compact-sort cal-filterbar-sort"><span class="cal-sort-short">${esc(t("wiz_T450"))}</span><span class="cal-sort-long">${esc(t("wiz_T379"))}:</span><select ${attribute}="order" aria-label="${esc(t("wiz_T379"))}">${options}</select></label>`;
   }
 
   /** The header row of the Calibration table: Cover, Status and Profile sort it (the wizard's lists are cards). */
@@ -357,9 +353,9 @@ export class CalibrationTab {
         <span class="cal-batch-profile">${profile(item)}</span>
         ${chosen && notes.length ? `<span class="wiz-pick-notes">${notes.map((note) => `<span class="cal-note${note.tone === "warning" ? " is-warning" : ""}">${esc(note.text)}</span>`).join("")}</span>` : ""}</label>`;
     }).join("");
-    return `<div class="cal-tab-chips wiz-pick-chips" role="group" aria-label="${esc(t("calTabFilterLabel"))}">${FILTERS.map((id) =>
-        `<button type="button" class="cal-chip" data-wiz="pick-filter:${id}" aria-pressed="${filter === id}">${esc(t(`calTabFilter_${id}`))} <span class="count">${counts[id]}</span></button>`).join("")}</div>
-      ${this._sortBar("data-pick-sort")}
+    return `${this._filterBar({ chipsClass: " wiz-pick-chips", sortAttribute: "data-pick-sort", extra: " wiz-pick-bar",
+        chips: FILTERS.map((id) => `<button type="button" class="cal-chip" data-wiz="pick-filter:${id}" aria-pressed="${filter === id}">${esc(t(`calTabFilter_${id}`))} <span class="count">${counts[id]}</span></button>`).join(""),
+        select: this._filterSelect(counts, filter, "data-pick-filter") })}
       <div class="cal-list cal-batch-list wiz-pick-list">
         <div class="cal-batch-rows" role="radiogroup" aria-label="${esc(t("wiz_T005"))}">${rows || `<p class="muted wiz-pick-empty">${esc(t("noResults"))}</p>`}</div></div>`;
   }
@@ -417,11 +413,10 @@ export class CalibrationTab {
           <button type="button" data-action="cal-tab-batch" ${busy || loading ? "disabled" : ""}><ha-icon icon="mdi:format-list-numbered" aria-hidden="true"></ha-icon><span>${esc(t("wiz_T363"))}</span></button>
           ${this._wizard ? `<button type="button" class="primary" data-action="cal-tab-measure" ${busy || loading || !counts.all ? "disabled" : ""}><ha-icon icon="mdi:ruler" aria-hidden="true"></ha-icon><span>${esc(t("calTabMeasureOne"))}</span></button>` : ""}
         </div></div>
-        <div class="cal-tab-filters"><div class="cal-tab-chips" role="group" aria-label="${esc(t("calTabFilterLabel"))}">${FILTERS.map((filter) =>
-          `<button type="button" class="cal-chip" data-action="cal-tab-filter" data-id="${filter}" aria-pressed="${this._filter === filter}">${esc(t(`calTabFilter_${filter}`))} <span class="count">${counts[filter]}</span></button>`).join("")}</div>
-          ${this._compactFilters(counts)}
-          <p class="muted cal-tab-summary" role="status">${esc([["calTabCountCovers", counts.all], ["calTabCountCalibrated", counts.calibrated], ["calTabCountToMeasure", counts.to_measure]]
-            .map(([key, count]) => fill(t(count === 1 ? `${key}_one` : key), { n: count })).join(" · "))}</p></div>
+        <p class="muted cal-tab-summary" role="status">${esc([["calTabCountCovers", counts.all], ["calTabCountCalibrated", counts.calibrated], ["calTabCountToMeasure", counts.to_measure]]
+          .map(([key, count]) => fill(t(count === 1 ? `${key}_one` : key), { n: count })).join(" · "))}</p>
+        ${this._filterBar({ extra: " cal-tab-filters", select: this._filterSelect(counts, this._filter),
+          chips: FILTERS.map((filter) => `<button type="button" class="cal-chip" data-action="cal-tab-filter" data-id="${filter}" aria-pressed="${this._filter === filter}">${esc(t(`calTabFilter_${filter}`))} <span class="count">${counts[filter]}</span></button>`).join("") })}
         ${this._done ? `<p class="notice cal-tab-done" role="status"><ha-icon icon="mdi:check-circle-outline" aria-hidden="true"></ha-icon><span>${esc(this._done)}</span></p>` : ""}
         ${busy ? `<p class="notice cal-tab-busy" role="status"><ha-icon icon="mdi:information-outline" aria-hidden="true"></ha-icon><span>${esc(t("calTabBusy"))}</span></p>` : ""}
         ${this._filter === "to_measure" ? `<p class="cal-note cal-tab-help">${esc(t("calTabToMeasureHelp"))}</p>` : ""}
@@ -983,6 +978,7 @@ export class CalibrationTab {
     }).join("");
     const summary = count === 0 ? t("wiz_T386") : count === 1 ? t("wiz_T385") : fill(t("wiz_T384"), { count });
     const select = t("wiz_T383").replace(/\s*:\s*$/, "");
+    const picks = [["all", t("calTabFilter_all")], ["to_measure", t("calTabFilter_to_measure")], ["none", t("wiz_T391")]];
     // M4-5 (T-06w): the selection is a view with the wizard's chrome: header (back, title, capacity, «Cancel the
     // sequence» / ✕), the steps Selection · Run · Results (the last two still run in the maintainer's dialog), the
     // content in the middle and the status with Start in the actions column (the bottom bar on phones).
@@ -1007,11 +1003,10 @@ export class CalibrationTab {
             ${batch.error ? `<p class="notice error" role="alert">${esc(batch.error)}</p>` : ""}
             ${batch.loading ? `<p class="muted" role="status">${esc(t("loading"))}</p>` : ""}
             ${!batch.loading && !batch.error && !targets.length ? `<p class="muted">${esc(t("calBatchEmpty"))}</p>` : ""}
-            ${targets.length ? `<div class="cal-tab-compact cal-batch-compact">
-              <label class="cal-compact-sort cal-compact-select"><select data-batch-pick aria-label="${esc(select)}">
-                <option value="" selected>${esc(select)}</option>${[["all", t("calTabFilter_all")], ["to_measure", t("calTabFilter_to_measure")], ["none", t("wiz_T391")]].map(([id, label]) =>
-                  `<option value="${id}">${esc(label)}</option>`).join("")}</select></label>
-              ${this._compactSort()}</div>
+            ${targets.length ? `${this._filterBar({ extra: " cal-batch-filterbar", compactClass: " cal-batch-compact", label: t("wiz_T383"),
+              chips: picks.map(([id, label]) => `<button type="button" class="cal-chip" data-action="cal-tab-batch-pick" data-id="${id}">${esc(label)}</button>`).join(""),
+              select: `<label class="cal-compact-sort cal-compact-filter cal-compact-select"><select data-batch-pick aria-label="${esc(select)}">
+                <option value="" selected>${esc(select)}</option>${picks.map(([id, label]) => `<option value="${id}">${esc(label)}</option>`).join("")}</select></label>` })}
             <div class="cal-list cal-batch-list">
               <div class="cal-batch-rows" role="group" aria-label="${esc(t("wiz_T364"))}">${rows}</div></div>
             <p class="error cal-batch-limit" role="alert">${count > max ? esc(`${t("calBatchLimit")}: ${max}`) : ""}</p>` : ""}

@@ -655,9 +655,6 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-tab-head { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; justify-content: space-between; }
 .cal-tab-intro { flex: 1 1 420px; min-width: 0; }
 .cal-tab-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.cal-tab-filters { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; }
-.cal-tab-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.cal-tab-compact { display: none; }
 /* Filter chips with a count (Figma chip 509:23167): the count badge takes the chip's colour at 12 %. The maintainer's
    category chips are left as they are. */
 .cal-chip { gap: 6px; min-height: 0; padding: 6px 10px; border: 1px solid var(--panel-border); border-radius: 16px;
@@ -701,14 +698,6 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-sort { display: inline-flex; align-items: center; gap: 4px; min-height: 0; padding: 2px 0; border: 0; background: transparent; color: inherit; font: inherit; }
 .cal-sort:hover { background: transparent; color: var(--primary-text-color, #182b37); }
 .cal-sort ha-icon { --mdc-icon-size: 16px; width: 16px; height: 16px; color: var(--panel-text-2); }
-.cal-sort-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
-.cal-sort-bar label { display: flex; flex-direction: row; align-items: center; gap: 8px; white-space: nowrap; }
-.cal-sort-bar select { width: auto; min-height: 36px; padding-block: 4px; padding-inline-end: 32px; font-size: 13px; }
-/* T-01 M: «Ordina per: Tapparella ↑ ⌄» as one pill; the select inside it has no box of its own. */
-.cal-sort-pill { gap: 4px !important; min-height: 36px; padding-inline-start: 14px; border: 1px solid var(--panel-border); border-radius: 999px;
-  background: var(--panel-surface); font-size: 13px; color: var(--panel-text-2); }
-.cal-sort-pill select { min-height: 34px; padding-inline-start: 0; border: 0; border-radius: 999px; background-color: transparent;
-  color: var(--primary-text-color, #182b37); font-weight: 500; }
 /* D17: the two buttons stack, at full width, only when the tab itself is narrow; side by side otherwise (a landscape
    phone keeps them on one row). */
 @container caltab (max-width: 599px) {
@@ -722,18 +711,13 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 /* The one breakpoint of the Calibration list (responsive map): below 880 px of tab (a 1184 px window with Home
    Assistant's sidebar) one column of cards, with the compact filter and order row; from 880 px the table. */
 @container caltab (max-width: 879px) {
-  .cal-tab-filters { justify-content: start; }
-  .cal-tab-summary { order: -1; flex-basis: 100%; margin: 0; }
-  /* T-01c M: chips and Sort by give way to one row of two 44 px drop-downs. */
-  .cal-tab-filters .cal-tab-chips { display: none; }
-  .cal-tab-compact { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; flex-basis: 100%; }
   /* The address keeps «Address: 86»; A and PL return with the table. */
   .cal-row-address-ap { display: none; }
 }
 /* M4-3: rings only for the keyboard, drawn on the wrapper of a borderless select; no grey flash on a tap. */
 .cal-tab, .wiz, dialog.cal-dialog { -webkit-tap-highlight-color: transparent; }
-.cal-compact-sort select:focus, .cal-compact-sort select:focus-visible, .cal-sort-pill select:focus, .cal-sort-pill select:focus-visible { outline: none; box-shadow: none; border-color: transparent; }
-.cal-compact-sort:has(select:focus-visible), .cal-sort-pill:has(select:focus-visible) { outline: 2px solid var(--panel-accent); outline-offset: 2px; }
+.cal-compact-sort select:focus, .cal-compact-sort select:focus-visible { outline: none; box-shadow: none; border-color: transparent; }
+.cal-compact-sort:has(select:focus-visible) { outline: 2px solid var(--panel-accent); outline-offset: 2px; }
 .cal-tab :is(button, select, input):focus:not(:focus-visible), .wiz :is(button, select, input):focus:not(:focus-visible) { outline: none; }
 .cal-compact-filter, .cal-compact-sort { box-sizing: border-box; display: flex; align-items: center; gap: 4px; min-width: 0; min-height: 44px; margin: 0;
   padding: 0 8px 0 12px; border: 1px solid var(--panel-border); border-radius: 10px; background: var(--panel-surface);
@@ -743,8 +727,27 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-compact-sort select { flex: 1; min-width: 0; width: auto; min-height: 42px; padding: 0 18px 0 0;
   background-position: calc(100% - 9px) 50%, calc(100% - 4px) 50%; border: 0; background-color: transparent;
   color: inherit; font-size: 14px; text-overflow: ellipsis; }
-/* D16: below 380 px of tab one drop-down per row, so «Ordina: Tapparella ↑» is never cut. */
-@container caltab (max-width: 379px) { .cal-tab-compact, .cal-batch-wiz .cal-tab-compact { grid-template-columns: minmax(0, 1fr); } }
+/* P-3: one filter and order bar for the Calibration list, A-01 and the sequence, in two states by its own width.
+   Narrow (T-01c M): two 44 px native drop-downs at 50 % (filter or selection, and order), one per row below 380 px so
+   «Ordina: Tapparella ↑» is never cut (D16). Wide (from 640 px of bar, a 680 px column with its padding: the four chips and the order on one line; T-06w D): the chips on the left, «Ordina per» as a
+   compact pill on the right. */
+.cal-filterbar { container: calbar / inline-size; }
+.cal-filterbar-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.cal-tab-chips { display: none; flex-wrap: wrap; align-items: center; gap: 6px; }
+.cal-filterbar-label { margin-inline-end: 4px; font-size: 13px; color: var(--panel-text-2); }
+.cal-tab-compact { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.cal-sort-long { display: none; }
+@container calbar (max-width: 379px) { .cal-tab-compact { grid-template-columns: minmax(0, 1fr); } }
+@container calbar (min-width: 640px) {
+  .cal-filterbar-row { display: flex; align-items: center; gap: 8px 16px; }
+  .cal-tab-chips { display: flex; flex: 1 1 auto; min-width: 0; }
+  .cal-tab-compact { display: flex; flex: none; margin-inline-start: auto; }
+  .cal-tab-compact .cal-compact-filter { display: none; }
+  .cal-filterbar-sort { gap: 4px; min-height: 36px; padding-inline-start: 14px; border-radius: 999px; font-size: 13px; color: var(--panel-text-2); }
+  .cal-filterbar-sort select { min-height: 34px; padding-inline-end: 22px; font-size: 13px; font-weight: 500; color: var(--primary-text-color, #182b37); }
+  .cal-sort-short { display: none; }
+  .cal-sort-long { display: inline; }
+}
 .cal-row { border-top: 1px solid var(--panel-border); }
 .cal-row:first-of-type, .cal-list-head + .cal-row { border-top: 0; }
 .cal-row-main { cursor: pointer; transition: background var(--panel-ease); }
@@ -912,7 +915,6 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-batch-status { min-width: 0; }
 .cal-batch-status .badge { max-width: 100%; white-space: normal; }
 .cal-batch-wiz .cal-batch-summary { margin: 0; font-size: 14px; font-weight: 500; text-align: center; }
-.cal-batch-wiz .cal-tab-compact { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
 .cal-batch-note p { margin: 0; }
 .cal-batch-note p + p { margin-top: 8px; }
 .cal-batch-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }

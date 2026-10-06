@@ -92,6 +92,14 @@ test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothin
   const sortBy = (value) => { const select = wiz().querySelector('.wiz-picker select[data-pick-sort="order"]'); select.value = value; select.dispatchEvent(new Event("change", { bubbles: true })); };
   sortBy("status:asc"); await tick();
   assert.deepEqual(rows().map((row) => row.dataset.entity), ["cover.living_one", "cover.living_three", "cover.kitchen_two"], "sorted by status, as the list");
+  // P-3: the list's own bar; its narrow filter drop-down filters as the chips do.
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-picker .cal-filterbar-row > *")].map((part) => part.classList[0]), ["cal-tab-chips", "cal-tab-compact"]);
+  const pickFilter = wiz().querySelector(".wiz-picker select[data-pick-filter]");
+  pickFilter.value = "calibrated"; pickFilter.dispatchEvent(new Event("change", { bubbles: true })); await tick();
+  assert.deepEqual(rows().map((row) => row.dataset.entity), ["cover.living_three", "cover.kitchen_two"]);
+  assert.equal(wiz().querySelector('.wiz-pick-chips [data-wiz="pick-filter:calibrated"]').getAttribute("aria-pressed"), "true", "the chips follow");
+  const back = wiz().querySelector(".wiz-picker select[data-pick-filter]");
+  back.value = "all"; back.dispatchEvent(new Event("change", { bubbles: true })); await tick();
   const phoneSort = wiz().querySelector('.wiz-picker select[data-pick-sort="order"]');
   phoneSort.value = "status:desc"; phoneSort.dispatchEvent(new Event("change", { bubbles: true })); await tick();
   assert.deepEqual(rows().map((row) => row.dataset.entity), ["cover.kitchen_two", "cover.living_three", "cover.living_one"], "status, descending");

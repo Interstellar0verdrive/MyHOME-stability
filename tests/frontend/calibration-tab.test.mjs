@@ -1042,11 +1042,11 @@ test("one breakpoint for the list (880 px of the tab itself) and the wizard's th
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   const calibration = css.slice(css.indexOf("/* ---------- WHO 2 · Calibration tab ---------- */"));
   assert.match(calibration, /#cover-calibration-tab \{ container: caltab \/ inline-size; \}/, "the tab's width decides, not the window's");
-  const widths = [...calibration.matchAll(/@(media|container caltab|container wizbar) ([^{]+)\{/g)].flatMap(([, kind, query]) =>
-    [...query.matchAll(/(min|max)-width: (\d+)px/g)].map(([, edge, px]) => `${kind === "media" ? "window" : kind.endsWith("wizbar") ? "bar" : "tab"} ${edge}-${px}`));
-  assert.deepEqual([...new Set(widths)].sort(), ["bar min-560", "tab max-379", "tab max-599", "tab max-699", "tab max-879", "tab max-999", "tab min-1000", "tab min-700", "tab min-880",
+  const widths = [...calibration.matchAll(/@(media|container caltab|container wizbar|container calbar) ([^{]+)\{/g)].flatMap(([, kind, query]) =>
+    [...query.matchAll(/(min|max)-width: (\d+)px/g)].map(([, edge, px]) => `${kind === "media" ? "window" : kind.endsWith("wizbar") ? "bar" : kind.endsWith("calbar") ? "filters" : "tab"} ${edge}-${px}`));
+  assert.deepEqual([...new Set(widths)].sort(), ["bar min-560", "filters max-379", "filters min-640", "tab max-599", "tab max-699", "tab max-879", "tab max-999", "tab min-1000", "tab min-700", "tab min-880",
     "window max-719", "window min-720"],
-    "the tab at 880 (list), 600 (header buttons), 380 (drop-downs), 700 and 1000 (wizard); the actions bar at 560; the window at 720 (phone, dialogs; with 500 px of height)");
+    "the tab at 880 (list), 600 (header buttons), 380 (drop-downs), 700 and 1000 (wizard); the actions bar at 560; the filter bar at 640 (chips) and 380 (drop-downs); the window at 720 (phone, dialogs; with 500 px of height)");
   assert.doesNotMatch(calibration, /container: wizmain/, "the wizard's lists are cards at every width");
   const { tab } = await mount();
   // P-1: in the table the cover, status and profile columns are equal, and the details' blocks sit under them.
@@ -1107,3 +1107,27 @@ test("the full-screen views, their bars and the sheets keep clear of the iOS saf
     /dialog\.cal-dialog > \* \{ padding-inline: calc\(16px \+ var\(--cal-safe-left\)\) calc\(16px \+ var\(--cal-safe-right\)\); \}/]) assert.match(css, rule);
   assert.doesNotMatch(css.slice(css.indexOf("/* ---------- WHO 2 · Calibration tab ---------- */")).replace(/:host \{[^}]*\}/, ""), /env\(safe-area/, "always through the variables");
 });
+
+test("one filter and order bar for the list, A-01 and the sequence: chips and «Ordina per» from 640 px, two drop-downs when narrow (P-3)", async () => {
+  const { tab, panel } = await mount({ language: "it" });
+  const shape = (bar) => [...bar.querySelector(".cal-filterbar-row").children].map((part) => part.classList[0]);
+  const list = tab.querySelector(".cal-tab-filters.cal-filterbar");
+  assert.deepEqual(shape(list), ["cal-tab-chips", "cal-tab-compact"]);
+  assert.deepEqual([...list.querySelectorAll(".cal-tab-compact select")].map((select) => select.hasAttribute("data-filter") ? "filter" : select.dataset.sort), ["filter", "order"]);
+  assert.deepEqual([...list.querySelectorAll(".cal-filterbar-sort > span")].map((span) => span.textContent), ["Ordina:", "Ordina per:"], "short when narrow, long when wide");
+  // The sequence: «Seleziona:» with its three shortcuts as chips, the same «Seleziona ⌄» when narrow.
+  const { tab: seq } = await openBatch();
+  const batch = seq.querySelector(".cal-batch-filterbar.cal-filterbar");
+  assert.deepEqual(shape(batch), ["cal-tab-chips", "cal-tab-compact"]);
+  assert.equal(batch.querySelector(".cal-filterbar-label").textContent, "Seleziona:");
+  assert.deepEqual([...batch.querySelectorAll(".cal-chip")].map((chip) => [chip.dataset.id, chip.textContent]), [["all", "Tutte"], ["to_measure", "Da calibrare"], ["none", "Nessuna"]]);
+  batch.querySelector('.cal-chip[data-id="all"]').click(); await tick();
+  assert.ok([...seq.querySelectorAll(".cal-batch-row input")].filter((input) => !input.disabled).every((input) => input.checked), "the chip ticks them all");
+  seq.querySelector('.cal-batch-filterbar .cal-chip[data-id="none"]').click(); await tick();
+  assert.equal(seq.querySelectorAll(".cal-batch-row input:checked").length, 0);
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.cal-filterbar \{ container: calbar \/ inline-size; \}/);
+  assert.match(css, /@container calbar \(min-width: 640px\) \{\s*\.cal-filterbar-row \{ display: flex;/);
+  void panel;
+});
+
