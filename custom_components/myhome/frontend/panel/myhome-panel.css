@@ -732,8 +732,9 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-filterbar-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .cal-tab-chips { display: none; flex-wrap: wrap; align-items: center; gap: 6px; }
 .cal-filterbar-label { margin-inline-end: 4px; font-size: 13px; color: var(--panel-text-2); }
-/* Q-10: the two drop-downs always side by side, 50 % each net of an 8 px gap; the counts above them. */
-.cal-tab-compact { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+/* Q-10/Q-23: the two drop-downs always side by side, 8 px apart, the counts above them: the order hugs its longest
+   choice («Ordina: Tapparella ↑», at most 55 %), the filter or the selection takes the rest. */
+.cal-tab-compact { display: grid; grid-template-columns: minmax(0, 1fr) fit-content(55%); gap: 8px; }
 .cal-filterbar .cal-tab-summary { margin: 0 0 8px; }
 .cal-sort-long { display: none; }
 @container calbar (min-width: 640px) {

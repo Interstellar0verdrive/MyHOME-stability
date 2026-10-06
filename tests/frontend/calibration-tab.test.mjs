@@ -1176,7 +1176,7 @@ test("one filter and order bar for the list, A-01 and the sequence: chips and «
   assert.match(css, /\.cal-filterbar \{ container: calbar \/ inline-size; \}/);
   assert.match(css, /@container calbar \(min-width: 640px\) \{\s*\.cal-filterbar \.cal-tab-summary \{ display: none; \}\s*\.cal-filterbar-row \{ display: flex; align-items: center; justify-content: space-between;/,
     "Q-10: chips left, order right, no counts (the chips have them)");
-  assert.match(css, /\.cal-tab-compact \{ display: grid; grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1fr\); gap: 8px; \}/, "two drop-downs at 50 %, always");
+  assert.match(css, /\.cal-tab-compact \{ display: grid; grid-template-columns: minmax\(0, 1fr\) fit-content\(55%\); gap: 8px; \}/, "the order hugs its longest choice (Q-23)");
   assert.ok(list.querySelector(":scope > .cal-tab-summary + .cal-filterbar-row"), "the counts above the drop-downs");
   void panel;
 });
