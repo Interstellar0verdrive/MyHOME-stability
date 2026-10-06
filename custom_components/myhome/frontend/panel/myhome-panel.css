@@ -293,6 +293,8 @@ label { display: grid; gap: 6px; font-size: 12px; font-weight: 500; color: var(-
 .empty { border: 1px dashed var(--panel-border); border-radius: var(--panel-radius); padding: 48px 24px; text-align: center; grid-column: 1 / -1; background: color-mix(in srgb, var(--panel-surface) 60%, transparent); }
 .empty h2 { margin-bottom: 8px; font-size: 16px; }
 #toast { min-height: 20px; margin-top: 14px; }
+/* An empty message area takes no room (it left a 34 px band under every page). */
+#toast:empty { display: none; }
 #toast:not(:empty) { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; background: color-mix(in srgb, var(--panel-success) 12%, transparent); color: var(--panel-success); font-weight: 500; animation: fade-in var(--panel-ease); }
 #toast:not(:empty)::before { content: "✓"; font-weight: 700; }
 @keyframes fade-in { from { opacity: 0; transform: translateY(4px); } }

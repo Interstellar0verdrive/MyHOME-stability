@@ -1785,3 +1785,8 @@ test("a tab's leave guard is asked before the panel moves away, and can keep it 
   panel.setBeforeLeave(null);
   assert.equal(panel._beforeLeave, null);
 });
+
+test("an empty message area takes no room under the page", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /#toast:empty \{ display: none; \}/);
+});
