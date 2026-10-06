@@ -802,12 +802,14 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-details-grid { display: flex; flex-wrap: wrap; gap: 16px 40px; }
 .cal-details-grid > section { flex: 1 1 260px; min-width: 0; max-width: 360px; }
 /* Block titles as large as the text under them, bold, over a divider as wide as the block (10 px above and below). */
-.cal-details-grid h4 { margin: 0 0 10px; padding-bottom: 10px; border-bottom: 1px solid var(--panel-border); font-size: 13px; font-weight: 700; color: var(--panel-text-2); }
+/* Q-9: the blocks' titles as the shell's `.device-name` (15 px semibold, text colour), over a full-width divider; the
+   pairs under them at 14 px. The phone's page keeps its titles without the divider. */
+.cal-details-grid h4 { margin: 0 0 10px; padding-bottom: 10px; border-bottom: 1px solid var(--panel-border); font-size: 15px; font-weight: 600; line-height: 1.3; color: var(--primary-text-color, #182b37); }
 .cal-details-grid p { margin: 6px 0 0; font-size: 13px; }
 /* Q-2/Q-6: compact pairs. The labels in one column as wide as the block's longest, the value 26 px after it,
    left-aligned (never pushed to the block's edge); both halves share the label column (subgrid). Q-4: in a block at
    least 480 px wide the halves sit side by side (auto-fill 220 px, 32 px apart); notes and buttons stay full width. */
-.cal-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: 26px; row-gap: 4px; margin: 0; font-size: 13px; }
+.cal-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: 26px; row-gap: 4px; margin: 0; font-size: 14px; }
 .cal-facts-col { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; row-gap: 4px; margin: 0; }
 .cal-facts-col > div { display: contents; }
 .cal-facts dt { color: var(--panel-text-2); }

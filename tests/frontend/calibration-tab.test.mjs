@@ -1220,6 +1220,10 @@ test("the details' pairs are compact: labels in one column, the value 26 px afte
   assert.deepEqual([...values.querySelectorAll(":scope > dl.cal-facts-col")].map((half) => half.querySelectorAll("dt").length), [3, 3], "six pairs in two halves of three");
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /\.cal-facts \{ display: grid; grid-template-columns: max-content minmax\(0, 1fr\); column-gap: 26px;/);
+  // Q-9: titles as the shell's device names (15 px semibold), pairs at 14 px, the phone's page included.
+  assert.match(css, /\.cal-details-grid h4 \{[^}]*font-size: 15px; font-weight: 600;/);
+  assert.match(css, /\.cal-facts \{[^}]*font-size: 14px; \}/);
+  assert.match(css, /\.cal-page \.cal-details-grid h4 \{[^}]*font-size: 15px; font-weight: 600;/);
   assert.match(css, /\.cal-facts-col \{ display: grid; grid-column: 1 \/ -1; grid-template-columns: subgrid;/, "one label column per block");
   assert.match(css, /\.cal-facts dd \{[^}]*text-align: start;/);
   assert.match(css, /@container calblock \(min-width: 480px\) \{\s*\.cal-facts \{ grid-template-columns: repeat\(auto-fill, minmax\(220px, 1fr\)\); column-gap: 32px; \}/);
