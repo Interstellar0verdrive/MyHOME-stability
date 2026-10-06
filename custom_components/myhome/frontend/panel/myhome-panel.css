@@ -1232,12 +1232,21 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-status p { margin: 0; line-height: 1.55; }
 .wiz-sheet, .wiz-dialog { position: fixed; inset: 0; z-index: 10; display: flex; background: rgb(0 0 0 / 40%); }
 .wiz-sheet { align-items: center; justify-content: center; padding: 20px; }
-.wiz-sheet-card { position: relative; box-sizing: border-box; width: min(100%, 460px); max-height: calc(100dvh - 40px); overflow: auto; padding: 18px 20px 24px;
-  border-radius: 18px; background: var(--panel-surface); box-shadow: var(--panel-shadow-hover); }
-.wiz-sheet-close { position: absolute; top: 10px; inset-inline-end: 10px; }
+/* R-3 (Figma «R · Breakpoint», «Passi»): a 360 px card centred on a desktop, its «Passi» title and ✕ on the surface,
+   the steps on the side colour; a sheet from the bottom on a phone; a 320 px side panel from the right in landscape. */
+.wiz-sheet-card { position: relative; box-sizing: border-box; width: min(100%, 360px); max-height: calc(100dvh - 40px); overflow: auto; padding: 0;
+  border-radius: 18px; background: var(--wiz-side); box-shadow: var(--panel-shadow-hover); }
+.wiz-sheet-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 52px;
+  padding: 4px 8px 4px 20px; background: var(--panel-surface); }
+.wiz-sheet-title { margin: 0; font-size: 18px; font-weight: 600; }
+.wiz-sheet-steps { padding: 8px 20px 24px; }
+.wiz-sheet-close { flex: none; width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0; justify-content: center; border: 0; background: transparent; }
+.wiz-sheet-close ha-icon { --mdc-icon-size: 24px; }
 /* Sheets slide up from the bottom when shown and down when they leave (`is-leaving`, removed by the wizard after 220 ms). */
 @keyframes wiz-sheet-in { from { transform: translateY(100%); } to { transform: none; } }
 @keyframes wiz-sheet-out { from { transform: none; } to { transform: translateY(100%); } }
+@keyframes wiz-panel-in { from { transform: translateX(100%); } to { transform: none; } }
+@keyframes wiz-panel-out { from { transform: none; } to { transform: translateX(100%); } }
 /* M5-4: full screen (a phone, or a landscape phone) the wizard, the sequence and the details page slide up on open and
    down on close. */
 @media (max-width: 719px), (max-height: 499px) and (orientation: landscape) {
@@ -1343,7 +1352,7 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 @media (max-width: 719px), (max-height: 499px) {
   .wiz-sheet { align-items: end; padding: 0; }
   .wiz-sheet .wiz-sheet-card { width: 100%; border-radius: 18px 18px 0 0; box-shadow: none; }
-  .wiz-sheet .wiz-sheet-card { padding: 18px calc(20px + var(--cal-safe-right)) calc(24px + var(--cal-safe-bottom)) calc(20px + var(--cal-safe-left)); }
+  .wiz-sheet .wiz-sheet-card { padding: 0 var(--cal-safe-right) var(--cal-safe-bottom) var(--cal-safe-left); }
   /* Full width, rounded top, buttons stacked full width with the primary first, over a darker blurred scrim; they slide
      up and down. */
   /* M2-6: the wizard's sheets keep the scroll to themselves. */
@@ -1408,5 +1417,10 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
     pointer-events: none; background: linear-gradient(to top, var(--panel-surface), transparent); opacity: 0; transition: opacity var(--panel-ease); }
   .wiz-columns:has(> .wiz-actions.has-more) > .wiz-main::after { opacity: 1; }
   .wiz-actions > [data-wiz="stop"] { order: -1; }
+  /* R-3: «Passi» as a side panel from the right, full height, square corners. */
+  .wiz-sheet { align-items: stretch; justify-content: end; padding: 0; }
+  .wiz-sheet .wiz-sheet-card { width: calc(320px + var(--cal-safe-right)); height: 100%; max-height: none; border-radius: 0; padding: 0 var(--cal-safe-right) 0 0; }
+  .wiz-sheet:not([hidden]) .wiz-sheet-card { animation: wiz-panel-in 220ms cubic-bezier(.2, 0, 0, 1); }
+  .wiz-sheet.is-leaving .wiz-sheet-card { animation: wiz-panel-out 220ms cubic-bezier(.3, 0, 1, 1) forwards; }
   .cal-batch-sticky { position: static; }
 }

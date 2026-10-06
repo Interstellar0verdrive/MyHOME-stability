@@ -1150,7 +1150,7 @@ test("the full-screen views, their bars and the sheets keep clear of the iOS saf
   for (const rule of [/\.wiz-head \{ padding: calc\(12px \+ var\(--cal-safe-top\)\) calc\(16px \+ var\(--cal-safe-right\)\) 12px calc\(16px \+ var\(--cal-safe-left\)\); \}/,
     /\.wiz-actions \{ padding: 12px calc\(16px \+ var\(--cal-safe-right\)\) calc\(12px \+ var\(--cal-safe-bottom\)\) calc\(16px \+ var\(--cal-safe-left\)\);/,
     /\.cal-page-head \{[^}]*padding: calc\(16px \+ var\(--cal-safe-top\)\) calc\(16px \+ var\(--cal-safe-right\)\) 16px calc\(16px \+ var\(--cal-safe-left\)\);/,
-    /\.wiz-sheet \.wiz-sheet-card \{ padding: 18px calc\(20px \+ var\(--cal-safe-right\)\) calc\(24px \+ var\(--cal-safe-bottom\)\) calc\(20px \+ var\(--cal-safe-left\)\); \}/,
+    /\.wiz-sheet \.wiz-sheet-card \{ padding: 0 var\(--cal-safe-right\) var\(--cal-safe-bottom\) var\(--cal-safe-left\); \}/,
     /dialog\.cal-dialog > \* \{ padding-inline: calc\(16px \+ var\(--cal-safe-left\)\) calc\(16px \+ var\(--cal-safe-right\)\); \}/]) assert.match(css, rule);
   assert.doesNotMatch(css.slice(css.indexOf("/* ---------- WHO 2 · Calibration tab ---------- */")).replace(/:host \{[^}]*\}/, ""), /env\(safe-area/, "always through the variables");
 });

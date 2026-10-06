@@ -2277,3 +2277,16 @@ test("a 40 px fade of the surface under every fixed or sticky action bar and at 
   assert.match(css, /\.wiz-columns:has\(> \.wiz-actions\.has-more\) > \.wiz-main::after \{ opacity: 1; \}/);
 });
 
+test("«Passi» has its title and ✕: a centred card, a sheet from the bottom, a square side panel in landscape (R-3)", async () => {
+  const { wiz, tab } = await mount();
+  tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
+  const head = wiz().querySelector(".wiz-sheet .wiz-sheet-head");
+  assert.equal(head.querySelector(".wiz-sheet-title").textContent, "Steps");
+  assert.ok(head.querySelector('.wiz-sheet-close[data-wiz="steps-close"]'));
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.wiz-sheet-card \{[^}]*width: min\(100%, 360px\);/);
+  const short = css.slice(css.lastIndexOf("@media (max-height: 499px) and (orientation: landscape) {"));
+  assert.match(short, /\.wiz-sheet \.wiz-sheet-card \{ width: calc\(320px \+ var\(--cal-safe-right\)\); height: 100%; max-height: none; border-radius: 0;/);
+  assert.match(short, /animation: wiz-panel-in/);
+});
+

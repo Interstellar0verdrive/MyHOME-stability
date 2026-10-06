@@ -1111,7 +1111,7 @@ export class CalibrationTab {
           </div></div>
         </div>
         <div class="wiz-sheet" role="dialog" aria-modal="true" aria-label="${esc(t("wiz_T274"))}" ${this._batchStepsOpen ? "" : "hidden"}><div class="wiz-sheet-card">
-          <button type="button" class="icon-button wiz-sheet-close" data-action="cal-tab-batch-steps-close" aria-label="${esc(t("close"))}"><ha-icon icon="mdi:close" aria-hidden="true"></ha-icon></button>
+          <div class="wiz-sheet-head"><h4 class="wiz-sheet-title">${esc(t("wiz_T274"))}</h4><button type="button" class="icon-button wiz-sheet-close" data-action="cal-tab-batch-steps-close" aria-label="${esc(t("close"))}"><ha-icon icon="mdi:close" aria-hidden="true"></ha-icon></button></div>
           <div class="wiz-sheet-steps">${this._batchSteps(count)}</div></div></div>
       </div>
     </div>`;
