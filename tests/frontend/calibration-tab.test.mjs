@@ -1317,3 +1317,10 @@ test("the tab's head: title, «Come funziona ›» under it, «Calibra una tappa
   assert.match(css, /\.cal-tab-how summary::after \{ content: " ›";/);
 });
 
+test("with nothing ticked the sequence's Start is a disabled primary (Q-29)", async () => {
+  const { tab } = await openBatch();
+  const start = tab.querySelector('[data-action="cal-tab-batch-start"]');
+  assert.equal(start.disabled, true);
+  assert.ok(start.classList.contains("primary"));
+});
+

@@ -2316,3 +2316,15 @@ test("dialogs are 560 px centred cards, and sheets with a handle, a ✕ that kee
   assert.match(css, /dialog\.cal-dialog \{ width: min\(100%, 560px\); margin: auto auto 0; \}/, "landscape: a 560 px sheet, centred");
 });
 
+test("a gated primary stays a primary, disabled: A-01's Continue before a choice, the sequence's Start with nothing ticked (Q-29)", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  const rule = css.match(/\.wiz-action\.primary:disabled, \.wiz-action\.primary:disabled:hover \{([^}]*)\}/)?.[1] || "";
+  assert.match(rule, /background: color-mix\(in srgb, var\(--panel-accent\) 38%, var\(--panel-surface\)\)/);
+  assert.match(rule, /box-shadow: none/);
+  assert.doesNotMatch(rule, /background: transparent/, "not an outlined button");
+  const { wiz, tab, button } = await mount();
+  tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
+  assert.ok(button("choose").classList.contains("primary"));
+  assert.equal(button("choose").disabled, true);
+});
+
