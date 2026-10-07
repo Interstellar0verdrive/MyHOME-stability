@@ -2518,3 +2518,13 @@ test("D-43: in one column the fade over the bar shows only while the bar is dock
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /background: linear-gradient\(to top, var\(--panel-surface\), transparent\); opacity: 0; \}\s*\.wiz\.is-docked > \.wiz-frame > \.wiz-columns > \.wiz-actions::before \{ opacity: 1; \}/);
 });
+
+test("D-44 (decided): during a session the ← is not drawn and leaves no space: the title starts at the head's edge", async () => {
+  const { backend, wiz, press, startFor } = await mount();
+  await startFor("cover.living_one");
+  const head = () => wiz().querySelector(".wiz-head");
+  assert.ok(head().querySelector('[data-wiz="back"]'), "before the session the way back is there");
+  await press("begin"); await move(backend, { seconds: 2 });
+  assert.equal(head().querySelector('[data-wiz="back"]'), null);
+  assert.equal(head().querySelector(".wiz-back"), null, "no placeholder keeps its room");
+});
