@@ -1332,3 +1332,13 @@ test("with nothing ticked the sequence's Start is a disabled primary (Q-29)", as
   assert.ok(start.classList.contains("primary"));
 });
 
+test("a dialog opened from a row's ⋮ menu closes that menu (U-4)", async () => {
+  const { tab, panel } = await mount();
+  row(tab, "cover.living_one").querySelector('[data-action="cal-tab-menu"]').click(); await tick();
+  assert.equal(row(tab, "cover.living_one").querySelector(".cal-menu").hidden, false);
+  row(tab, "cover.living_one").querySelector('.cal-menu [data-action="cal-tab-assign"]').click(); await tick();
+  assert.ok(panel.shadowRoot.querySelector("dialog.cal-dialog")?.open);
+  assert.equal(row(tab, "cover.living_one").querySelector(".cal-menu").hidden, true);
+  panel.shadowRoot.querySelector("dialog.cal-dialog .cal-dialog-close").click(); await tick();
+});
+

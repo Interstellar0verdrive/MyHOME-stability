@@ -848,6 +848,9 @@ export class CalibrationTab {
    */
   _openDialog({ title, subtitle = "", icon }) {
     this._closeDialog();
+    // U-4: a row's ⋮ menu that opened the dialog closes with it, not at the next redraw.
+    this._menu = null;
+    if (this._mode.kind === "list" && this._context?.host.querySelector(".cal-menu:not([hidden])")) this._render();
     this._done = "";
     const { dialogHost, t } = this._context;
     dialogHost.innerHTML = `<dialog class="cover-profile-dialog cal-dialog" aria-labelledby="cal-dialog-title">
