@@ -1211,9 +1211,17 @@ test("a full run ended by the bus: valid with a press before or within 2 s of th
   c.backend.stopped(); await tick();
   assert.equal(c.code(), "A-12");
   assert.equal(notice(c.wiz), "The cover stopped before you pressed ②: the time may not be the real one. Repeat the run and press ② as soon as the motor really stops.");
-  assert.deepEqual([...c.wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => [item.dataset.wiz, item.className.replace("wiz-action ", "")]), [["repeat", "primary"]], "no OK, continue");
+  assert.deepEqual([...c.wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => [item.dataset.wiz, item.className.replace("wiz-action ", ""), item.disabled]),
+    [["repeat", "primary", false], ["invalid-next", "secondary", true]], "no OK, continue: Continue shown, disabled (D-11)");
+  assert.equal(c.title(), "Ascent not valid", "D-11: the title says so");
+  assert.equal(c.wiz().querySelector(".wiz-result-notices .wiz-notice").dataset.tone, "error");
+  const tiles = [...c.wiz().querySelectorAll(".wiz-result")];
+  assert.deepEqual(tiles.map((tile) => tile.classList.contains("is-invalid")), [false, true], "the lift-off stays valid, the ascent is struck through");
+  const ascent = () => [...c.wiz().querySelectorAll(".wiz-steps li li")].find((item) => item.textContent.startsWith("Full ascent"))?.textContent;
+  assert.match(ascent(), /—/, "D-11: the stepper does not show the time judged not valid");
   await c.press("repeat");
   assert.ok(c.actions().slice(-2).includes("repeat"), "Repeat sends repeat (the return to the bottom then starts by itself)");
+  assert.match(ascent(), /—/, "D-11: nor while the repeat returns to the bottom (A-09)");
   // (d) a frame at the actuator's timer (59-65 s), even with ② within 2 s: not valid.
   const d = await mount();
   await toAscent(d);
@@ -1245,7 +1253,8 @@ test("the full descent follows the same rule, and the lift-off run is not affect
   backend.stopped(); await tick();
   assert.equal(code(), "A-15");
   assert.match(wiz().querySelector(".wiz-result-notices").textContent, /stopped before you pressed ②/);
-  assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => item.dataset.wiz), ["repeat"]);
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => item.dataset.wiz), ["repeat", "invalid-next"]);
+  assert.equal(wiz().querySelector(".wiz-title").textContent, "Descent not valid");
 });
 
 test("A-03 and A-16 have no Cancel of their own: the header's Abandon the calibration does the same", () => {

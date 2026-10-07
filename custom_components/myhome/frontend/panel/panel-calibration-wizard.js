@@ -256,8 +256,8 @@ export class CalibrationWizard {
             ${screen.results?.length ? "" : resultNotices}
             ${drawing("before-body")}
             ${screen.wait ? this._waitMarkup(screen.wait) : ""}
-            ${screen.results?.length ? `<div class="wiz-results">${screen.results.map((tile) => `<div class="wiz-result"><span class="wiz-result-label">${esc(tile.label)}</span>
-              <span class="wiz-result-value">${esc(tile.value)}<small> ${esc(tile.unit)}</small>${tile.extra ? `<span class="wiz-result-extra"> · ${esc(tile.extra)}</span>` : ""}</span></div>`).join("")}</div>${resultNotices}` : ""}
+            ${screen.results?.length ? `<div class="wiz-results">${screen.results.map((tile) => `<div class="wiz-result${tile.invalid ? " is-invalid" : ""}"><span class="wiz-result-label">${esc(tile.label)}</span>
+              <span class="wiz-result-value"><span class="wiz-result-number">${esc(tile.value)}</span><small> ${esc(tile.unit)}</small>${tile.extra ? `<span class="wiz-result-extra"> · ${esc(tile.extra)}</span>` : ""}</span></div>`).join("")}</div>${resultNotices}` : ""}
             ${screen.body ? `<div class="wiz-body">${rich(screen.body)}</div>` : ""}
             ${screen.help && !screen.choice ? this._helpMarkup(screen.help) : ""}
             ${screen.note ? `<p class="cal-note${screen.note.tone === "warning" ? " is-warning" : ""} wiz-note">${esc(screen.note.text)}</p>` : ""}
@@ -646,6 +646,11 @@ export class CalibrationWizard {
       // ② on a full run after the motor stopped by itself: valid within 2 s of the frame (not at a timer's 60 s).
       const verdict = this._judgeFullRun(gateway?.view, true);
       if (verdict) { local.fullRun.decided = true; local.invalidRun = verdict === "valid" ? null : { step: local.fullRun.step, reason: verdict }; }
+    }
+    // D-11: the time of a run judged not valid stays out of the stepper until a new run replaces it.
+    if (id === "repeat" && local.invalidRun) {
+      const key = local.invalidRun.step === "opening" ? "opening_time" : "closing_time";
+      local.discarded = { step: local.invalidRun.step, value: gateway?.view?.values?.[key] ?? null };
     }
     if (id === "repeat") local.invalidRun = null;
     if (["next", "lift", "endpoint", "repeat", "repeat_step", "accept", "repeat_check", "redo_readings", "continue_anyway", "continue"].includes(id)) return this._send(id);
@@ -1131,7 +1136,7 @@ function key(item) { return JSON.stringify([item.entry.entry_id, item.cover.enti
  * Fine-tuning keeps its base on purpose (`_startRefine` passes it again).
  */
 function freshFlags() {
-  return { ackLift: false, ackAscent: false, ackDescent: false, ackReadings: false, arm: null, run: null, fullRun: null, invalidRun: null, misbehaved: false,
+  return { ackLift: false, ackAscent: false, ackDescent: false, ackReadings: false, arm: null, run: null, fullRun: null, invalidRun: null, discarded: null, misbehaved: false,
     review: null, pendingSave: null, fieldError: null, fieldSequence: undefined, errorPhase: undefined, saveProfile: undefined, saveChoice: undefined,
     profileName: undefined, refining: false, lastGap: null, liftOrigin: null, baseReadings: null, fineReadings: null, pathChoice: null, reachedPhase: null };
 }

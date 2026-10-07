@@ -424,6 +424,8 @@ export const translations = {
     wiz_T499: "To start the ascent, press button ①. The cover will start from the rest: let it run to the top, it will stop by itself at the end stop.\n\n**Get ready to press button ② the moment the motor stops at the top**: you can tell when its sound stops.",
     wiz_T500: "To start the descent, press button ①. The cover will start at the top and descend fully, then stop by itself.\n\n**Get ready to press button ② the moment the motor stops at the bottom**: you can tell when its sound stops.\n\nA cover usually descends slightly faster than it rises because it does not work against gravity. Descent is therefore measured separately.",
     wiz_T501: "The cover **has closed fully**: all later measurements start here. Once it stops with the edge resting on the rest, continue.",
+    wiz_T502: "Ascent not valid",
+    wiz_T503: "Descent not valid",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1312,6 +1314,8 @@ export const translations = {
     wiz_T499: "Per iniziare la salita premi il pulsante ①. La tapparella partirà dalla base: lasciala correre fino in cima, si fermerà da sola al finecorsa.\n\n**Preparati a premere il pulsante ② nell'istante in cui il motore si ferma in alto**: si riconosce dal rumore che cessa.",
     wiz_T500: "Per iniziare la discesa premi il pulsante ①. La tapparella partirà dall'alto e scenderà fino in fondo, fermandosi da sola.\n\n**Preparati a premere il pulsante ② nell'istante in cui il motore si ferma in basso**: si riconosce dal rumore che cessa.\n\nDi solito una tapparella scende un po' più in fretta di quanto sale, perché non deve combattere la forza di gravità: per questo motivo la discesa si misura a parte.",
     wiz_T501: "La tapparella **si è chiusa completamente**: da qui parte ogni misura successiva. Quando si ferma, con il bordo in appoggio, puoi proseguire.",
+    wiz_T502: "La salita non è valida",
+    wiz_T503: "La discesa non è valida",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

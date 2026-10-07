@@ -372,13 +372,15 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     return screen;
   }
   // A full run the bus ended without a timely press of ②: its result is shown but not valid; only a repeat goes on.
-  const invalid = (key) => local.invalidRun?.step === key ? { tone: "warning", result: true, text: t(local.invalidRun.reason === "timer" ? "wiz_T445" : "wiz_T444") } : null;
-  const repeatOnly = (code, title, results, note) => Object.assign(screen, { code, title, results: results.filter(Boolean), notices: [note],
-    actions: [{ id: "repeat", label: t("wiz_T061"), kind: "primary" }] });
+  // D-11: not valid is drawn as such: its own title, the tiles struck through, the notice as an error, and Continue
+  // shown but disabled beside Repeat.
+  const invalid = (key) => local.invalidRun?.step === key ? { tone: "error", result: true, text: t(local.invalidRun.reason === "timer" ? "wiz_T445" : "wiz_T444") } : null;
+  const repeatOnly = (code, title, results, note) => Object.assign(screen, { code, title, results: results.filter(Boolean),
+    notices: [note], actions: [{ id: "repeat", label: t("wiz_T061"), kind: "primary" }, { id: "invalid-next", label: t("wiz_T060"), kind: "secondary", disabled: true }] });
   if (step === "opening") {
     if (phase === "reading") {
       const bad = invalid("opening");
-      if (bad) return repeatOnly(p("12"), t("wiz_T058"), [slats ? liftTile() : null, timeTile("wiz_T040", view.values?.opening_time)], bad);
+      if (bad) return repeatOnly(p("12"), t("wiz_T502"), [slats ? liftTile() : null, { ...timeTile("wiz_T040", view.values?.opening_time), invalid: true }], bad);
       if (!local.ackAscent && slats) return Object.assign(screen, { code: p("12"), title: t("wiz_T058"), body: t("wiz_T059"),
         results: [liftTile(), timeTile("wiz_T040", view.values?.opening_time)].filter(Boolean),
         actions: [{ id: "ack:ascent", label: t("wiz_T060"), kind: "primary" }, { id: "repeat", label: t("wiz_T061"), kind: "secondary" }] });
@@ -403,7 +405,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
   if (step === "half_open") {
     const bad = phase === "briefing" ? invalid("closing") : null;
     if (bad) {
-      repeatOnly(p("15"), t("wiz_T071"), [timeTile("wiz_T068", view.values?.closing_time)], bad);
+      repeatOnly(p("15"), t("wiz_T503"), [{ ...timeTile("wiz_T068", view.values?.closing_time), invalid: true }], bad);
       screen.phase = "descent";
       return screen;
     }
@@ -473,11 +475,13 @@ function guidedScreen(screen, ctx, tx, n, values, stop) {
   const { t, view, elapsed, local = {} } = ctx;
   const phase = view.phase;
   const tile = (key, seconds) => seconds == null ? null : { label: t(key), value: n(seconds), unit: "s" };
-  const bad = (key) => local.invalidRun?.step === key ? { tone: "warning", result: true, text: t(local.invalidRun.reason === "timer" ? "wiz_T445" : "wiz_T444") } : null;
+  const bad = (key) => local.invalidRun?.step === key ? { tone: "error", result: true, text: t(local.invalidRun.reason === "timer" ? "wiz_T445" : "wiz_T444") } : null;
   const result = (code, title, body, time, key, ack) => {
     const notice = bad(key);
-    return Object.assign(screen, { code, title, body: notice ? "" : t(body), results: [time].filter(Boolean), notices: notice ? [notice] : [],
-      actions: notice ? [{ id: "restart", label: t("wiz_T061"), kind: "primary" }]
+    // D-11: as on A-12/A-15, a result that is not valid looks it.
+    return Object.assign(screen, { code, title: notice ? t(key === "opening" ? "wiz_T502" : "wiz_T503") : title, body: notice ? "" : t(body),
+      results: [time].filter(Boolean).map((tile) => notice ? { ...tile, invalid: true } : tile), notices: notice ? [notice] : [],
+      actions: notice ? [{ id: "restart", label: t("wiz_T061"), kind: "primary" }, { id: "invalid-next", label: t("wiz_T060"), kind: "secondary", disabled: true }]
         : [{ id: ack, label: t("wiz_T060"), kind: "primary" }, { id: "restart", label: t("wiz_T061"), kind: "secondary" }] });
   };
   if ((phase === "review" || phase === "saving") && !local.ackDescent) {
@@ -870,15 +874,17 @@ function finalize(screen, ctx) {
   const base = local.base || {};
   const values = source?.values || {}, samples = source?.samples || {}, readings = { ...(local.baseReadings || {}), ...(source?.readings || {}) };
   const seconds = (value) => value == null ? "—" : `${n(value)} s`, cm = (value) => value == null ? "—" : `${n(value)} cm`;
+  // D-11: a time judged not valid, or discarded by its repeat and not yet measured again, is not shown as a result.
+  const kept = (step, value) => local.invalidRun?.step === step || (local.discarded?.step === step && local.discarded.value === value) ? null : value;
   const slats = source ? source.slats !== false : local.slats !== false;
   const sub = {
     // The path chosen ("Ⓐ first of its type") is the introduction's sub-line, as the mockups' stepper shows it.
     intro: screen.caption ? [["", screen.caption]] : [],
     ascent: [...(slats && !(path === "C" && scope === "times_only") ? [[t("wiz_T039"), (samples.lift ?? base.lift) != null
       ? `${n(samples.lift ?? base.lift)} s · ${(readings.gap ?? base.gap) != null ? cm(readings.gap ?? base.gap) : "—"}` : "—"]] : []),
-      [t("wiz_T040"), seconds(values.opening_time ?? base.opening)],
+      [t("wiz_T040"), seconds(kept("opening", values.opening_time ?? base.opening))],
       ...(path === "C" && scope === "times_only" ? [] : [[t("wiz_T041"), cm(source?.travel_cm ?? base.travel)]])],
-    descent: [[t("wiz_T068"), seconds(values.closing_time ?? base.closing)]],
+    descent: [[t("wiz_T068"), seconds(kept("closing", values.closing_time ?? base.closing))]],
     readings: path === "B" ? [[t("wiz_T041"), cm(view?.travel_cm ?? local.fineReadings?.travel)],
       [t("wiz_T119"), (view?.check ?? local.fineReadings?.check) ? `${(view?.check ?? local.fineReadings.check).gap_cm} cm` : "—"]]
       : path === "C" && scope === "points_only" ? fineSub(t, view, cm, local.fineReadings)

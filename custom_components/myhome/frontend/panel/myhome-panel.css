@@ -1158,6 +1158,10 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-result-label { font-size: 12px; color: var(--panel-text-2); }
 .wiz-result-value { font-size: 32px; line-height: 1.15; font-weight: 600; font-variant-numeric: tabular-nums; }
 .wiz-result-value small, .wiz-result-extra { font-size: 16px; font-weight: 500; }
+/* D-11: a result that is not valid: on the error colour, its value struck through in the secondary colour. */
+.wiz-result.is-invalid { background: color-mix(in srgb, var(--panel-error) 8%, var(--panel-surface)); }
+.wiz-result.is-invalid .wiz-result-value { color: var(--panel-text-2); }
+.wiz-result.is-invalid .wiz-result-number { text-decoration: line-through; text-decoration-thickness: 2px; }
 .wiz-box { display: grid; gap: 4px; padding: 12px 14px; border-radius: 10px; background: var(--panel-surface-2); }
 .wiz-box p { margin: 0; }
 .wiz-choice { max-width: 420px; }
