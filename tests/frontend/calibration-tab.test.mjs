@@ -1353,3 +1353,13 @@ test("a dialog opened from a row's ⋮ menu closes that menu (U-4)", async () =>
   panel.shadowRoot.querySelector("dialog.cal-dialog .cal-dialog-close").click(); await tick();
 });
 
+
+test("D-01: in a landscape sheet the maintainer's view keeps its body: compact bars, no second «Chiudi» under Stop", async () => {
+  const { readFileSync } = await import("node:fs");
+  const css = readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  const short = css.slice(css.indexOf("@media (max-height: 499px) and (orientation: landscape) {\n  dialog.cal-dialog { max-height"));
+  const block = short.slice(0, short.indexOf("\n}\n"));
+  assert.match(block, /dialog\.cal-dialog:has\(\.calibration-safety-actions\) \.dialog-foot \{ display: none; \}/);
+  assert.match(block, /dialog\.cal-dialog \.calibration-safety-actions \{ bottom: -4px; padding-block: 8px; \}/, "flush with the sheet's bottom");
+  assert.match(block, /dialog\.cal-dialog :is\(\.calibration-safety-actions, \.cal-actions\) button \{ min-height: 40px;/);
+});

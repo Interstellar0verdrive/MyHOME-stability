@@ -1434,6 +1434,12 @@ dialog.cal-dialog .dialog-head { justify-content: space-between; padding-block: 
 @media (max-height: 499px) and (orientation: landscape) {
   dialog.cal-dialog { max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); }
   dialog.cal-dialog { width: min(100%, 560px); margin: auto auto 0; }
+  /* D-01: the maintainer's view in a landscape sheet keeps its body: its Stop/Cancel bar and buttons are compact, the
+     title row is tighter, and the sheet's own «Chiudi» gives way to the ✕ beside the title (always there on a sheet). */
+  dialog.cal-dialog:has(.calibration-safety-actions) .dialog-foot { display: none; }
+  dialog.cal-dialog:has(.calibration-safety-actions) .dialog-head { padding-block: 8px; }
+  dialog.cal-dialog .calibration-safety-actions { bottom: -4px; padding-block: 8px; }
+  dialog.cal-dialog :is(.calibration-safety-actions, .cal-actions) button { min-height: 40px; padding-block: 6px; }
   .wiz-dialog { justify-content: center; }
   .wiz-dialog .wiz-dialog-card { width: min(100%, 560px); padding: 24px 20px calc(16px + var(--cal-safe-bottom)); }
   /* The 560 px sheet is centred, clear of the side safe areas: its own 20 px inside. */
