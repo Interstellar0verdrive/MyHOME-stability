@@ -81,7 +81,9 @@ function fitBar(bar) {
   const room = bar.clientWidth;
   if (!chips || !compact || !room) return;
   bar.classList.add("is-chips", "is-measuring");
-  const need = chips.getBoundingClientRect().width + BAR_GAP + compact.getBoundingClientRect().width;
+  // Q-27: in the table layouts the bar has no order control: only the chips count.
+  const order = compact.getBoundingClientRect().width;
+  const need = chips.getBoundingClientRect().width + (order > 0 ? BAR_GAP + order : 0);
   bar.classList.remove("is-measuring");
   bar.classList.toggle("is-chips", need <= room);
   bar.dataset.width = String(room);

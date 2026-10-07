@@ -755,6 +755,8 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-filterbar.is-chips .cal-filterbar-sort::after { content: ""; flex: none; width: 16px; height: 16px; background: currentColor; pointer-events: none;
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7.41 8.58 12 13.17l4.59-4.59L18 10l-6 6-6-6z'/%3E%3C/svg%3E") center / 16px 16px no-repeat;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7.41 8.58 12 13.17l4.59-4.59L18 10l-6 6-6-6z'/%3E%3C/svg%3E") center / 16px 16px no-repeat; }
+/* Q-27: the table sorts by its headers (the active one keeps its arrow): from 1016 px of content the bar has no order. */
+@container caltab (min-width: 1016px) { .cal-tab-filters .cal-filterbar-sort { display: none; } }
 .cal-filterbar.is-chips .cal-sort-short { display: none; }
 .cal-filterbar.is-chips .cal-sort-long { display: inline; }
 /* While measuring, the chips keep one line at their own width. */
