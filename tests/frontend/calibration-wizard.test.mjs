@@ -2353,7 +2353,7 @@ test("every wizard, block and dialog button centres its label and takes the shel
   assert.match(css, /\.wiz-action, \.wiz-take, \.wiz-dialog-card \.actions button, dialog\.cal-dialog \.dialog-foot button, \.cal-block-action > button \{\s*justify-content: center; text-align: center; border-radius: var\(--cal-btn-radius\); \}/);
 });
 
-test("dialogs are 560 px centred cards, and sheets with a handle, a ✕ that keeps the calibration and stacked buttons (R-5)", async () => {
+test("dialogs are 560 px centred cards, and sheets with a ✕ that keeps the calibration and stacked buttons (R-5)", async () => {
   const { wiz, press, startFor } = await mount();
   await startFor("cover.living_one");
   await press("begin");
@@ -2369,7 +2369,7 @@ test("dialogs are 560 px centred cards, and sheets with a handle, a ✕ that kee
   } finally { globalThis.matchMedia = original; }
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /\.wiz-dialog-card \{ box-sizing: border-box; width: min\(100%, 560px\); padding: 24px;/);
-  assert.match(css, /dialog\.cal-dialog::before, \.wiz-dialog \.wiz-dialog-card::before \{ content: ""; display: block; flex: none; width: 40px; height: 4px;/, "the sheets' handle");
+  assert.doesNotMatch(css, /width: 40px; height: 4px; border-radius: 2px;/, "X-5: no drag handle (there is no drag-to-close)");
   assert.match(css, /dialog\.cal-dialog \{ width: min\(100%, 560px\); margin: auto auto 0; \}/, "landscape: a 560 px sheet, centred");
 });
 
@@ -2467,11 +2467,9 @@ test("D-24: the progress track is seen at 0 % on light and dark boxes", async ()
   assert.match(css, /\.wiz-progress \{ height: 6px; border-radius: 999px; background: color-mix\(in srgb, var\(--primary-text-color, #182b37\) 14%, transparent\); overflow: hidden; \}/);
 });
 
-test("D-25/D-26: sheets have a centred handle (the Steps sheet too) and the side Steps panel reaches the right edge", async () => {
+test("D-26/X-5: the side Steps panel reaches the right edge; no sheet draws a drag handle", async () => {
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
-  assert.match(css, /dialog\.cal-dialog::before \{ align-self: center; margin: 10px auto 0; \}/);
-  assert.match(css, /\.wiz-dialog \.wiz-dialog-card::before \{ margin: -12px auto 12px; \}/);
-  assert.match(css, /\.wiz-sheet \.wiz-sheet-head::before \{ content: ""; position: absolute; top: 6px; left: 50%;/);
+  assert.doesNotMatch(css, /dialog\.cal-dialog::before|\.wiz-dialog-card::before|\.wiz-sheet-head::before/);
   assert.match(css, /\.wiz-sheet \.wiz-sheet-card \{ width: calc\(320px \+ var\(--cal-safe-right\)\); height: 100%; max-height: none; border-radius: 0; padding: 0; \}/);
   assert.match(css, /\.wiz-sheet \.wiz-sheet-head \{ padding-top: 4px; padding-inline-end: calc\(8px \+ var\(--cal-safe-right\)\); \}/);
 });

@@ -1006,15 +1006,9 @@ dialog.cal-dialog .cal-resume-entity { display: none; }
   dialog.cal-dialog::backdrop { background: rgb(0 0 0 / 55%); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
   dialog.cal-dialog > * { padding-inline: calc(16px + var(--cal-safe-left)) calc(16px + var(--cal-safe-right)); }
   dialog.cal-dialog .dialog-foot { flex-direction: column-reverse; align-items: stretch; }
-  dialog.cal-dialog .dialog-head { padding-top: 12px; }
-  dialog.cal-dialog::before, .wiz-dialog .wiz-dialog-card::before { content: ""; display: block; flex: none; width: 40px; height: 4px; border-radius: 2px;
-    background: var(--panel-border); }
-  /* D-25: the handle is centred, as on every sheet; the Steps sheet has one too, in its title row. */
-  dialog.cal-dialog::before { align-self: center; margin: 10px auto 0; }
-  .wiz-dialog .wiz-dialog-card::before { margin: -12px auto 12px; }
-  .wiz-sheet .wiz-sheet-head { padding-top: 14px; }
-  .wiz-sheet .wiz-sheet-head::before { content: ""; position: absolute; top: 6px; left: 50%; width: 40px; height: 4px; border-radius: 2px;
-    background: var(--panel-border); transform: translateX(-50%); }
+  /* X-5: no drag handle on the sheets: it suggested a drag-to-close they do not have; ✕, the buttons, Escape and a tap
+     outside close them. (The top padding keeps the room the handle had.) */
+  dialog.cal-dialog .dialog-head { padding-top: 22px; }
   dialog.cal-dialog .dialog-foot button { width: 100%; justify-content: center; }
   /* M2-6: the sheet holds its place; only its body scrolls, the footer stays at the bottom with the fade above it. */
   dialog.cal-dialog[open] { display: flex; flex-direction: column; overflow: hidden; overscroll-behavior: contain; }
@@ -1511,7 +1505,6 @@ dialog.cal-dialog .dialog-head { justify-content: space-between; padding-block: 
   .wiz-dialog .wiz-dialog-card { width: min(100%, 560px); padding: 24px 20px calc(16px + var(--cal-safe-bottom)); }
   /* The 560 px sheet is centred, clear of the side safe areas: its own 20 px inside. */
   dialog.cal-dialog > * { padding-inline: 20px; }
-  dialog.cal-dialog::before { margin-inline: auto; }
   .wiz-dialog .wiz-dialog-card, .wiz-sheet .wiz-sheet-card { max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); }
   /* D-30: side by side while their labels fit on one line each; a label that does not fit moves its button to a row of
      its own rather than wrap («Continua la calibrazione», «Conferma presa di controllo»). */
@@ -1565,7 +1558,6 @@ dialog.cal-dialog .dialog-head { justify-content: space-between; padding-block: 
   /* D-26: the panel reaches the window's right edge: its title row and steps keep clear of the safe area inside it. */
   .wiz-sheet .wiz-sheet-card { width: calc(320px + var(--cal-safe-right)); height: 100%; max-height: none; border-radius: 0; padding: 0; }
   .wiz-sheet .wiz-sheet-head { padding-top: 4px; padding-inline-end: calc(8px + var(--cal-safe-right)); }
-  .wiz-sheet .wiz-sheet-head::before { display: none; }
   .wiz-sheet .wiz-sheet-steps { padding-inline-end: calc(20px + var(--cal-safe-right)); }
   .wiz-sheet:not([hidden]) .wiz-sheet-card { animation: wiz-panel-in 220ms cubic-bezier(.2, 0, 0, 1); }
   .wiz-sheet.is-leaving .wiz-sheet-card { animation: wiz-panel-out 220ms cubic-bezier(.3, 0, 1, 1) forwards; }
