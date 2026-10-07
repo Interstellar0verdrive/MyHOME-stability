@@ -1481,8 +1481,10 @@ dialog.cal-dialog .dialog-head { justify-content: space-between; padding-block: 
   dialog.cal-dialog > * { padding-inline: 20px; }
   dialog.cal-dialog::before { margin-inline: auto; }
   .wiz-dialog .wiz-dialog-card, .wiz-sheet .wiz-sheet-card { max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); }
-  dialog.cal-dialog .dialog-foot, .wiz-dialog .actions { flex-direction: row; justify-content: end; }
-  dialog.cal-dialog .dialog-foot button, .wiz-dialog .actions button { flex: 1 1 0; width: auto; min-width: 0; }
+  /* D-30: side by side while their labels fit on one line each; a label that does not fit moves its button to a row of
+     its own rather than wrap («Continua la calibrazione», «Conferma presa di controllo»). */
+  dialog.cal-dialog .dialog-foot, .wiz-dialog .actions { flex-direction: row; flex-wrap: wrap; justify-content: end; }
+  dialog.cal-dialog .dialog-foot button, .wiz-dialog .actions button { flex: 1 1 auto; width: auto; min-width: 0; white-space: nowrap; }
 }
 /* R-4 (Q-17): every button of the wizard, the sequence, the blocks and the dialogs has its label centred, and the
    shell's radius through `--cal-btn-radius`. */

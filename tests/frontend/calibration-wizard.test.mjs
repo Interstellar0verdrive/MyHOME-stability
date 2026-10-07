@@ -2464,3 +2464,9 @@ test("D-25/D-26: sheets have a centred handle (the Steps sheet too) and the side
   assert.match(css, /\.wiz-sheet \.wiz-sheet-card \{ width: calc\(320px \+ var\(--cal-safe-right\)\); height: 100%; max-height: none; border-radius: 0; padding: 0; \}/);
   assert.match(css, /\.wiz-sheet \.wiz-sheet-head \{ padding-top: 4px; padding-inline-end: calc\(8px \+ var\(--cal-safe-right\)\); \}/);
 });
+
+test("D-30: in a landscape sheet the buttons sit side by side only while their labels fit on one line", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /dialog\.cal-dialog \.dialog-foot, \.wiz-dialog \.actions \{ flex-direction: row; flex-wrap: wrap; justify-content: end; \}/);
+  assert.match(css, /dialog\.cal-dialog \.dialog-foot button, \.wiz-dialog \.actions button \{ flex: 1 1 auto; width: auto; min-width: 0; white-space: nowrap; \}/);
+});
