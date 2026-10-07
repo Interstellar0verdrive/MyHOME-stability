@@ -453,6 +453,10 @@ export class CalibrationTab {
     const busy = rows.map((row) => row.session).find(Boolean) || (rows.some((row) => row.data && row.reserved && !row.sessionKnown) ? { unknown: true } : null);
     // D-08: no overview could be read: no filter bar with zero counts, no «nothing matches the filter»; the error says it.
     const unread = !!failed.length && !this._covers().length;
+    // D-09: the two head actions go off only when there is no cover at all, never because of a filter or the search.
+    const none = !this._covers().length;
+    const narrowed = this._filter !== "all" || !!this._context.filters.query.trim();
+    const clear = narrowed ? `<button type="button" class="cal-tab-clear" data-action="cal-tab-clear">${esc(t("wiz_T510"))}</button>` : "";
     let html;
     if (!loading && !failed.length && !this._covers().length) {
       // T-04: no cover estimated from its travel times on the gateway(s); the tab's title stays above.
@@ -465,8 +469,8 @@ export class CalibrationTab {
       html = `<div class="cal-tab-top"><div class="cal-tab-head"><div class="cal-tab-heading"><h3 class="cal-tab-title">${esc(t("calTabTitle"))}</h3>
           <button type="button" class="cal-tab-how" data-action="cal-tab-how" aria-expanded="${!!this._howOpen}" aria-controls="cal-tab-how-text">${esc(t("calTabHowItWorks"))}</button></div>
         <div class="actions cal-tab-actions">
-          ${this._wizard ? `<button type="button" class="primary" data-action="cal-tab-measure" ${busy || loading || !counts.all ? "disabled" : ""}><ha-icon icon="mdi:ruler" aria-hidden="true"></ha-icon><span>${esc(t("calTabMeasureOne"))}</span></button>` : ""}
-          <button type="button" data-action="cal-tab-batch" ${busy || loading ? "disabled" : ""}><ha-icon icon="mdi:format-list-numbered" aria-hidden="true"></ha-icon><span>${esc(t("wiz_T496"))}</span></button>
+          ${this._wizard ? `<button type="button" class="primary" data-action="cal-tab-measure" ${busy || loading || none ? "disabled" : ""}><ha-icon icon="mdi:ruler" aria-hidden="true"></ha-icon><span>${esc(t("calTabMeasureOne"))}</span></button>` : ""}
+          <button type="button" data-action="cal-tab-batch" ${busy || loading || none ? "disabled" : ""}><ha-icon icon="mdi:format-list-numbered" aria-hidden="true"></ha-icon><span>${esc(t("wiz_T496"))}</span></button>
         </div></div>
         <p class="muted cal-tab-how-text" id="cal-tab-how-text" ${this._howOpen ? "" : "hidden"}>${esc(t("calTabHowItWorksBody"))}</p></div>
         ${unread ? "" : this._filterBar({ extra: " cal-tab-filters", select: this._filterSelect(counts, this._filter),
@@ -478,7 +482,7 @@ export class CalibrationTab {
         ${failed.map((entry) => `<p class="notice error" role="alert">${esc(gateways.length > 1 ? `${entry.title}: ` : "")}${esc(t("calTabError"))}</p>`).join("")}
         ${failed.length ? `<button type="button" data-action="cal-tab-refresh">${esc(t("refresh"))}</button>` : ""}
         ${loading ? `<p class="muted" role="status">${esc(t("loading"))}</p>` : ""}
-        ${visible.length || loading || unread ? "" : this._emptyCard(t("wiz_T493"), t("wiz_T494"), this._howItWorks(), "cal-tab-no-match")}
+        ${visible.length || loading || unread ? "" : this._emptyCard(t("wiz_T493"), t("wiz_T494"), clear + this._howItWorks(), "cal-tab-no-match")}
         ${visible.length ? `<div class="cal-list">
           ${this._sortHeads(this._expandAll(visible))}
           <div class="cal-list-rows" role="list">${visible.map((item) => this._row(item, busy, language)).join("")}</div></div>` : ""}
@@ -767,6 +771,13 @@ export class CalibrationTab {
     if (action !== "cal-tab-menu" && this._menu !== null) { this._menu = null; if (!action?.startsWith("cal-tab-")) this._render(); }
     if (action === "cal-tab-how") { this._howOpen = !this._howOpen; this._render(); return; }
     if (action === "cal-tab-filter") { this._filter = id; this._render(); }
+    // D-09: the empty list's way out: the tab's filter back to «Tutte» and the panel's search emptied (as typed away).
+    if (action === "cal-tab-clear") {
+      this._filter = "all";
+      const search = this._context.host.getRootNode().getElementById?.("search");
+      if (search && search.value) { search.value = ""; search.dispatchEvent(new Event("input", { bubbles: true })); }
+      this._render();
+    }
     else if (action === "cal-tab-sort") this._setSort(id);
     else if (action === "cal-tab-expand-all") {
       const language = this._context.hass.language || "en";

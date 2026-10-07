@@ -462,6 +462,24 @@ test("a filter without results says so and keeps the filters (T-04b)", async () 
   assert.equal(tab.querySelector(".cal-tab-no-match > .muted").textContent, "Cambia o togli il filtro o la ricerca per vedere le altre tapparelle.");
   assert.ok(tab.querySelector(".cal-tab-filters"), "the filters stay, to change it");
   assert.equal(tab.querySelector(".cal-tab-no-match .cal-empty-how summary").textContent, "Come funziona", "R-7: as Figma T-04b");
+  // D-09: the head actions stay on (there are covers), and the card offers the way back.
+  assert.equal(tab.querySelector('[data-action="cal-tab-measure"]').disabled, false);
+  assert.equal(tab.querySelector('[data-action="cal-tab-batch"]').disabled, false);
+  tab.querySelector('[data-action="cal-tab-clear"]').click(); await tick();
+  assert.equal(tab.querySelector(".cal-tab-no-match"), null);
+  assert.ok(tab.querySelector(".cal-list"));
+});
+
+test("D-09: a search without results is cleared from the empty list's own button", async () => {
+  const { root, tab } = await mount({ language: "it" });
+  const search = root.getElementById("search");
+  search.value = "zzz"; search.dispatchEvent(new Event("input", { bubbles: true })); await tick();
+  assert.ok(tab.querySelector(".cal-tab-no-match"));
+  assert.equal(tab.querySelector('[data-action="cal-tab-measure"]').disabled, false, "not off because of the search");
+  assert.equal(tab.querySelector('[data-action="cal-tab-clear"]').textContent, "Togli filtro e ricerca");
+  tab.querySelector('[data-action="cal-tab-clear"]').click(); await tick();
+  assert.equal(search.value, "");
+  assert.equal(tab.querySelector(".cal-tab-no-match"), null);
 });
 
 const targets = (extra = {}) => ({ revision: 7, max_batch: 20, targets: [

@@ -432,6 +432,7 @@ export const translations = {
     wiz_T507: "Live, the cover would return to the end stop and then position itself. In the preview nothing moves.",
     wiz_T508: "Preview: no cover moves",
     wiz_T509: "Live, the cover would stop at **half its curtain travel**. The expected height is {expected} cm, half of its {travel} cm travel: measure from the window base, i.e. the rest the closed cover sits on, to the bottom edge of the curtain and enter the centimetres.\n\nThis is where the cover will stop whenever asked to open halfway. The gap between expected and measured shows how well the profile describes this cover.",
+    wiz_T510: "Clear filter and search",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1328,6 +1329,7 @@ export const translations = {
     wiz_T507: "Dal vivo la tapparella tornerebbe al finecorsa e poi si posizionerebbe da sola. In anteprima non si muove niente.",
     wiz_T508: "Anteprima: nessuna tapparella si muove",
     wiz_T509: "Dal vivo la tapparella si fermerebbe a **metà della corsa del telo**. L'atteso è {expected} cm, la metà dei {travel} cm della corsa: misura dalla base della finestra, cioè l'appoggio su cui si ferma la tapparella chiusa, al bordo inferiore del telo e scrivi i centimetri.\n\nÈ lo stesso punto in cui la tapparella si fermerà ogni volta che le viene chiesta un'apertura a metà: lo scarto fra atteso e misurato dice quanto il profilo descrive questa tapparella.",
+    wiz_T510: "Togli filtro e ricerca",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",
