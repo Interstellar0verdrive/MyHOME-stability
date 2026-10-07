@@ -753,6 +753,10 @@ dialog.cal-dialog .cal-resume-entity { display: none; }
 }
 /* M4-3: rings only for the keyboard, drawn on the wrapper of a borderless select; no grey flash on a tap. */
 .cal-tab, .wiz, dialog.cal-dialog { -webkit-tap-highlight-color: transparent; }
+/* X-6: a dialog's or sheet's own box takes the focus when it opens after a tap: never a ring on it; inside the tab's
+   dialogs a ring only from the keyboard, as in the tab and the wizard. */
+:is(dialog.cal-dialog, .wiz-dialog-card, .wiz-sheet-card):focus { outline: none; }
+dialog.cal-dialog :is(button, select, input):focus:not(:focus-visible) { outline: none; }
 .cal-compact-sort select:focus, .cal-compact-sort select:focus-visible { outline: none; box-shadow: none; border-color: transparent; }
 .cal-compact-sort:has(select:focus-visible) { outline: 2px solid var(--panel-accent); outline-offset: 2px; }
 .cal-tab :is(button, select, input):focus:not(:focus-visible), .wiz :is(button, select, input):focus:not(:focus-visible) { outline: none; }

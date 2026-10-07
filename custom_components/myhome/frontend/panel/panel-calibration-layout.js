@@ -144,6 +144,22 @@ export function keepScrollOnPick(host) {
   return () => { host.removeEventListener("focusin", focusin); host.removeEventListener("change", settle); host.removeEventListener("focusout", settle); clearTimeout(timer); };
 }
 
+/**
+ * X-6: a dialog or sheet that opens puts the focus inside itself, for assistive technology and the keyboard; after a
+ * tap, on its own box (no ring anywhere: WebKit draws one on a button focused by script), after a key, on its safe
+ * button as before. The last input is noted once, for every panel view.
+ */
+let keyboardInput = false;
+if (typeof window !== "undefined" && window.addEventListener && !window.__myhomeInputWatch) {
+  window.__myhomeInputWatch = true;
+  window.addEventListener("keydown", (event) => { if (!["Shift", "Control", "Alt", "Meta"].includes(event.key)) keyboardInput = true; }, true);
+  window.addEventListener("pointerdown", () => { keyboardInput = false; }, true);
+}
+export function focusOnOpen(box, target) {
+  if (keyboardInput && target) target.focus({ preventScroll: true });
+  else box?.focus({ preventScroll: true });
+}
+
 /** D-40: the room the name of a wizard list's row keeps before its chips leave the side for under it. */
 export const ROW_NAME_MIN = 200;
 

@@ -16,7 +16,7 @@ function holdScroll(host) {
 
 /** WHO 2 "Calibration" view: what each timed cover uses, its measurement state and the ways to measure it. */
 const asset = (name) => { const url = new URL(name, import.meta.url); url.search = new URL(import.meta.url).search; return url.href; };
-const [{ escapeHtml: esc }, model, text, { CoverCalibration }, { CalibrationWizard }, { ProfileCatalogueEditor }, { morph }, { layout, SHEETS, listBand, contentWidth, fitBars, fitRows, dockBar, keepScrollOnPick }] = await Promise.all([
+const [{ escapeHtml: esc }, model, text, { CoverCalibration }, { CalibrationWizard }, { ProfileCatalogueEditor }, { morph }, { layout, SHEETS, listBand, contentWidth, fitBars, fitRows, dockBar, keepScrollOnPick, focusOnOpen }] = await Promise.all([
   import(asset("panel-dom.js")), import(asset("panel-model.js")), import(asset("panel-calibration-text.js")),
   import(asset("panel-cover-calibration.js")), import(asset("panel-calibration-wizard.js")), import(asset("panel-profile-catalogue-editor.js")),
   import(asset("panel-calibration-morph.js")), import(asset("panel-calibration-layout.js")),
@@ -931,7 +931,7 @@ export class CalibrationTab {
     if (this._mode.kind === "list" && this._context?.host.querySelector(".cal-menu:not([hidden])")) this._render();
     this._done = "";
     const { dialogHost, t } = this._context;
-    dialogHost.innerHTML = `<dialog class="cover-profile-dialog cal-dialog" aria-labelledby="cal-dialog-title">
+    dialogHost.innerHTML = `<dialog class="cover-profile-dialog cal-dialog" tabindex="-1" aria-labelledby="cal-dialog-title">
       <header class="dialog-head"><div class="dialog-icon" aria-hidden="true"><ha-icon icon="${esc(icon)}"></ha-icon></div>
         <div class="dialog-head-text"><h2 id="cal-dialog-title">${esc(title)}</h2>${subtitle ? `<p class="muted">${esc(subtitle)}</p>` : ""}</div>
         <button type="button" class="icon-button cal-dialog-x" ${hosted || layout.sheets() ? "" : "hidden"} aria-label="${esc(t("close"))}" title="${esc(t("close"))}"><ha-icon icon="mdi:close" aria-hidden="true"></ha-icon></button></header>
@@ -949,6 +949,9 @@ export class CalibrationTab {
       if (!inside || (!box.width && !box.height)) this._dialogDone();
     });
     dialog.showModal();
+    // X-6: after a tap the focus rests on the sheet itself, not on its ✕ (no ring); after a key it stays where the
+    // browser put it.
+    focusOnOpen(dialog, null);
     this._dialog = dialog;
     this._holdPage(dialog);
     return dialog.querySelector(".cal-dialog-body");

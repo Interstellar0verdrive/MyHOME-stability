@@ -4,7 +4,7 @@
  * `CalibrationGateway` (live session or local preview); it never builds a WebSocket message itself.
  */
 const asset = (name) => { const url = new URL(name, import.meta.url); url.search = new URL(import.meta.url).search; return url.href; };
-const [{ escapeHtml: esc }, text, screens, gateways, illustration, { morph }, { layout, fitBars, fitRows, dockBar }] = await Promise.all([
+const [{ escapeHtml: esc }, text, screens, gateways, illustration, { morph }, { layout, fitBars, fitRows, dockBar, focusOnOpen }] = await Promise.all([
   import(asset("panel-dom.js")), import(asset("panel-calibration-text.js")), import(asset("panel-calibration-screens.js")),
   import(asset("panel-calibration-gateway.js")), import(asset("panel-calibration-illustration.js")), import(asset("panel-calibration-morph.js")), import(asset("panel-calibration-layout.js")),
 ]);
@@ -276,14 +276,14 @@ export class CalibrationWizard {
           </div>
           <div class="wiz-actions"></div>
         </div>
-        <div class="wiz-sheet" role="dialog" aria-modal="true" aria-label="${esc(t("wiz_T274"))}" hidden><div class="wiz-sheet-card">
+        <div class="wiz-sheet" role="dialog" aria-modal="true" aria-label="${esc(t("wiz_T274"))}" hidden><div class="wiz-sheet-card" tabindex="-1">
           <div class="wiz-sheet-head"><h4 class="wiz-sheet-title">${esc(t("wiz_T274"))}</h4><button type="button" class="icon-button wiz-sheet-close" data-wiz="steps-close" aria-label="${esc(t("close"))}"><ha-icon icon="mdi:close" aria-hidden="true"></ha-icon></button></div>
           <div class="wiz-sheet-steps"></div></div></div>
-        <div class="wiz-dialog" role="alertdialog" aria-modal="true" aria-labelledby="wiz-dialog-title" aria-describedby="wiz-dialog-body" hidden><div class="wiz-dialog-card">
+        <div class="wiz-dialog" role="alertdialog" aria-modal="true" aria-labelledby="wiz-dialog-title" aria-describedby="wiz-dialog-body" hidden><div class="wiz-dialog-card" tabindex="-1">
           <div class="wiz-dialog-head"><h4 id="wiz-dialog-title">${esc(t("wiz_T267"))}</h4><button type="button" class="icon-button wiz-dialog-x" data-wiz="dialog-x" hidden aria-label="${esc(t("close"))}" title="${esc(t("close"))}"><ha-icon icon="mdi:close" aria-hidden="true"></ha-icon></button></div><p id="wiz-dialog-body"></p>
           <div class="actions"><button type="button" class="wiz-leave" data-wiz="leave">${esc(t("wiz_T270"))}</button>
             <button type="button" class="primary" data-wiz="stay">${esc(t("wiz_T269"))}</button></div></div></div>
-        <div class="wiz-dialog wiz-nav-dialog" role="alertdialog" aria-modal="true" aria-labelledby="wiz-nav-title" aria-describedby="wiz-nav-body" hidden><div class="wiz-dialog-card">
+        <div class="wiz-dialog wiz-nav-dialog" role="alertdialog" aria-modal="true" aria-labelledby="wiz-nav-title" aria-describedby="wiz-nav-body" hidden><div class="wiz-dialog-card" tabindex="-1">
           <div class="wiz-dialog-head"><h4 id="wiz-nav-title">${esc(t("wiz_T408"))}</h4><button type="button" class="icon-button wiz-dialog-x" data-wiz="dialog-x" hidden aria-label="${esc(t("close"))}" title="${esc(t("close"))}"><ha-icon icon="mdi:close" aria-hidden="true"></ha-icon></button></div><p id="wiz-nav-body"></p>
           <div class="actions"><button type="button" class="wiz-leave" data-wiz="nav-discard">${esc(t("wiz_T411"))}</button>
             <button type="button" data-wiz="nav-later">${esc(t("wiz_T410"))}</button>
@@ -610,7 +610,7 @@ export class CalibrationWizard {
 
   async _act(id) {
     const local = this._local, gateway = this._gateway;
-    if (id === "steps") { const sheet = this._frame.querySelector(".wiz-sheet"); sheet.hidden = false; sheet.querySelector("button").focus(); return; }
+    if (id === "steps") { const sheet = this._frame.querySelector(".wiz-sheet"); sheet.hidden = false; focusOnOpen(sheet.querySelector(".wiz-sheet-card"), sheet.querySelector("button")); return; }
     if (id === "steps-close") { this._slideAway(this._frame.querySelector(".wiz-sheet")); this._frame.querySelector('[data-wiz="steps"]').focus(); return; }
     if (id === "exit") { this._exit(); return; }
     if (id === "back") { this._back(); return; }
@@ -1040,7 +1040,7 @@ export class CalibrationWizard {
     dialog.querySelector(".wiz-dialog-x").hidden = !layout.sheets();
     dialog.hidden = false;
     this._root.classList.add("has-dialog");
-    dialog.querySelector('[data-wiz="nav-stay"]').focus();
+    focusOnOpen(dialog.querySelector(".wiz-dialog-card"), dialog.querySelector('[data-wiz="nav-stay"]'));
     this._navPromise = new Promise((resolve) => { this._navResolve = resolve; });
     return this._navPromise;
   }
@@ -1094,7 +1094,7 @@ export class CalibrationWizard {
     dialog.querySelector(".wiz-dialog-x").hidden = !layout.sheets();
     dialog.hidden = false;
     this._root.classList.add("has-dialog");
-    dialog.querySelector('[data-wiz="stay"]').focus();
+    focusOnOpen(dialog.querySelector(".wiz-dialog-card"), dialog.querySelector('[data-wiz="stay"]'));
   }
 
   _closeDialog(focus = true) {

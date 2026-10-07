@@ -1535,3 +1535,18 @@ test("X-3: choosing a cover in A-01 scrolls nothing: the row only shows as selec
   assert.doesNotMatch(source, /chosen\.scrollIntoView|is-selected"\)[^;]*scrollIntoView/, "no scroll on a choice");
   assert.match(source, /column\.querySelector\(`\[data-wiz="\$\{focused\}"\]`\)\?\.focus\(\{ preventScroll: true \}\)/, "the actions' focus comes back without scrolling");
 });
+
+test("X-6: a sheet opened by a tap focuses its own box (no ring on its ✕); by a key, the browser's choice stays", async () => {
+  const { readFileSync } = await import("node:fs");
+  const css = readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /:is\(dialog\.cal-dialog, \.wiz-dialog-card, \.wiz-sheet-card\):focus \{ outline: none; \}/);
+  assert.match(css, /dialog\.cal-dialog :is\(button, select, input\):focus:not\(:focus-visible\) \{ outline: none; \}/);
+  const { root, tab } = await mount();
+  const open = () => { tab.querySelector('[data-action="cal-tab-menu"]').click(); tab.querySelector('.cal-menu:not([hidden]) [data-action="cal-tab-assign"]').click(); };
+  window.dispatchEvent(new Event("pointerdown"));
+  open(); await tick();
+  const dialog = root.querySelector("#dialog-host dialog.cal-dialog");
+  assert.equal(dialog.getAttribute("tabindex"), "-1");
+  assert.equal(root.activeElement, dialog, "after a tap: the sheet itself");
+  dialog.querySelector(".cal-dialog-close").click(); await tick();
+});

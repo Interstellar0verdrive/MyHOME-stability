@@ -434,13 +434,14 @@ test("Discard asks first, closes with Escape, and leaves only once Cancel reache
   await startFor("cover.living_one");
   await press("begin"); await move(backend);
   const discard = wiz().querySelector('.wiz-head [data-wiz="exit"]');
+  window.dispatchEvent(new Event("pointerdown")); // a tap
   discard.click(); await tick();
   const dialog = wiz().querySelector(".wiz-dialog");
   assert.equal(dialog.hidden, false);
   assert.equal(dialog.querySelector("h4").textContent, "Close without saving?");
   assert.match(dialog.textContent, /A stop command is sent/);
   assert.equal(dialog.querySelector('[data-wiz="stop"]'), null, "no Stop of its own: Exit without saving sends it, and Stop stays on the page");
-  assert.equal(root.activeElement, dialog.querySelector('[data-wiz="stay"]'));
+  assert.equal(root.activeElement, dialog.querySelector(".wiz-dialog-card"), "X-6: after a tap the focus rests on the dialog's box, no ring");
   dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); await tick();
   assert.equal(dialog.hidden, true);
   assert.equal(root.activeElement, wiz().querySelector('.wiz-actions [data-wiz="endpoint"]'), "focus returns to the screen's confirming button, visible at every width");
@@ -1003,6 +1004,7 @@ test("the keyboard reaches every step: title focus, Steps sheet, and a dialog th
   await startFor("cover.living_one");
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(root.activeElement, wiz().querySelector(".wiz-title"), "a new step moves focus to its title");
+  window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" })); // from the keyboard: the focus goes to the sheet's button
   wiz().querySelector('[data-wiz="steps"]').click(); await tick();
   const sheet = wiz().querySelector(".wiz-sheet");
   assert.equal(sheet.hidden, false);
@@ -1511,6 +1513,7 @@ test("leaving the tab with a live session open asks: continue, leave and resume 
     unloads[0](event);
     assert.equal(event.defaultPrevented, true);
     // Another cover view: asked first, and nothing moves until the answer.
+    window.dispatchEvent(new Event("pointerdown")); // a tap
     view("devices").click(); await tick();
     assert.equal(panel._coverView, "calibration");
     assert.equal(nav().hidden, false);
@@ -1520,7 +1523,7 @@ test("leaving the tab with a live session open asks: continue, leave and resume 
     assert.equal(nav().querySelector(".wiz-dialog-x").hidden, true, "centred: no ✕ (R-5)");
     assert.deepEqual([...nav().querySelectorAll(".actions button")].map((button) => [button.dataset.wiz, button.textContent, button.className]),
       [["nav-discard", "Leave without saving", "wiz-leave"], ["nav-later", "Leave and resume later", ""], ["nav-stay", "Continue calibration", "primary"]]);
-    assert.equal(root.activeElement, nav().querySelector('[data-wiz="nav-stay"]'));
+    assert.equal(root.activeElement, nav().querySelector(".wiz-dialog-card"), "X-6: after a tap, the dialog's box");
     nav().querySelector('[data-wiz="nav-stay"]').click(); await tick();
     assert.equal(panel._coverView, "calibration", "Continue keeps the wizard");
     assert.equal(nav().hidden, true);
