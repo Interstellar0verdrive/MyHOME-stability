@@ -779,6 +779,9 @@ function problemScreen(screen, ctx, reason, step = false) {
     const key = `calReason_${reason}`;
     // G2-10: the actuator never confirmed the stop: S-01 says it plainly and offers to start over.
     if (reason === "not_stopped") { screen.code = "S-01"; screen.title = t("wiz_T240"); }
+    // D-31: the ended session's reason is about the measured value (an interval out of range…), not two presses: a
+    // title that says only that it is not valid.
+    if (code === "S-04") screen.title = t("wiz_T512");
     screen.body = reason === "not_stopped" ? t("wiz_T460") : reason === "stopped" && ctx.local?.misbehaved ? t("wiz_T442")
       : reason === "unexpected_stop" && ctx.view?.step === "lift" ? t("wiz_T443")
         : t(key) === key ? t("calPhase_interrupted") : t(key);

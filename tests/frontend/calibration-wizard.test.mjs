@@ -2470,3 +2470,10 @@ test("D-30: in a landscape sheet the buttons sit side by side only while their l
   assert.match(css, /dialog\.cal-dialog \.dialog-foot, \.wiz-dialog \.actions \{ flex-direction: row; flex-wrap: wrap; justify-content: end; \}/);
   assert.match(css, /dialog\.cal-dialog \.dialog-foot button, \.wiz-dialog \.actions button \{ flex: 1 1 auto; width: auto; min-width: 0; white-space: nowrap; \}/);
 });
+
+test("D-31: an ended session with a measurement out of range is titled as such, not as two presses", async () => {
+  const t = (key) => translations.it[key] || key;
+  const view = { mode: "geometry", phase: "interrupted", reason: "invalid_measurement", step: "opening", values: {}, samples: {}, readings: {}, owner: true, sequence: 9 };
+  const screen = buildScreen({ t, language: "it", stage: "session", path: "A", view, local: {}, cover: { name: "K" } });
+  assert.deepEqual([screen.code, screen.title, screen.body], ["S-04", "La misura non è valida", "Il tempo misurato deve essere compreso tra 1 e 600 secondi."]);
+});
