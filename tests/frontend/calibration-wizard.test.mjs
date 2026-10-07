@@ -2512,3 +2512,8 @@ test("D-37: the filter bars are fitted in the next frame, never inside the resiz
     root.remove();
   } finally { globalThis.ResizeObserver = original; globalThis.requestAnimationFrame = frame; }
 });
+
+test("D-43: in one column the fade over the bar shows only while the bar is docked over the content", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /background: linear-gradient\(to top, var\(--panel-surface\), transparent\); opacity: 0; \}\s*\.wiz\.is-docked > \.wiz-frame > \.wiz-columns > \.wiz-actions::before \{ opacity: 1; \}/);
+});
