@@ -527,12 +527,17 @@ function previewScreen(screen, ctx, tx, n, values, stop) {
     quarter_close: ["26", "27", "wiz_T130"], three_quarter_close: ["28", "29", "wiz_T134"], check: ["30", "31", "wiz_T138"] };
   const stageText = { back_down: "wiz_T120", back_up: "wiz_T084", quarter_open: "wiz_T121", three_quarter_open: "wiz_T125",
     quarter_close: "wiz_T129", three_quarter_close: "wiz_T133", check: "wiz_T137", bottom: "wiz_T171", half_travel: "wiz_T172" };
+  // D-46: path B is only a preview and its box says nothing moves, so its positionings are not drawn as such: what
+  // would happen live, the stages it would run, no countdown, and the state in place of Stop. (The fine-tuning and
+  // readings-only previews keep Stop, which leads to S-01 as live.)
+  const still = [{ id: "preview-still", label: t("wiz_T508"), kind: "state" }];
   if (view.phase === "positioning") {
-    if (profile && view.step === "open_full") return Object.assign(screen, { code: "B-03", title: t("wiz_T027"),
-      wait: { text: tx("wiz_T170", values), stages: [], progress: stagesBar(view) }, actions: [stop] });
+    if (profile && view.step === "open_full") return Object.assign(screen, { code: "B-03", title: t("wiz_T505"),
+      wait: { text: tx("wiz_T506", values), stages: [], progress: false }, actions: still });
     const stages = view.stages.map((stage, index) => ({ text: tx(stageText[stage.key], { seconds: n(stage.seconds, 0) }),
       state: index < view.stage_index ? "done" : index === view.stage_index ? "current" : "future" }));
-    return Object.assign(screen, { code: profile ? "B-05" : p(readingCodes[view.step][0]), title: t("wiz_T027"),
+    if (profile) return Object.assign(screen, { code: "B-05", title: t("wiz_T505"), wait: { text: t("wiz_T507"), stages, progress: false }, actions: still });
+    return Object.assign(screen, { code: p(readingCodes[view.step][0]), title: t("wiz_T027"),
       wait: { text: t("wiz_T086"), stages, progress: stagesBar(view) }, actions: [stop] });
   }
   if (view.phase === "reading") {
@@ -540,7 +545,7 @@ function previewScreen(screen, ctx, tx, n, values, stop) {
       field: { label: t("wiz_T064"), hint: t("wiz_T066"), min: 20, max: 500, kind: "travel" },
       actions: [{ id: "reading", label: t("wiz_T051"), kind: "primary" }] });
     if (profile) return Object.assign(screen, { code: "B-06", title: t("wiz_T138"),
-      body: tx("wiz_T173", { expected: n(view.expected_cm, 0), travel: n(view.travel_cm, 0) }),
+      body: tx("wiz_T509", { expected: n(view.expected_cm, 0), travel: n(view.travel_cm, 0) }),
       field: { label: t("wiz_T064"), hint: view.expected_cm != null ? tx("wiz_T123", { cm: n(view.expected_cm, 0) }) : t("wiz_T491"), min: 0, max: 10000, kind: "height" },
       actions: [{ id: "reading", label: t("wiz_T051"), kind: "primary" }, { id: "repeat", label: t("wiz_T033"), kind: "secondary" }] });
     const [, number, title] = readingCodes[view.step];

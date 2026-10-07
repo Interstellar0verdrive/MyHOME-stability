@@ -401,7 +401,9 @@ export class CalibrationWizard {
         list.querySelector(".wiz-wait-slot")?.replaceWith(meter);
       }
       list.hidden = !screen.wait.stages.length;
-      // The bar is always there: the share already run, or moving back and forth while the duration is unknown.
+      // The bar is there for every run: the share already run, or moving back and forth while the duration is unknown;
+      // not where nothing runs (`progress: false`, path B's preview, D-46).
+      meter.hidden = screen.wait.progress === false;
       const bar = wait.querySelector(".wiz-progress"), share = screen.wait.progress?.value ?? null;
       bar.classList.toggle("is-indeterminate", share == null);
       if (share == null) bar.removeAttribute("aria-valuenow");
