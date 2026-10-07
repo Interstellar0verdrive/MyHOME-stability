@@ -157,9 +157,12 @@ export class CalibrationTab {
       if (typeof ResizeObserver === "function") {
         const host = context.host;
         let width = 0;
+        // D-37: the band and the cards are set in the next frame, outside the observer's delivery.
         new ResizeObserver(([entry]) => {
           const now = Math.round(entry.contentRect.width);
-          if (now !== width) { width = now; this._band(); this._alignCards(); }
+          if (now === width) return;
+          width = now;
+          (globalThis.requestAnimationFrame || ((callback) => setTimeout(callback, 16)))(() => { this._band(); this._alignCards(); });
         }).observe(host);
       }
     }

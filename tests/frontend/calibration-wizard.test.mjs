@@ -2494,3 +2494,21 @@ test("D-33: the stepper's times always carry one decimal", async () => {
   const ascent = screen.stepper.phases.find((phase) => phase.key === "ascent").substeps.map((item) => item.value);
   assert.deepEqual(ascent.slice(0, 2), ["5.0 s · 3 cm", "22.0 s"]);
 });
+
+test("D-37: the filter bars are fitted in the next frame, never inside the resize observer's delivery", async () => {
+  const original = globalThis.ResizeObserver, frame = globalThis.requestAnimationFrame;
+  let deliver = null; const frames = [];
+  globalThis.ResizeObserver = class { constructor(callback) { deliver = callback; } observe() {} disconnect() {} };
+  globalThis.requestAnimationFrame = (callback) => { frames.push(callback); return frames.length; };
+  try {
+    const { fitBars } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-layout.js?d37");
+    const root = document.createElement("div"); root.innerHTML = '<div class="cal-filterbar"><div class="cal-filterbar-row"></div></div>';
+    document.body.append(root);
+    fitBars(root);
+    assert.equal(typeof deliver, "function");
+    const before = frames.length;
+    deliver([{ target: root.firstElementChild }]);
+    assert.equal(frames.length, before + 1, "the fit waits for the next frame");
+    root.remove();
+  } finally { globalThis.ResizeObserver = original; globalThis.requestAnimationFrame = frame; }
+});

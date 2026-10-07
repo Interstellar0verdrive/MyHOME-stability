@@ -93,8 +93,13 @@ export function fitBars(root) {
   for (const bar of root?.querySelectorAll?.(".cal-filterbar") || []) {
     fitBar(bar);
     if (typeof ResizeObserver !== "function" || watched.has(bar)) continue;
+    // D-37: measured in the next frame, so a bar changing its own state never re-enters the observer's delivery
+    // («ResizeObserver loop completed with undelivered notifications»).
     observer ||= new ResizeObserver((entries) => {
-      for (const { target } of entries) if (target.isConnected && String(target.clientWidth) !== target.dataset.width) fitBar(target);
+      const targets = entries.map((entry) => entry.target);
+      (globalThis.requestAnimationFrame || ((callback) => setTimeout(callback, 16)))(() => {
+        for (const target of targets) if (target.isConnected && String(target.clientWidth) !== target.dataset.width) fitBar(target);
+      });
     });
     observer.observe(bar);
     watched.add(bar);
