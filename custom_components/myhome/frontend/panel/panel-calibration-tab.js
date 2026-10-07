@@ -876,7 +876,7 @@ export class CalibrationTab {
     if (item && this._wizard?.handles?.(session)) { this._openWizard({ start: "resume", session, item }); return; }
     const { hass, t } = this._context;
     const body = this._openDialog({ title: t(session.batch ? "wiz_T364" : "calTitle"), subtitle: session.batch ? "" : item?.name || session.entity_id,
-      icon: session.batch ? "mdi:format-list-numbered" : "mdi:timer-outline" });
+      icon: session.batch ? "mdi:format-list-numbered" : "mdi:timer-outline", hosted: true });
     this._calibration.open({ host: body, hass, t, entity: { entry_id: entryId, entity_id: session.entity_id }, resume: session,
       revision: row.data?.revision, onCancel: () => this._dialogDone(), onSaved: () => this._dialogDone() });
   }
@@ -885,7 +885,11 @@ export class CalibrationTab {
    * A dialog with the look of the maintainer's profile dialog, in the panel's dialog host. Closing it leaves an open
    * session as closing the profile dialog does: the session keeps running in Home Assistant.
    */
-  _openDialog({ title, subtitle = "", icon }) {
+  /**
+   * `hosted`: the dialog hosts the maintainer's view, which has its own Stop and Cancel/Close bar: the dialog's own
+   * «Chiudi» is left out and its ✕ shown at every size, so there is one way to close and one bar (D-17, D-18).
+   */
+  _openDialog({ title, subtitle = "", icon, hosted = false }) {
     this._closeDialog();
     // U-4: a row's ⋮ menu that opened the dialog closes with it, not at the next redraw.
     this._menu = null;
@@ -895,9 +899,9 @@ export class CalibrationTab {
     dialogHost.innerHTML = `<dialog class="cover-profile-dialog cal-dialog" aria-labelledby="cal-dialog-title">
       <header class="dialog-head"><div class="dialog-icon" aria-hidden="true"><ha-icon icon="${esc(icon)}"></ha-icon></div>
         <div class="dialog-head-text"><h2 id="cal-dialog-title">${esc(title)}</h2>${subtitle ? `<p class="muted">${esc(subtitle)}</p>` : ""}</div>
-        <button type="button" class="icon-button cal-dialog-x" ${layout.sheets() ? "" : "hidden"} aria-label="${esc(t("close"))}" title="${esc(t("close"))}"><ha-icon icon="mdi:close" aria-hidden="true"></ha-icon></button></header>
+        <button type="button" class="icon-button cal-dialog-x" ${hosted || layout.sheets() ? "" : "hidden"} aria-label="${esc(t("close"))}" title="${esc(t("close"))}"><ha-icon icon="mdi:close" aria-hidden="true"></ha-icon></button></header>
       <div class="cal-dialog-body"></div>
-      <footer class="dialog-foot"><button type="button" class="cal-dialog-close">${esc(t("close"))}</button></footer></dialog>`;
+      <footer class="dialog-foot" ${hosted ? "hidden" : ""}><button type="button" class="cal-dialog-close">${esc(t("close"))}</button></footer></dialog>`;
     const dialog = dialogHost.querySelector("dialog");
     dialog.querySelector(".cal-dialog-close").onclick = () => this._dialogDone();
     dialog.querySelector(".cal-dialog-x").onclick = () => this._dialogDone();
@@ -1250,7 +1254,7 @@ export class CalibrationTab {
     this._batch = null;
     this._context.host.innerHTML = "";
     this._render();
-    const body = this._openDialog({ title: t("wiz_T364"), icon: "mdi:format-list-numbered" });
+    const body = this._openDialog({ title: t("wiz_T364"), icon: "mdi:format-list-numbered", hosted: true });
     this._calibration.open({ host: body, hass, t, entity: { entry_id: batch.entryId }, mode: "automatic", entity_ids: ids, revision: batch.data.revision,
       onCancel: () => this._dialogDone(), onSaved: () => this._dialogDone() });
   }

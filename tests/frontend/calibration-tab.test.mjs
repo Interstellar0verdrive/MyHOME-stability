@@ -440,7 +440,11 @@ test("a session in progress marks its cover, blocks new measurements and opens a
   assert.equal(dialog.querySelector("#cal-paused").hidden, false);
   assert.ok(tab.querySelector(".cal-list"), "the list stays behind the dialog");
   assert.equal(commands(calls).length, 0);
-  dialog.querySelector(".cal-dialog-close").click(); await tick();
+  // D-17/D-18: one bar (the view's own Stop and Cancel/Close), closed by its ✕ at every size; no entity id line.
+  assert.equal(dialog.querySelector(".dialog-foot").hidden, true);
+  assert.equal(dialog.querySelector(".cal-dialog-x").hidden, false);
+  assert.ok(dialog.querySelector(".cal-resume-entity"), "the view's entity id line is marked, and hidden by the stylesheet");
+  dialog.querySelector(".cal-dialog-x").click(); await tick();
   assert.equal(root.querySelector("#dialog-host dialog"), null);
 });
 
@@ -1384,7 +1388,7 @@ test("D-01: in a landscape sheet the maintainer's view keeps its body: compact b
   const css = readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   const short = css.slice(css.indexOf("@media (max-height: 499px) and (orientation: landscape) {\n  dialog.cal-dialog { max-height"));
   const block = short.slice(0, short.indexOf("\n}\n"));
-  assert.match(block, /dialog\.cal-dialog:has\(\.calibration-safety-actions\) \.dialog-foot \{ display: none; \}/);
+  assert.match(css, /dialog\.cal-dialog \.cal-resume-entity \{ display: none; \}/, "D-18");
   assert.match(block, /dialog\.cal-dialog \.calibration-safety-actions \{ bottom: -4px; padding-block: 8px; \}/, "flush with the sheet's bottom");
   assert.match(block, /dialog\.cal-dialog :is\(\.calibration-safety-actions, \.cal-actions\) button \{ min-height: 40px;/);
 });

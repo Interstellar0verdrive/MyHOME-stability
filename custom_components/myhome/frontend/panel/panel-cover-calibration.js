@@ -183,7 +183,7 @@ export class CoverCalibration {
         <p class="muted cal-help">${esc(t(geometry ? "calGeometryHelp" : quick ? (quick === "opening" ? "calQuickOpeningHelp" : "calQuickClosingHelp") : automatic ? "calAutomaticHelp" : "calHelp"))}</p>
         <p class="muted">${esc(t("calRecoveryHelp"))}</p>
       </details>
-      ${context.resume ? `<p>${esc(context.resume.entity_id)}</p>` : ""}
+      ${context.resume ? `<p class="cal-resume-entity">${esc(context.resume.entity_id)}</p>` : ""}
       ${context.entity_ids ? `<p class="notice">${esc(t("calBatchHelp"))}</p><ol id="cal-targets"></ol>` : ""}
       <div class="cal-status">
         ${visualMarkup()}

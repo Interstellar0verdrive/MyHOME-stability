@@ -699,6 +699,9 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-note.is-warning { border-color: color-mix(in srgb, var(--panel-warning) 75%, transparent);
   background: color-mix(in srgb, var(--panel-warning) 8%, var(--panel-surface)); color: var(--primary-text-color, #182b37); }
 /* On dark themes the warning text takes the note's own tint instead of plain white. */
+/* D-18: hosting the maintainer's view, the tab's dialog names the cover in its title: the view's own line with the
+   entity id is left out. */
+dialog.cal-dialog .cal-resume-entity { display: none; }
 /* D-14: native controls (radios, drop-downs) follow the theme: on a dark one an unticked radio is a dark ring, not a
    white disc that reads as ticked. */
 [data-theme="dark"] { color-scheme: dark; }
@@ -1459,9 +1462,8 @@ dialog.cal-dialog .dialog-head { justify-content: space-between; padding-block: 
 @media (max-height: 499px) and (orientation: landscape) {
   dialog.cal-dialog { max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); }
   dialog.cal-dialog { width: min(100%, 560px); margin: auto auto 0; }
-  /* D-01: the maintainer's view in a landscape sheet keeps its body: its Stop/Cancel bar and buttons are compact, the
-     title row is tighter, and the sheet's own «Chiudi» gives way to the ✕ beside the title (always there on a sheet). */
-  dialog.cal-dialog:has(.calibration-safety-actions) .dialog-foot { display: none; }
+  /* D-01: the maintainer's view in a landscape sheet keeps its body: its Stop/Cancel bar and buttons are compact and
+     the title row is tighter (the sheet's own «Chiudi» is already left out, D-18). */
   dialog.cal-dialog:has(.calibration-safety-actions) .dialog-head { padding-block: 8px; }
   dialog.cal-dialog .calibration-safety-actions { bottom: -4px; padding-block: 8px; }
   dialog.cal-dialog :is(.calibration-safety-actions, .cal-actions) button { min-height: 40px; padding-block: 6px; }
