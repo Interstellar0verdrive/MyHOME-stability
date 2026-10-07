@@ -440,10 +440,11 @@ export class CalibrationTab {
         this._howItWorks(), "cal-tab-empty")}`;
     } else {
       // The buttons line up with the introduction, not with the title above it.
-      html = `<h3 class="cal-tab-title">${esc(t("calTabTitle"))}</h3><div class="cal-tab-head"><p class="muted cal-tab-intro">${esc(t("calTabIntro"))}</p>
+      // Q-25: the title with «Come funziona ›» under it, and the two actions on the title's row (the primary first).
+      html = `<div class="cal-tab-head"><div class="cal-tab-heading"><h3 class="cal-tab-title">${esc(t("calTabTitle"))}</h3>${this._howItWorks(" cal-tab-how")}</div>
         <div class="actions cal-tab-actions">
-          <button type="button" data-action="cal-tab-batch" ${busy || loading ? "disabled" : ""}><ha-icon icon="mdi:format-list-numbered" aria-hidden="true"></ha-icon><span>${esc(t("wiz_T363"))}</span></button>
           ${this._wizard ? `<button type="button" class="primary" data-action="cal-tab-measure" ${busy || loading || !counts.all ? "disabled" : ""}><ha-icon icon="mdi:ruler" aria-hidden="true"></ha-icon><span>${esc(t("calTabMeasureOne"))}</span></button>` : ""}
+          <button type="button" data-action="cal-tab-batch" ${busy || loading ? "disabled" : ""}><ha-icon icon="mdi:format-list-numbered" aria-hidden="true"></ha-icon><span>${esc(t("wiz_T496"))}</span></button>
         </div></div>
         ${this._filterBar({ extra: " cal-tab-filters", select: this._filterSelect(counts, this._filter),
           count: this._countLine(counts),
@@ -523,9 +524,9 @@ export class CalibrationTab {
   }
 
   /** «Come funziona» under an empty state (T-04, T-04b; R-7): it opens in place. */
-  _howItWorks() {
+  _howItWorks(extra = "") {
     const { t } = this._context;
-    return `<details class="cal-empty-how"><summary>${esc(t("calTabHowItWorks"))}</summary><p class="muted">${esc(t("calTabHowItWorksBody"))}</p></details>`;
+    return `<details class="cal-empty-how${extra}"><summary>${esc(t("calTabHowItWorks"))}</summary><p class="muted">${esc(t("calTabHowItWorksBody"))}</p></details>`;
   }
 
   /** T-04 / T-04b: an empty state as a card: the shutter icon, a title, its explanation and an optional extra. */

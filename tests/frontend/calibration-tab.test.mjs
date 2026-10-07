@@ -1080,9 +1080,9 @@ test("the list's bands by content width (1200/1016/700) and the wizard's layouts
   assert.match(calibration, /#cover-calibration-tab \{ container: caltab \/ inline-size; \}/, "the tab's width decides, not the window's");
   const widths = [...calibration.matchAll(/@(media|container caltab|container wizbar|container calblock|container calcards) ([^{]+)\{/g)].flatMap(([, kind, query]) =>
     [...query.matchAll(/(min|max)-width: (\d+)px/g)].map(([, edge, px]) => `${kind === "media" ? "window" : kind.endsWith("wizbar") ? "bar" : kind.endsWith("calblock") ? "block" : kind.endsWith("calcards") ? "cards" : "tab"} ${edge}-${px}`));
-  assert.deepEqual([...new Set(widths)].sort(), ["bar min-560", "block min-480", "cards min-600", "tab max-1015", "tab max-599", "tab max-699", "tab max-999",
+  assert.deepEqual([...new Set(widths)].sort(), ["bar min-560", "block min-480", "cards min-600", "tab max-1015", "tab max-699", "tab max-999",
     "tab min-1000", "tab min-1016", "tab min-1200", "tab min-700", "window max-719", "window min-720"],
-    "the content at 1200/1016/700 (list), 600 (header buttons), 700 and 1000 (wizard); the actions bar at 560; a details block at 480 (pairs in two halves); the filter bar measured (Q-24); the window at 720 (phone, dialogs; with 500 px of height)");
+    "the content at 1200/1016/700 (list), 700 and 1000 (wizard); the actions bar at 560; a details block at 480 (pairs in two halves); the filter bar measured (Q-24); the window at 720 (phone, dialogs; with 500 px of height)");
   // Q-3 parity: the script's list bands are the stylesheet's container rules.
   const { LIST_BANDS, listBand } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-layout.js");
   assert.match(calibration, new RegExp(`@container caltab \\(min-width: ${LIST_BANDS.table}px\\) \\{`));
@@ -1295,5 +1295,18 @@ test("the lists in the wizard are cards, with the bar's counts above its drop-do
   assert.match(css, /\.cal-batch-rows \{ display: grid; gap: 12px; container: calcards \/ inline-size; \}/);
   assert.match(css, /\.cal-batch-row \{[^}]*border: 1px solid var\(--panel-border\); border-radius: 12px; background: var\(--panel-surface\);/);
   assert.match(css, /@container calcards \(min-width: 600px\) \{\s*\.cal-batch-row \{ grid-template-columns: auto minmax\(0, 1fr\) auto; grid-template-areas: "lead name status"; \}/);
+});
+
+test("the tab's head: title, «Come funziona ›» under it, «Calibra una tapparella» (primary) then «Calibra in sequenza» (Q-25)", async () => {
+  const { tab } = await mount({ language: "it" });
+  const head = tab.querySelector(".cal-tab-head");
+  assert.equal(head.querySelector(".cal-tab-heading > .cal-tab-title").textContent, "Calibrazione");
+  assert.equal(head.querySelector(".cal-tab-heading > .cal-tab-how summary").textContent, "Come funziona");
+  assert.equal(tab.querySelector(".cal-tab-intro"), null, "no intro paragraph");
+  assert.deepEqual([...head.querySelectorAll(".cal-tab-actions > button")].map((button) => [button.dataset.action, button.className, button.textContent.trim()]),
+    [["cal-tab-measure", "primary", "Calibra una tapparella"], ["cal-tab-batch", "", "Calibra in sequenza"]]);
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.cal-tab-head \{[^}]*margin: 22px 0 18px; \}/, "32 px above (after the views bar) and below (with the tab's 14 px gap); 24 on the phone");
+  assert.match(css, /\.cal-tab-how summary::after \{ content: " ›";/);
 });
 

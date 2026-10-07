@@ -418,6 +418,7 @@ export const translations = {
     wiz_T493: "No cover matches the filter",
     wiz_T494: "Change or clear the filter to see the other covers.",
     wiz_T495: "No timed covers on these gateways",
+    wiz_T496: "Calibrate in sequence",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1300,6 +1301,7 @@ export const translations = {
     wiz_T493: "Nessuna tapparella corrisponde al filtro",
     wiz_T494: "Cambia o togli il filtro per vedere le altre tapparelle.",
     wiz_T495: "Nessuna tapparella a tempo su questi gateway",
+    wiz_T496: "Calibra in sequenza",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

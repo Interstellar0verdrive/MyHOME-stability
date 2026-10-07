@@ -653,9 +653,14 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 #cover-calibration-tab { container: caltab / inline-size; }
 .cal-tab { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
 .cal-tab h3 { margin: 0; font-size: 18px; }
-.cal-tab-title { margin-bottom: -8px !important; }
-.cal-tab-head { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; justify-content: space-between; }
-.cal-tab-intro { flex: 1 1 420px; min-width: 0; }
+/* Q-25: the tab's head is its title with «Come funziona ›» under it and, on the same row at the right, «Calibra una
+   tapparella» (primary) and «Calibra in sequenza»; 32 px above it and 32 px down to the filter bar (24 on the phone). */
+.cal-tab-head { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; justify-content: space-between; margin: 22px 0 18px; }
+.cal-tab-heading { display: grid; justify-items: start; gap: 4px; min-width: 0; }
+.cal-tab-how summary { min-height: 0; }
+.cal-tab-how summary::after { content: " ›"; white-space: pre; }
+.cal-tab-how[open] summary::after { content: " ⌄"; }
+.cal-tab-how > p { max-width: 640px; margin: 4px 0 0; }
 .cal-tab-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 /* Q-12 (Figma «R · Breakpoint», «Chip»): status, profile and filter chips are one shape: 24 px high, 4 px × 10 px
    inside (3 px plus the 1 px border), 12 px text, filled with their colour at 12 % and bordered with it at 20 %:
@@ -701,13 +706,10 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-sort { display: inline-flex; align-items: center; gap: 4px; min-height: 0; padding: 2px 0; border: 0; background: transparent; color: inherit; font: inherit; }
 .cal-sort:hover { background: transparent; color: var(--primary-text-color, #182b37); }
 .cal-sort ha-icon { --mdc-icon-size: 16px; width: 16px; height: 16px; color: var(--panel-text-2); }
-/* D17: the two buttons stack, at full width, only when the tab itself is narrow; side by side otherwise (a landscape
-   phone keeps them on one row). */
-@container caltab (max-width: 599px) {
-  /* T-01 M: the two buttons at full width, «Misura una tapparella» (primary) first; the summary above the chips. */
-  .cal-tab-head { flex-direction: column; align-items: stretch; gap: 12px; }
-  .cal-tab-intro { flex: none; }
-  .cal-tab-actions { flex-direction: column-reverse; flex-wrap: nowrap; }
+/* Q-25: on the phone the two buttons stack at full width under the title and its link, the primary first. */
+@media (max-width: 719px) and (min-height: 500px), (max-width: 719px) and (orientation: portrait) {
+  .cal-tab-head { flex-direction: column; align-items: stretch; gap: 12px; margin: 14px 0 10px; }
+  .cal-tab-actions { flex-direction: column; flex-wrap: nowrap; }
   .cal-tab-actions button { width: 100%; min-height: 48px; justify-content: center; font-size: 14px; }
   .cal-tab-actions button:not(.primary) { background: transparent; }
 }
@@ -1017,7 +1019,6 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-batch-row .cal-batch-profile:has(.cal-profile-chip) { display: block; max-width: 100%; }
 .wiz-main .cal-list { border: 0; border-radius: 0; background: transparent; }
 .cal-batch-limit:empty { display: none; }
-.cal-batch .cal-tab-intro { flex: none; }
 @media (max-width: 719px), (max-height: 499px) and (orientation: landscape) {
   /* GM2: on the phone the reading field takes the content's width (more specific than the base rule, which comes later). */
   .wiz-main .wiz-field { max-width: none; }
