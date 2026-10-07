@@ -2243,7 +2243,7 @@ test("a value the field refuses says why under it, never a silent red (G3-4)", a
   assert.equal(error().hidden, true);
   await type("25");
   assert.equal(error().hidden, false);
-  assert.equal(error().textContent, "Valore oltre il massimo (20 cm): controlla la misura.");
+  assert.equal(error().textContent, "Valore oltre il massimo (20 cm): controlla la misurazione.");
   assert.equal(wiz().querySelector('[name="reading_cm"]').getAttribute("aria-invalid"), "true");
   assert.match(wiz().querySelector('[name="reading_cm"]').getAttribute("aria-describedby"), /wiz-field-error/);
   assert.equal(actions().includes("reading"), false, "nothing sent");
@@ -2486,7 +2486,7 @@ test("D-31: an ended session with a measurement out of range is titled as such, 
   const t = (key) => translations.it[key] || key;
   const view = { mode: "geometry", phase: "interrupted", reason: "invalid_measurement", step: "opening", values: {}, samples: {}, readings: {}, owner: true, sequence: 9 };
   const screen = buildScreen({ t, language: "it", stage: "session", path: "A", view, local: {}, cover: { name: "K" } });
-  assert.deepEqual([screen.code, screen.title, screen.body], ["S-04", "La misura non è valida", "Il tempo misurato deve essere compreso tra 1 e 600 secondi."]);
+  assert.deepEqual([screen.code, screen.title, screen.body], ["S-04", "La misurazione non è valida", "Il tempo misurato deve essere compreso tra 1 e 600 secondi."]);
 });
 
 test("D-32: in the summary a cover without slats reads «No» for the slat time, not «0 s»", async () => {

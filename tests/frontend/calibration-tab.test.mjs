@@ -514,7 +514,7 @@ test("several covers in sequence are chosen in a view of the tab, not a dialog, 
   assert.equal(tab.querySelector(".cal-batch .wiz-body").textContent,
     "Scegli le tapparelle da calibrare: si calibreranno una dopo l'altra, nell'ordine in cui le selezioni, da sole, senza premere nulla durante le corse.");
   const note = tab.querySelector(".cal-batch-note");
-  assert.equal(note.textContent, "Servono attuatori che segnalino l'arresto reale: se i tuoi non lo fanno, usa la calibrazione guidata, una tapparella alla volta. Annullare o un errore di misura scartano l'intera sequenza non salvata.",
+  assert.equal(note.textContent, "Servono attuatori che segnalino l'arresto reale: se i tuoi non lo fanno, usa la calibrazione guidata, una tapparella alla volta. Annullare o un errore di misurazione scartano l'intera sequenza non salvata.",
     "the yellow note only around the actuators");
   assert.deepEqual([...note.querySelectorAll("strong")].map((bold) => bold.textContent), ["Servono attuatori che segnalino l'arresto reale"]);
   assert.ok(note.classList.contains("is-warning"));
