@@ -145,3 +145,19 @@ test("leaving a preview says that nothing was saved and nothing moved (U-5)", as
   assert.equal(translations.it.wiz_T497, "L'anteprima si chiude: non è stato salvato niente e nessuna tapparella si è mossa.");
 });
 
+test("a preview reading beyond the travel + 50 cm shows why it is refused, in the reading's screen (U-7)", async () => {
+  const overview = sampleOverview();
+  overview.covers.find((cover) => cover.entity_id === "cover.living_one").travel_cm = null;
+  const { wiz, code, press, type, startFor } = await mount({ stageMs: 0, overview });
+  await startFor("cover.living_one", "B");
+  await press("profile");
+  await press("begin");
+  await waitFor(() => code() === "B-04", "B-04");
+  await type("196");
+  await waitFor(() => wiz().querySelector('.wiz-frame [name="reading_cm"]'), "the check's reading");
+  const before = code();
+  await type("400");
+  assert.equal(code(), before, "the same screen");
+  assert.ok(wiz().textContent.includes(translations.en.profileError_invalid_reading), "the refusal is shown");
+});
+
