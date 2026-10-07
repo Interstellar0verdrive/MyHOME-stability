@@ -692,7 +692,10 @@ function savedScreen(screen, ctx, tx, values) {
     screen.illustration = false;
     return Object.assign(screen, { code: path === "B" ? "B-09" : path === "C" ? "C-34" : "A-34", title: t("wiz_T320"),
       body: local.baseSaved ? t("wiz_T322") : tx("wiz_T321", values),
-      actions: path === "B" ? [close("B")]
+      // U-8: at the end of a preview nothing is lost: on B-09 and C-34 «Chiudi» is the primary, not red (A-34 keeps its
+      // primary «another» and Close as red text).
+      actions: path === "B" ? [{ ...close("B"), kind: "primary" }]
+        : path === "C" ? [{ ...close("C"), kind: "primary" }, { id: "another", label: t("wiz_T156"), kind: "secondary" }, { id: "open-cover", label: t("wiz_T157"), kind: "secondary" }]
         : [{ id: "another", label: t("wiz_T156"), kind: "primary" }, { id: "open-cover", label: t("wiz_T157"), kind: "secondary" }, close(path)] });
   }
   if (path === "B") return Object.assign(screen, { code: "B-09", title: t("wiz_T154"),

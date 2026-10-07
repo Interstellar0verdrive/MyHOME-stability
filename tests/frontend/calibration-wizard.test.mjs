@@ -1075,7 +1075,7 @@ test("Close keeps each mockup's style: B-09 red filled, A-34 red text, C-34 and 
   assert.deepEqual(close(saved("A")), ["A-34", "link"]);
   assert.deepEqual(close(saved("C")), ["C-34", "danger-outline"]);
   assert.deepEqual([close(saved("B", true)), close(saved("A", true)), close(saved("C", true))],
-    [["B-09", "danger"], ["A-34", "link"], ["C-34", "danger-outline"]], "the end of a preview uses the style of the screen it reuses");
+    [["B-09", "primary"], ["A-34", "link"], ["C-34", "primary"]], "U-8: at the end of a preview Close is the primary on B-09 and C-34");
   const expired = buildScreen({ t, language: "it", stage: "session", path: "A", cover: { name: "Cucina 2" }, status: { expired: true },
     view: { mode: "geometry", phase: "briefing", step: "lift", values: {}, samples: {}, readings: {}, owner: true, sequence: 3 } });
   assert.deepEqual(close(expired), ["S-06", "danger-outline"]);
