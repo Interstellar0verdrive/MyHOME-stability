@@ -1823,10 +1823,11 @@ test("counts of zero and one use their own forms", () => {
     profiles: [{ id: "p", name: "alte", followers: followerNames.length, followerNames, measuredOn: "Sala 1" }] }).choice.options[0];
   assert.equal(b01([]).label, "alte · misurato su Sala 1");
   assert.deepEqual(b01([]).note, ["Nessuna tapparella lo segue"]);
-  assert.deepEqual(b01(["Cover K_1L"]).note, ["Seguito da Cover K_1L"]);
-  assert.deepEqual(b01(["Cover K_1L", "Cover A_1L"]).note, ["Seguito da Cover K_1L e Cover A_1L"]);
-  assert.deepEqual(b01(["X", "Y", "Z"]).note, ["Seguito da X, Y e Z"]);
-  assert.deepEqual(b01(["X", "Y", "Z", "W", "V"]).note, ["Seguito da X, Y, Z e altre 2"]);
+  assert.deepEqual(b01(["Tapparella Cucina"]).note, ["Seguito da Tapparella Cucina"]);
+  assert.deepEqual(b01(["Tapparella Cucina", "Portafinestra Terrazza"]).note, ["Seguito da Tapparella Cucina e Portafinestra Terrazza"]);
+  assert.deepEqual(b01(["Tapparella Bagno", "Tapparella Studio", "Tapparella Corridoio"]).note, ["Seguito da Tapparella Bagno, Tapparella Studio e Tapparella Corridoio"]);
+  assert.deepEqual(b01(["Tapparella Bagno", "Tapparella Studio", "Tapparella Corridoio", "Tapparella Cucina", "Portafinestra Terrazza"]).note,
+    ["Seguito da Tapparella Bagno, Tapparella Studio, Tapparella Corridoio e altre 2"]);
   const en = (key) => translations.en[key] || key;
   assert.deepEqual(buildScreen({ t: en, language: "en", stage: "profile", path: "B", cover: cover([]), local: {},
     profiles: [{ id: "p", name: "tall", followerNames: ["X", "Y", "Z", "W"], measuredOn: "Hall" }] }).choice.options[0].note, ["Followed by X, Y, Z and 1 more"]);

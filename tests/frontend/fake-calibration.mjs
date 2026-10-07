@@ -40,7 +40,7 @@ export function sampleOverview() {
 
 export function createFakeBackend({ language = "en", inventory = coverInventory([["cover.living_one", "Living room shutter 1", "living"],
   ["cover.kitchen_two", "Kitchen shutter 2", "kitchen"], ["cover.living_three", "Living room shutter 3", "living"]]), overview = sampleOverview(),
-  session: initial = null, owner = true } = {}) {
+  session: initial = null, owner = true, ownerPresent = true, targets = [], maxBatch = 4, persist = false } = {}) {
   const calls = [], subscriptions = [];
   let session = initial, listener = null, clock = 0, profilesListener = null;
   const backend = {
@@ -51,7 +51,7 @@ export function createFakeBackend({ language = "en", inventory = coverInventory(
       const { _after_stop, _after_position, _started, ...public_ } = session;
       void _after_stop; void _after_position;
       return { ...public_, elapsed: _started == null ? null : Math.round((clock - _started) * 100) / 100,
-        owner, read_only: !owner, attachment: "attachment-1", attached: true, owner_present: true, recoverable: !["saved", "cancelled", "interrupted"].includes(session.phase), ...extra };
+        owner, read_only: !owner, attachment: "attachment-1", attached: true, owner_present: ownerPresent, recoverable: !["saved", "cancelled", "interrupted"].includes(session.phase), ...extra };
     },
     emit() { if (session.mode === "geometry") refresh(); session.sequence += 1; listener?.(backend.view()); },
     /** The bus confirms the movement asked by `next`, `open` or `close`. */
@@ -74,6 +74,10 @@ export function createFakeBackend({ language = "en", inventory = coverInventory(
       session.phase = "geometry_wait_stop"; session._after_stop = "reading";
       backend.emit();
     },
+    /** Presence of the owning tab as Home Assistant reports it (`owner_present`). */
+    setPresence(present) { ownerPresent = present; },
+    /** Another tab presses Stop: the session ends and every subscriber gets the view. */
+    stopFromElsewhere() { session.phase = "interrupted"; session.reason = "stopped"; session._started = null; backend.emit(); },
     interrupt(reason) { session.phase = "interrupted"; session.reason = reason; session._started = null; backend.emit(); },
   };
 
@@ -160,6 +164,11 @@ export function createFakeBackend({ language = "en", inventory = coverInventory(
           // As in Home Assistant, a start without `mode` is the guided measurement.
           session = message.mode === "geometry" ? startGeometry(message) : startGuided(message);
           refresh();
+        } else if (message.type === "myhome/cover_calibration/batch_start") {
+          // A sequence: the automatic cycle of each cover in turn (`cover_index`), confirmed with `run`.
+          session = { entry_id: message.entry_id, entity_id: message.entity_ids[0], session_id: "session-1", sequence: 1, revision: message.revision,
+            mode: "automatic", phase: "confirm_automatic", reason: null, values: {}, stop_requested: false, save_modes: ["new"], run_index: 0,
+            cover_index: 0, results: [], targets: message.entity_ids.map((entity_id) => ({ entity_id })), _started: null };
         } else if (message.type === "myhome/cover_calibration/resume") {
           if (!session || session.session_id !== message.session_id) throw Object.assign(new Error("expired"), { code: "calibration_expired" });
           if (message.claim) owner = true;
@@ -188,9 +197,27 @@ export function createFakeBackend({ language = "en", inventory = coverInventory(
           if (session.phase !== "review") throw Object.assign(new Error("step"), { code: "calibration_step" });
           if (!session.save_modes.includes(message.save_mode || "new")) throw Object.assign(new Error("mode"), { code: "invalid_profile" });
           session.phase = "saved"; session.saved = { save_mode: message.save_mode, name: message.name }; session.sequence += 1;
+          // `persist`: the store is written as Home Assistant would (a new profile followed by this cover), then announced.
+          if (persist && message.name) {
+            const id = `profile_${overview.profiles.length + 1}`, cover = overview.covers.find((item) => item.entity_id === session.entity_id);
+            for (const profile of overview.profiles) profile.assigned_to = profile.assigned_to.filter((entity) => entity !== session.entity_id);
+            overview.profiles.push({ id, name: message.name, opening_time: 22.7, closing_time: 22.2, reference_travel_cm: session.travel_cm, geometry: null,
+              assigned_to: [session.entity_id], provenance: { opening: { source: "guided", recorded_at: "2026-10-07T09:00:00+00:00", origin_entity_id: session.entity_id,
+                origin_name: session.entity_id, inherited: false }, closing: { source: "guided", recorded_at: "2026-10-07T09:00:00+00:00", origin_entity_id: null, origin_name: null, inherited: false } } });
+            if (cover) cover.profile_id = id;
+            setTimeout(() => backend.publishOverview(), 0);
+          }
           return backend.view();
         }
         if (message.sequence !== session.sequence) throw Object.assign(new Error("sequence"), { code: "calibration_sequence" });
+        if (action === "continue" || (action === "run" && session.mode === "automatic")) {
+          // `continue` only in `paused` (0.40.0); `run` confirms an automatic cycle.
+          if (action === "continue" ? session.phase !== "paused" : session.phase !== "confirm_automatic") throw Object.assign(new Error("step"), { code: "calibration_step" });
+          const step = session.next_step?.step;
+          Object.assign(session, { phase: step === "opening" ? "starting_open" : "starting_close", reason: null, next_step: null, paused_at: null });
+          session.sequence += 1;
+          return backend.view();
+        }
         if (session.mode === "guided") guidedAction(message); else geometryAction(message);
         refresh();
         session.sequence += 1;
@@ -198,7 +225,17 @@ export function createFakeBackend({ language = "en", inventory = coverInventory(
         // The answer reaches the caller first; other subscribers get the same view.
         return result;
       }
-      if (message.type === "myhome/cover_calibration/targets") return { revision: 7, max_batch: 4, targets: [] };
+      if (message.type === "myhome/cover_profiles/write" && message.action === "assign") {
+        if (message.revision !== overview.revision) throw Object.assign(new Error("revision"), { code: "stale_revision" });
+        const cover = overview.covers.find((item) => item.entity_id === message.entity_id);
+        if (!cover) throw Object.assign(new Error("cover"), { code: "cover_not_found" });
+        for (const profile of overview.profiles) profile.assigned_to = profile.assigned_to.filter((entity) => entity !== message.entity_id);
+        cover.profile_id = message.profile_id;
+        overview.profiles.find((profile) => profile.id === message.profile_id)?.assigned_to.push(message.entity_id);
+        setTimeout(() => backend.publishOverview(), 0);
+        return { revision: overview.revision + 1 };
+      }
+      if (message.type === "myhome/cover_calibration/targets") return { revision: overview.revision, max_batch: maxBatch, targets: structuredClone(targets) };
       throw new Error(`Unexpected command ${message.type}`);
     },
   };
