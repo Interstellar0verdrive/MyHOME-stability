@@ -1393,3 +1393,9 @@ test("D-13: on a dark theme a disabled primary is neutral, in the tab, the wizar
   const { root, tab } = await mount();
   assert.equal(root.getElementById("dialog-host").dataset.theme, tab.dataset.theme, "the dialogs follow the tab's theme");
 });
+
+test("D-14: native radios and drop-downs follow the theme (color-scheme)", async () => {
+  const { readFileSync } = await import("node:fs");
+  const css = readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\[data-theme="dark"\] \{ color-scheme: dark; \}\s*\[data-theme="light"\] \{ color-scheme: light; \}/);
+});

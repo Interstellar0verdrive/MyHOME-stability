@@ -699,6 +699,10 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-note.is-warning { border-color: color-mix(in srgb, var(--panel-warning) 75%, transparent);
   background: color-mix(in srgb, var(--panel-warning) 8%, var(--panel-surface)); color: var(--primary-text-color, #182b37); }
 /* On dark themes the warning text takes the note's own tint instead of plain white. */
+/* D-14: native controls (radios, drop-downs) follow the theme: on a dark one an unticked radio is a dark ring, not a
+   white disc that reads as ticked. */
+[data-theme="dark"] { color-scheme: dark; }
+[data-theme="light"] { color-scheme: light; }
 /* M2-2: on dark themes the info notes take a light accent for their text, as the warning ones take their own tint. */
 [data-theme="dark"] .cal-note:not(.is-warning) { color: color-mix(in srgb, var(--panel-accent) 70%, var(--primary-text-color, #fff)); }
 [data-theme="dark"] .cal-note.is-warning, [data-theme="dark"] .wiz-notice[data-tone="warning"], [data-theme="dark"] .cal-tab-busy, [data-theme="dark"] .cal-badge[data-status="running"] { color: color-mix(in srgb, var(--panel-warning) 70%, var(--primary-text-color, #fff)); }
