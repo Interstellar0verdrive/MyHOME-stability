@@ -187,7 +187,9 @@ export function buildScreen(ctx) {
         : [tx("wiz_T455", values), ...tx("wiz_T185", { ...values, travel: "" }).split(/\n\s*\n/).slice(1)].join("\n\n"),
       // A bold title and one line per value: the sheet's single line (T188) split at its separators.
       box: { label: t("wiz_T186"), lines: tx("wiz_T188", { profile: cover?.profile?.name ?? "—", travel: n(cover?.travel_cm),
-        opening: n(effective.opening?.value), closing: n(effective.closing?.value), slat: n(effective.slat_time_s?.value) }).split(" · ") },
+        opening: n(effective.opening?.value), closing: n(effective.closing?.value), slat: n(effective.slat_time_s?.value) }).split(" · ")
+        // D-20: a value not known is «—», without the unit.
+        .map((line) => line.replace(/—\s*(s|cm)$/, "—")) },
       actions: [{ id: "current", label: t("wiz_T006"), kind: "primary" }] });
     return finish();
   }

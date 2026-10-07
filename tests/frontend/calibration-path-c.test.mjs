@@ -176,3 +176,14 @@ test("times only: a repeat starts the times again from the briefing, and a run t
   wizard._trackFullRun({ mode: "guided", phase: "opening", owner: true, attachment: "a" });
   assert.equal(wizard._local.fullRun.step, "opening");
 });
+
+test("D-20: in C-01 a value not known is «—» without its unit", async () => {
+  const { buildScreen } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-screens.js");
+  const { translations } = await import("../../custom_components/myhome/frontend/panel/panel-translations.js");
+  const t = (key) => translations.it[key] || key;
+  const cover = { name: "Studio", profile: { name: "standard_3ante" }, travel_cm: 150, effective: { opening: { value: 20 }, closing: { value: 19 }, slat_time_s: { value: null } } };
+  const screen = buildScreen({ t, language: "it", stage: "current", path: "C", cover });
+  assert.equal(screen.code, "C-01");
+  assert.equal(screen.box.lines.at(-1), "Tempo lamelle: —");
+  assert.equal(screen.box.lines[1], "Corsa del telo: 150 cm", "known values keep their unit");
+});
