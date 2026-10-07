@@ -537,6 +537,9 @@ export class CalibrationTab {
       }
       const widest = Math.max(0, ...[...chips.children].filter((chip) => chip.getClientRects().length).map((chip) => chip.getBoundingClientRect().width));
       const cap = right - left - actions.getBoundingClientRect().width - 16 - widest;
+      // D-04: where the chips leave too little room for the pairs' first half, the card keeps its own layout rather
+      // than squeeze the values against the second half.
+      if (cap < pairs + 32) continue;
       const edge = Math.round(Math.min(Math.max(text, pairs) + 32, cap));
       if (edge <= 0) continue;
       card.style.setProperty("--cal-col2", `${edge}px`);
@@ -671,7 +674,9 @@ export class CalibrationTab {
     }) : [];
     const scaled = ["opening", "closing"].some((direction) => effective[direction]?.origin === "profile");
     // Q-2/Q-4: label and value as compact pairs; the pairs in two halves, side by side when the block is wide.
-    const pairs = (items) => `<dl class="cal-facts-col">${items.map(([label, shown]) => `<div><dt>${esc(label)}</dt><dd>${esc(shown)}</dd></div>`).join("")}</dl>`;
+    // D-04: a value never leaves its unit («27,1 s», «240 cm»), nor a date its year: no-break spaces.
+    const keep = (text) => String(text).replace(/(\d) (s|cm)(?=$|[\s)])/g, "$1\u00a0$2");
+    const pairs = (items) => `<dl class="cal-facts-col">${items.map(([label, shown]) => `<div><dt>${esc(label)}</dt><dd>${esc(keep(shown))}</dd></div>`).join("")}</dl>`;
     const list = (items) => { const half = Math.ceil(items.length / 2);
       return `<div class="cal-facts">${pairs(items.slice(0, half))}${items.length > half ? pairs(items.slice(half)) : ""}</div>`; };
     const key = JSON.stringify([item.entry.entry_id, item.cover.entity_id]);
@@ -685,7 +690,7 @@ export class CalibrationTab {
     const note = this._running(item) ? "cal-note is-warning" : "cal-note";
     return `<div class="cal-details-grid">
         <section><h4>${esc(t("calTabValues"))}</h4>${list(rows)}${this._originNote(item, language)}${action(refine)}</section>
-        <section><h4>${esc(t("calTabColLast"))}</h4>${list([[t("calTabDate"), item.last ? dateText(item.last, language) : "—"],
+        <section><h4>${esc(t("calTabColLast"))}</h4>${list([[t("calTabDate"), item.last ? dateText(item.last, language).replace(/ /g, "\u00a0") : "—"],
           [t("calTabMethod"), t(`calTabMethod_${item.method || "none"}`)]])}
           ${item.profile && scaled ? `<p class="${note}">${esc(fill(t("calTabInheritedNote"), { profile: item.profile.name }))}</p>` : ""}${action(measure)}</section>
         <section><h4>${esc(t("calTabColProfile"))}</h4>${item.profile ? `<p>${this._profileChip(item.profile.name)}</p>

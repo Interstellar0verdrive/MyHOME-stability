@@ -150,8 +150,10 @@ test("the chevron expands a row in place with the values in use, the last measur
   const details = expanded.querySelector(".cal-row-details");
   assert.equal(details.hidden, false);
   const facts = Object.fromEntries([...details.querySelectorAll(".cal-facts div")].map((item) => [item.querySelector("dt").textContent, item.querySelector("dd").textContent]));
-  assert.deepEqual(facts, { "Opening time": "22.4 s", "Closing time": "21.9 s", Slats: "Yes · 4.4 s", "Curtain travel": "196 cm",
-    "Roll on ascent": "1.83", "Roll on descent": "1.91", Date: "Sep 29, 2026", Method: "From the profile" });
+  // D-04: values keep their unit and dates their year with no-break spaces.
+  const nb = "\u00a0";
+  assert.deepEqual(facts, { "Opening time": `22.4${nb}s`, "Closing time": `21.9${nb}s`, Slats: `Yes · 4.4${nb}s`, "Curtain travel": `196${nb}cm`,
+    "Roll on ascent": "1.83", "Roll on descent": "1.91", Date: `Sep${nb}29,${nb}2026`, Method: "From the profile" });
   assert.match(details.textContent, /Also followed by Kitchen shutter 2\./);
   assert.match(details.textContent, /adapted to the curtain travel of this cover/);
   const blockActions = (entity) => {
