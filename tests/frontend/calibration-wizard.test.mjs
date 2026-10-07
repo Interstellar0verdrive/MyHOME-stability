@@ -2247,11 +2247,11 @@ test("a tap on the Steps sheet's backdrop closes it, as every sheet and dialog (
   assert.equal(sheet.hidden, true, "a tap on the backdrop closes it");
 });
 
-test("the wizard's actions, Take control, PASSI and the compact order take the shell's 8 px radius (Q-18)", async () => {
+test("the wizard's actions, Take control and PASSI take the shell's 8 px radius (Q-18); the compact order is round (Q-26)", async () => {
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /--cal-btn-radius: 8px; \}/);
-  for (const rule of [/\.wiz-action \{[^}]*border-radius: var\(--cal-btn-radius\);/, /\.wiz-take \{[^}]*border-radius: var\(--cal-btn-radius\);/,
-    /\.cal-filterbar-sort \{[^}]*border-radius: var\(--cal-btn-radius\);/]) assert.match(css, rule);
+  for (const rule of [/\.wiz-action \{[^}]*border-radius: var\(--cal-btn-radius\);/, /\.wiz-take \{[^}]*border-radius: var\(--cal-btn-radius\);/]) assert.match(css, rule);
+  assert.match(css, /\.cal-filterbar\.is-chips \.cal-filterbar-sort \{[^}]*border-radius: 999px;/, "Q-26: the compact order is drawn as a chip, round");
   assert.equal(css.match(/\.wiz-steps-button \{[^}]*border-radius: var\(--cal-btn-radius\);/g)?.length, 2, "PASSI in both layouts");
 });
 

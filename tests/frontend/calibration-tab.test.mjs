@@ -1193,6 +1193,9 @@ test("one filter and order bar for the list, A-01 and the sequence: chips and «
   assert.equal(measure(list, 640, 430, 194), true, "430 + 16 + 194 = 640: the chips");
   assert.equal(measure(list, 639, 430, 194), false, "one pixel short: the drop-downs");
   assert.equal(list.classList.contains("is-measuring"), false);
+  const chipSort = css.match(/\.cal-filterbar\.is-chips \.cal-filterbar-sort \{([^}]*)\}/)?.[1] || "";
+  for (const part of ["height: 24px", "padding: 4px 8px 4px 10px", "gap: 6px", "border-radius: 999px", "font-size: 12px", "font-weight: 500"]) assert.ok(chipSort.includes(part), `Q-26 ${part}`);
+  assert.match(css, /\.cal-filterbar\.is-chips \.cal-filterbar-sort::after \{ content: ""; flex: none; width: 16px; height: 16px;/, "a 16 px chevron");
   assert.ok(list.querySelector(":scope > .cal-tab-summary + .cal-filterbar-row"), "the counts above the drop-downs");
   void panel;
 });

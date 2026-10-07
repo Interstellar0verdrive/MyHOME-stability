@@ -745,8 +745,16 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-filterbar.is-chips .cal-tab-chips { display: flex; flex: 1 1 auto; min-width: 0; }
 .cal-filterbar.is-chips .cal-tab-compact { display: flex; flex: none; margin-inline-start: auto; }
 .cal-filterbar.is-chips .cal-tab-compact .cal-compact-filter { display: none; }
-.cal-filterbar.is-chips .cal-filterbar-sort { flex: none; gap: 4px; min-height: 36px; padding-inline-start: 14px; border-radius: var(--cal-btn-radius); font-size: 13px; color: var(--panel-text-2); }
-.cal-filterbar.is-chips .cal-filterbar-sort select { min-height: 34px; padding-inline-end: 22px; font-size: 13px; font-weight: 500; color: var(--primary-text-color, #182b37); }
+/* Q-26 (Figma): with the chips, «Ordina per ▾» is drawn as a chip: 24 px, 4 × 8/10 px inside, round, the neutral chip
+   colour at 12 % with a 20 % border, 12 px text in the secondary colour, a 16 px chevron 6 px after. */
+.cal-filterbar.is-chips .cal-filterbar-sort { --cal-chip: var(--panel-text-2); flex: none; box-sizing: border-box; gap: 6px; min-height: 24px; height: 24px;
+  padding: 4px 8px 4px 10px; border: 1px solid color-mix(in srgb, var(--cal-chip) 20%, transparent); border-radius: 999px;
+  background: color-mix(in srgb, var(--cal-chip) 12%, transparent); font-size: 12px; font-weight: 500; line-height: 16px; color: var(--panel-text-2); }
+.cal-filterbar.is-chips .cal-filterbar-sort select { min-height: 0; height: 16px; padding: 0; border: 0; background: none; font-size: 12px; font-weight: 500;
+  line-height: 16px; color: inherit; cursor: pointer; }
+.cal-filterbar.is-chips .cal-filterbar-sort::after { content: ""; flex: none; width: 16px; height: 16px; background: currentColor; pointer-events: none;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7.41 8.58 12 13.17l4.59-4.59L18 10l-6 6-6-6z'/%3E%3C/svg%3E") center / 16px 16px no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7.41 8.58 12 13.17l4.59-4.59L18 10l-6 6-6-6z'/%3E%3C/svg%3E") center / 16px 16px no-repeat; }
 .cal-filterbar.is-chips .cal-sort-short { display: none; }
 .cal-filterbar.is-chips .cal-sort-long { display: inline; }
 /* While measuring, the chips keep one line at their own width. */
