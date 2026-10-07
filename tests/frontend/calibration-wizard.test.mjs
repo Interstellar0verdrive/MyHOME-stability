@@ -2455,3 +2455,12 @@ test("D-24: the progress track is seen at 0 % on light and dark boxes", async ()
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /\.wiz-progress \{ height: 6px; border-radius: 999px; background: color-mix\(in srgb, var\(--primary-text-color, #182b37\) 14%, transparent\); overflow: hidden; \}/);
 });
+
+test("D-25/D-26: sheets have a centred handle (the Steps sheet too) and the side Steps panel reaches the right edge", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /dialog\.cal-dialog::before \{ align-self: center; margin: 10px auto 0; \}/);
+  assert.match(css, /\.wiz-dialog \.wiz-dialog-card::before \{ margin: -12px auto 12px; \}/);
+  assert.match(css, /\.wiz-sheet \.wiz-sheet-head::before \{ content: ""; position: absolute; top: 6px; left: 50%;/);
+  assert.match(css, /\.wiz-sheet \.wiz-sheet-card \{ width: calc\(320px \+ var\(--cal-safe-right\)\); height: 100%; max-height: none; border-radius: 0; padding: 0; \}/);
+  assert.match(css, /\.wiz-sheet \.wiz-sheet-head \{ padding-top: 4px; padding-inline-end: calc\(8px \+ var\(--cal-safe-right\)\); \}/);
+});
