@@ -2368,3 +2368,28 @@ test("in the one-column layout the action bar is docked to the window's bottom (
   stop();
 });
 
+
+test("D-02: with columns the sequence's status and Start are held 16 px under the top while an outer box scrolls", async () => {
+  const { dockBar } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-layout.js");
+  const wiz = document.createElement("div"), column = document.createElement("div"), block = document.createElement("div");
+  block.className = "cal-batch-sticky"; column.append(block); wiz.append(column); document.body.append(wiz);
+  const rect = (top, height) => ({ top, bottom: top + height, height, left: 0, right: 600, width: 600 });
+  let scrolled = 0;
+  wiz.getBoundingClientRect = () => rect(100 - scrolled, 2000);
+  column.getBoundingClientRect = () => rect(100 - scrolled, 2000);
+  // Where it sits in the flow (the transform is cleared before each measure): the column's top + its 24 px padding.
+  block.getBoundingClientRect = () => rect(124 - scrolled, 90);
+  const original = window.getComputedStyle, frame = window.requestAnimationFrame;
+  window.getComputedStyle = (element) => ({ position: element === block ? "sticky" : "static", paddingBottom: "24px", getPropertyValue: () => "" });
+  window.requestAnimationFrame = (callback) => setTimeout(callback, 0);
+  try {
+    const stop = dockBar(wiz);
+    assert.equal(block.style.transform, "", "in place while the column's top is in view");
+    scrolled = 600; window.dispatchEvent(new window.Event("scroll")); await new Promise((resolve) => setTimeout(resolve, 5));
+    assert.equal(block.style.transform, "translateY(492px)", "16 px under the window's top: 16 − (124 − 600)");
+    scrolled = 1990; window.dispatchEvent(new window.Event("scroll")); await new Promise((resolve) => setTimeout(resolve, 5));
+    assert.equal(block.style.transform, "translateY(1862px)", "never past the column's end: 2100 − 24 − 214 = 1862");
+    stop();
+    assert.equal(block.style.transform, "");
+  } finally { window.getComputedStyle = original; window.requestAnimationFrame = frame; wiz.remove(); }
+});

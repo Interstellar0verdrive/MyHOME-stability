@@ -107,6 +107,9 @@ export function fitBars(root) {
  * bar never sticks: the bar is docked instead, `position: fixed` over the wizard's own width, whenever the wizard runs
  * past the window's bottom, and back in its place at the end of the wizard when that end is in view. The wizard keeps
  * the bar's height as padding meanwhile, so nothing moves. The stylesheet marks the layout with `--wiz-single: 1`.
+ * D-02: with columns, the sequence's status and Start (`.cal-batch-sticky`, sticky at 76 px) are held the same way: moved
+ * down their column by a transform so their top stays 16 px under the panel's bar (or the window's top), never past
+ * the column's end. Where the sticky rule works the block is already there and nothing is added.
  * Returns the function that stops it.
  */
 export function dockBar(wiz) {
@@ -128,6 +131,19 @@ export function dockBar(wiz) {
       wiz.style.setProperty("--dock-width", `${Math.round(box.width)}px`);
       wiz.style.setProperty("--dock-height", `${Math.round(barHeight)}px`);
     }
+    hold(single);
+  };
+  const hold = (single) => {
+    const block = wiz.querySelector(".cal-batch-sticky");
+    if (!block) return;
+    block.style.transform = "";
+    if (single || view.getComputedStyle(block).position !== "sticky") return;
+    const column = block.parentElement.getBoundingClientRect(), own = block.getBoundingClientRect();
+    const topbar = wiz.getRootNode().querySelector?.(".topbar")?.getBoundingClientRect();
+    const top = (topbar && topbar.bottom > 0 ? topbar.bottom : 0) + 16;
+    const room = column.bottom - parseFloat(view.getComputedStyle(block.parentElement).paddingBottom || "0") - own.bottom;
+    const shift = Math.min(top - own.top, room);
+    if (shift > 0.5) block.style.transform = `translateY(${Math.round(shift)}px)`;
   };
   const schedule = () => { if (!frame) frame = (view.requestAnimationFrame || ((callback) => setTimeout(callback, 16)))(update); };
   view.addEventListener("scroll", schedule, { capture: true, passive: true });
@@ -140,6 +156,8 @@ export function dockBar(wiz) {
     view.removeEventListener("resize", schedule);
     observer?.disconnect();
     wiz.classList.remove("is-docked");
+    const block = wiz.querySelector(".cal-batch-sticky");
+    if (block) block.style.transform = "";
   };
 }
 
