@@ -1027,7 +1027,7 @@ test("the keyboard reaches every step: title focus, Steps sheet, and a dialog th
   assert.equal(dialog.hidden, true, "Continue the calibration closes it and keeps the wizard");
 });
 
-test("a half run that did not start by itself can be started from its screen, and fine-tuning starts over as a preview", async () => {
+test("a half run that did not start by itself can be started from its screen, and fine-tuning runs as a preview without Stop", async () => {
   const t = (key) => translations.en[key] || key;
   const view = { mode: "geometry", phase: "briefing", step: "half_open", values: { opening_time: 22, closing_time: 21 }, samples: { lift: 4 },
     readings: { gap: 3 }, geometry: {}, travel_cm: 198, slats: true, owner: true, sequence: 4 };
@@ -1039,10 +1039,11 @@ test("a half run that did not start by itself can be started from its screen, an
   await runToSaved(context);
   await press("refine");
   assert.equal(code(), "A-22");
-  await press("stop");
-  assert.equal(code(), "S-01");
-  await press("start-over");
-  assert.equal(code(), "A-22", "fine-tuning starts over from the saved values, still as a preview");
+  // D-46: a preview moves nothing, so it has no Stop: the state says so, under «Here the cover would position itself».
+  assert.equal(wiz().querySelector('[data-wiz="stop"]'), null);
+  assert.equal(wiz().querySelector(".wiz-title").textContent, "Here the cover would position itself");
+  assert.equal(wiz().querySelector(".wiz-actions .status.is-still").textContent.trim(), "Preview: no cover moves");
+  assert.equal(wiz().querySelector(".wiz-wait-meter").hidden, true, "no countdown");
   assert.ok(wiz().querySelector(".wiz-preview"));
   assert.equal(backend.calls.filter((message) => message.action === "save").length, 1, "only the base calibration was saved");
 });

@@ -534,18 +534,16 @@ function previewScreen(screen, ctx, tx, n, values, stop) {
     quarter_close: ["26", "27", "wiz_T130"], three_quarter_close: ["28", "29", "wiz_T134"], check: ["30", "31", "wiz_T138"] };
   const stageText = { back_down: "wiz_T120", back_up: "wiz_T084", quarter_open: "wiz_T121", three_quarter_open: "wiz_T125",
     quarter_close: "wiz_T129", three_quarter_close: "wiz_T133", check: "wiz_T137", bottom: "wiz_T171", half_travel: "wiz_T172" };
-  // D-46: path B is only a preview and its box says nothing moves, so its positionings are not drawn as such: what
-  // would happen live, the stages it would run, no countdown, and the state in place of Stop. (The fine-tuning and
-  // readings-only previews keep Stop, which leads to S-01 as live.)
+  // D-46: a preview's box says nothing moves (path B, fine-tuning, tape readings only), so its positionings are not
+  // drawn as such: what would happen live, the stages it would run, no countdown, and the state in place of Stop.
   const still = [{ id: "preview-still", label: t("wiz_T508"), kind: "state" }];
   if (view.phase === "positioning") {
     if (profile && view.step === "open_full") return Object.assign(screen, { code: "B-03", title: t("wiz_T505"),
       wait: { text: tx("wiz_T506", values), stages: [], progress: false }, actions: still });
     const stages = view.stages.map((stage, index) => ({ text: tx(stageText[stage.key], { seconds: n(stage.seconds, 0) }),
       state: index < view.stage_index ? "done" : index === view.stage_index ? "current" : "future" }));
-    if (profile) return Object.assign(screen, { code: "B-05", title: t("wiz_T505"), wait: { text: t("wiz_T507"), stages, progress: false }, actions: still });
-    return Object.assign(screen, { code: p(readingCodes[view.step][0]), title: t("wiz_T027"),
-      wait: { text: t("wiz_T086"), stages, progress: stagesBar(view) }, actions: [stop] });
+    return Object.assign(screen, { code: profile ? "B-05" : p(readingCodes[view.step][0]), title: t("wiz_T505"),
+      wait: { text: t("wiz_T507"), stages, progress: false }, actions: still });
   }
   if (view.phase === "reading") {
     if (view.step === "travel") return Object.assign(screen, { code: "B-04", title: t("wiz_T062"), body: t("wiz_T063"),
@@ -837,13 +835,6 @@ function waitBar(view, elapsed, seconds) {
   return { value: done / seconds, remaining: secondsLeft(seconds - done) };
 }
 
-/** A simulated positioning advances by stages: the stages done over the whole, the stages left as the time left. */
-function stagesBar(view) {
-  const seconds = (view.stages || []).map((stage) => stage.seconds || 0), total = seconds.reduce((sum, value) => sum + value, 0);
-  if (!(total > 0)) return { value: null, remaining: null };
-  const done = seconds.slice(0, view.stage_index || 0).reduce((sum, value) => sum + value, 0);
-  return { value: done / total, remaining: secondsLeft(total - done) };
-}
 
 /** Whole seconds left, never 0 while the bar is shown (sums of tenths are not exact: 11.000000001 is 11). */
 function secondsLeft(seconds) { return Math.max(1, Math.ceil(seconds - 0.001)); }
