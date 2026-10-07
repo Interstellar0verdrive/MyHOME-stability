@@ -435,6 +435,7 @@ export const translations = {
     wiz_T510: "Clear filter and search",
     wiz_T511: "\"{cover}\" now follows the profile \"{profile}\".",
     wiz_T512: "The measurement is not valid",
+    wiz_T513: "Verified accuracy: a gap under 1 cm after {seconds} s of descent.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1334,6 +1335,7 @@ export const translations = {
     wiz_T510: "Togli filtro e ricerca",
     wiz_T511: "«{cover}» ora segue il profilo «{profile}».",
     wiz_T512: "La misura non è valida",
+    wiz_T513: "Precisione verificata: scarto sotto 1 cm dopo {seconds} s di discesa.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

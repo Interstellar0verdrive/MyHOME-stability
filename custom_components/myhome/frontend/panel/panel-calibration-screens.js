@@ -621,7 +621,8 @@ function summaryScreen(screen, ctx, tx, n, values) {
     : points ? t("wiz_T239") : t("wiz_T104"), rows: rolls,
     code: profileB || timesOnly ? "" : ["slat_time_s", "opening_roll", "closing_roll"].map((key) => `${key}: ${after[key === "slat_time_s" ? "slat" : key] == null ? "—" : n(after[key === "slat_time_s" ? "slat" : key], key === "slat_time_s" ? 1 : 2)}`).join("\n") };
   if (timesOnly && after.opening_roll == null) screen.technical = null;
-  const precision = view.check ? tx("wiz_T151", { gap: view.check.gap_cm, seconds: n(view.check.check_seconds) }) : null;
+  // D-35: a gap under 1 cm is said so, not «about 0 cm».
+  const precision = view.check ? tx(Number(view.check.gap_cm) < 1 ? "wiz_T513" : "wiz_T151", { gap: view.check.gap_cm, seconds: n(view.check.check_seconds) }) : null;
   const saveInfo = (key) => ({ title: t("wiz_T280"), body: counted(t, key, cover?.followers?.length ?? 0, values) });
   const save = { id: "save", label: t("wiz_T102"), kind: "primary" };
   if (profileB) {
@@ -636,8 +637,10 @@ function summaryScreen(screen, ctx, tx, n, values) {
     return withSupport(screen, ctx, "cover_only");
   }
   if (points) {
-    // C-38 shows the values in use in grey: only the rolls change.
+    // C-38 shows the values in use in grey: only the rolls change, so (D-35) they are in the table, not only under
+    // «Dettagli tecnici».
     screen.table.mutedBefore = true;
+    screen.table.rows = [...screen.table.rows, ...rolls];
     Object.assign(screen, { code: "C-38", title: t("wiz_T149"), body: t("wiz_T238"), precision,
       saveInfo: follows ? saveInfo("wiz_T288") : saveInfo("wizSaveCoverOnly"), actions: [{ ...save, target: "cover_only" }] });
     return screen;

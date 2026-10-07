@@ -115,10 +115,12 @@ test("tape readings only run as a preview with four readings and the check, save
   await press("accept");
   assert.equal(code(), "C-38");
   const before = [...wiz().querySelectorAll(".wiz-main > .wiz-table tbody td:nth-of-type(1)")];
-  assert.ok(before.length === 4 && before.every((cell) => cell.classList.contains("muted")), "Before in grey");
+  assert.ok(before.length === 6 && before.every((cell) => cell.classList.contains("muted")), "Before in grey");
+  // D-35: the rolls, the only values that change here, are in the table; a gap under 1 cm is said so.
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-main > .wiz-table tbody th")].slice(-2).map((cell) => cell.textContent), [translations.en.wiz_T105, translations.en.wiz_T106]);
   assert.equal(wiz().querySelector(".wiz-save-info").open, true);
   assert.equal(wiz().querySelector(".wiz-technical .muted").textContent, translations.en.wiz_T239);
-  assert.match(wiz().querySelector(".wiz-precision").textContent, /after 4\.8 s of descent/);
+  assert.match(wiz().querySelector(".wiz-precision").textContent, /a gap under 1 cm after 4\.8 s of descent/);
   await press("save");
   assert.equal(code(), "C-34");
   assert.equal([...backend.calls, ...backend.subscriptions].filter((message) => message.type.startsWith("myhome/cover_calibration/")).length, 0);
