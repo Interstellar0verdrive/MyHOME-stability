@@ -685,7 +685,9 @@ function profileBlock(ctx, tx, pathC) {
 function withSupport(screen, ctx, target) {
   const supported = ctx.supports ? ctx.supports(target) : true;
   if (!supported) {
-    screen.notices.push({ tone: "warning", text: ctx.t("wizSaveUnavailable") });
+    // D-16: said at the top of the screen (seen on a phone too), and no help explaining what Save would do.
+    screen.notices.push({ tone: "warning", result: true, text: ctx.t("wizSaveUnavailable") });
+    screen.saveInfo = null;
     for (const action of screen.actions) if (action.id === "save") action.disabled = true;
   }
   if (screen.profileBlock?.name && !screen.profileBlock.name.valid) {

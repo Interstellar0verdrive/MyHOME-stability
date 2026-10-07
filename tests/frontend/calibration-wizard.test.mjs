@@ -489,16 +489,17 @@ test("a cover that follows a profile saves only on itself by default, which wait
   await type("54"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
   await move(backend, { auto: true, stop: true }); await type("56");
   assert.equal(code(), "A-21c");
-  assert.equal(wiz().querySelector(".wiz-save-info").open, true, "What happens when I save? starts open");
-  wiz().querySelector(".wiz-save-info").open = false;
   assert.equal(wiz().querySelector('[name="save_profile"]').checked, false);
   assert.match(wiz().querySelector(".wiz-profile-block").textContent, /follows the profile "tall_two_leaf"/);
   assert.equal(wiz().querySelector('[data-wiz="save"]').disabled, true);
-  assert.match(wiz().querySelector(".wiz-notices").textContent, /not available yet/);
+  // D-16: a Save not available yet is said at the top, and no help says what it would do.
+  assert.match(wiz().querySelector(".wiz-result-notices").textContent, /not available yet/);
+  assert.equal(wiz().querySelector(".wiz-save-info"), null);
   const toggle = wiz().querySelector('[name="save_profile"]');
   toggle.checked = true; toggle.dispatchEvent(new Event("change", { bubbles: true })); await tick();
   assert.equal(code(), "A-21d");
-  assert.equal(wiz().querySelector(".wiz-save-info").open, false, "closed by the user, it stays closed while the summary changes");
+  assert.equal(wiz().querySelector(".wiz-save-info").open, true, "What happens when I save? starts open");
+  wiz().querySelector(".wiz-save-info").open = false;
   assert.deepEqual([...wiz().querySelectorAll('[name="save_choice"]')].map((input) => input.value), ["update", "new"], "listed as in A-21d");
   assert.equal(wiz().querySelector('[name="save_choice"][value="new"]').checked, true);
   assert.match(wiz().querySelector(".wiz-profile-block").textContent, /Will also change 1 cover: Living room shutter 3\./);
@@ -518,6 +519,7 @@ test("a cover that follows a profile saves only on itself by default, which wait
   assert.equal(error().textContent, "Enter a name for the profile.");
   assert.equal(wiz().querySelector('[data-wiz="save"]').disabled, true);
   assert.equal(wiz().querySelector('[name="profile_name"]'), name, "typing never redraws the field");
+  assert.equal(wiz().querySelector(".wiz-save-info").open, false, "closed by the user, it stays closed while the summary changes");
   name.value = "kitchen_two"; name.dispatchEvent(new Event("input", { bubbles: true })); await tick();
   assert.equal(error().hidden, true, "the error goes with the problem");
   assert.equal(wiz().querySelector(".wiz-name-line").textContent, 'This cover will follow the new profile. "tall_two_leaf" stays with the other cover.');

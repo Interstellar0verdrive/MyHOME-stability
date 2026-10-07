@@ -149,7 +149,7 @@ test("remeasuring everything runs the geometry session with the C texts and wait
   assert.match(wiz().querySelector(".wiz-body").textContent, /quelli del profilo «tall_two_leaf» adattati alla corsa del telo di Kitchen shutter 2/);
   assert.equal(wiz().querySelector('[name="save_profile"]').checked, false);
   assert.equal(wiz().querySelector('[data-wiz="save"]').disabled, true);
-  assert.equal(wiz().querySelector(".wiz-notices").textContent, translations.it.wizSaveUnavailable);
+  assert.equal(wiz().querySelector(".wiz-result-notices").textContent, translations.it.wizSaveUnavailable, "D-16: at the top");
   const toggle = wiz().querySelector('[name="save_profile"]');
   toggle.checked = true; toggle.dispatchEvent(new Event("change", { bubbles: true })); await tick();
   await press("save");
