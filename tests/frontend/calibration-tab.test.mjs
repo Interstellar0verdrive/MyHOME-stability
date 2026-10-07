@@ -343,7 +343,10 @@ test("Assign profile waits while a calibration is open on the gateway, and after
   const choice = dialog.querySelector('input[value="tall"]');
   choice.checked = true; choice.dispatchEvent(new Event("change", { bubbles: true }));
   dialog.querySelector("[data-assign]").click(); await tick(4);
-  assert.equal(dialog.querySelector(".error").hidden, false);
+  const refusal = dialog.querySelector(".cal-assign-error");
+  assert.equal(refusal.hidden, false);
+  assert.ok(refusal.classList.contains("notice"), "D-29: an error notice, not bare red text");
+  assert.equal(refusal.nextElementSibling, dialog.querySelector(".cal-assign-list"), "D-15: above the choices, in view");
   assert.equal(dialog.querySelector("[data-assign]").disabled, true, "off after the refusal");
   choice.dispatchEvent(new Event("change", { bubbles: true }));
   assert.equal(dialog.querySelector("[data-assign]").disabled, true, "and stays off");

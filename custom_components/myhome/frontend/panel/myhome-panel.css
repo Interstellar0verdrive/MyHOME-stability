@@ -1197,6 +1197,10 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-radio small + small { margin-top: 4px; }
 .wiz-radio-explain { display: block; margin-top: 1px; }
 .wiz-radio.is-disabled { cursor: not-allowed; opacity: .6; }
+/* D-29: on «Nessun profilo» of the cover a profile was measured on, only the choice is off: its note, which says why,
+   stays readable in the secondary colour. */
+.cal-assign-none.is-disabled { opacity: 1; }
+.cal-assign-none.is-disabled input, .cal-assign-none.is-disabled strong { opacity: .6; }
 .wiz-radio-text { display: grid; gap: 0; min-width: 0; }
 .wiz-radio-label { display: flex; flex-wrap: wrap; align-items: center; gap: 1px 8px; }
 .wiz-recommended { background: var(--panel-accent-soft); color: var(--panel-accent); font-size: 11px; padding: 1px 8px; }

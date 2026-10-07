@@ -1008,12 +1008,12 @@ export class CalibrationTab {
     const source = followed?.provenance?.opening?.origin_entity_id === item.cover.entity_id;
     const none = followed ? `<label class="wiz-radio cal-assign-none${source ? " is-disabled" : ""}"><input type="radio" name="assign_profile" value="${NO_PROFILE}"${source ? " disabled" : ""}>
         <span><strong><ha-icon icon="mdi:link-variant-off" aria-hidden="true"></ha-icon>${esc(t("wiz_T404"))}</strong><small class="muted">${esc(fill(t(source ? "wiz_T430" : "wiz_T405"), { profile: followed.name }))}</small></span></label>` : "";
-    body.innerHTML = profiles.length ? `<fieldset class="wiz-radios cal-assign-list"><legend>${esc(t("wiz_T163"))}</legend>${none}${profiles.map((profile) => {
+    // D-15/D-29: a refusal is an error notice above the choices, where it is seen even in a landscape sheet.
+    body.innerHTML = profiles.length ? `<p class="notice error cal-assign-error" role="alert" hidden></p><fieldset class="wiz-radios cal-assign-list"><legend>${esc(t("wiz_T163"))}</legend>${none}${profiles.map((profile) => {
       const [type, measured, followers] = describe(profile);
       return `<label class="wiz-radio"><input type="radio" name="assign_profile" value="${esc(profile.id)}" ${profile.id === item.cover.profile_id ? "checked" : ""}>
         <span><strong>${esc(profile.name)}</strong><small class="muted">${esc(type)}</small>${measured ? `<small class="muted">${esc(measured)}</small>` : ""}<small class="muted cal-assign-followers">${esc(followers)}</small></span></label>`;
-    }).join("")}</fieldset>
-      <p class="error" role="alert" hidden></p>`
+    }).join("")}</fieldset>`
       : `<p class="muted">${esc(t("profileListEmpty"))}</p>`;
     // A calibration open on the gateway reserves it: Home Assistant would refuse, so the dialog says so and waits.
     const row = this._rows.get(item.entry.entry_id), reserved = !!(row?.session || row?.reserved);
@@ -1038,7 +1038,7 @@ export class CalibrationTab {
       if (!choice || button.disabled || reserved || refused) return;
       const profileId = choice === NO_PROFILE ? null : choice;
       button.disabled = true;
-      const box = body.querySelector(".error");
+      const box = body.querySelector(".cal-assign-error");
       box.hidden = true;
       try {
         await hass.callWS({ type: "myhome/cover_profiles/write", entry_id: item.entry.entry_id, entity_id: item.cover.entity_id,
@@ -1052,6 +1052,7 @@ export class CalibrationTab {
         const key = `profileError_${error?.code}`;
         box.textContent = t(key) === key ? t("profileError") : t(key);
         box.hidden = false;
+        box.scrollIntoView?.({ block: "nearest" });
         refused = true;
       }
     };
