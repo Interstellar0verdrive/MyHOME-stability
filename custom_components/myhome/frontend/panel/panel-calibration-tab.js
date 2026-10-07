@@ -1088,7 +1088,7 @@ export class CalibrationTab {
     const summary = count === 0 ? t("wiz_T386") : count === 1 ? t("wiz_T385") : fill(t("wiz_T384"), { count });
     const select = t("wiz_T383").replace(/\s*:\s*$/, "");
     const picks = [["all", t("calTabFilter_all")], ["to_measure", t("calTabFilter_to_measure")], ["none", t("wiz_T391")]];
-    // M4-5 (T-06w): the selection is a view with the wizard's chrome: header (back, title, capacity, «Cancel the
+    // M4-5 (T-06): the selection is a view with the wizard's chrome: header (back, title, capacity, «Cancel the
     // sequence» / ✕), the steps Selection · Run · Results (the last two still run in the maintainer's dialog), the
     // content in the middle and the status with Start in the actions column (the bottom bar on phones).
     const line = fill(t("wizPhaseLine"), { phase: t("wiz_T482"), n: 1, total: 3 });

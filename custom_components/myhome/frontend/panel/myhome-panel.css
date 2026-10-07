@@ -969,7 +969,7 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 @media (max-width: 719px) and (prefers-reduced-motion: reduce), (max-height: 499px) and (prefers-reduced-motion: reduce) {
   dialog.cal-dialog, .wiz-dialog, .wiz-dialog .wiz-dialog-card { animation: none !important; }
 }
-/* Sequence selection (T-06w, M4-5): a view with the wizard's chrome (the .wiz classes); its content keeps the list's
+/* Sequence selection (T-06, M4-5): a view with the wizard's chrome (the .wiz classes); its content keeps the list's
    rows with a circle and the place of each ticked cover. */
 .cal-batch-wiz .wiz-main { display: grid; gap: 14px; align-content: start; }
 .cal-batch-wiz .wiz-main > * { margin: 0; }
