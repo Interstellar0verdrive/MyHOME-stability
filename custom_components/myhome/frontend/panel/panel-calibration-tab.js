@@ -474,7 +474,7 @@ export class CalibrationTab {
       // Q-25: the title with «Come funziona ›» under it, and the two actions on the title's row (the primary first).
       // U-2: «Come funziona ›» opens its text under the whole title row, which keeps its place and its buttons.
       html = `<div class="cal-tab-top"><div class="cal-tab-head"><div class="cal-tab-heading"><h3 class="cal-tab-title">${esc(t("calTabTitle"))}</h3>
-          <button type="button" class="cal-tab-how" data-action="cal-tab-how" aria-expanded="${!!this._howOpen}" aria-controls="cal-tab-how-text">${esc(t("calTabHowItWorks"))}</button></div>
+          <button type="button" class="cal-tab-how cal-disclosure-toggle" data-action="cal-tab-how" aria-expanded="${!!this._howOpen}" aria-controls="cal-tab-how-text"><span class="cal-disclosure-label">${esc(t("calTabHowItWorks"))}</span><ha-icon icon="mdi:chevron-down" aria-hidden="true"></ha-icon></button></div>
         <div class="actions cal-tab-actions">
           ${this._wizard ? `<button type="button" class="primary${loading ? " is-settling" : ""}" data-action="cal-tab-measure" ${busy || loading || none ? "disabled" : ""}><ha-icon icon="mdi:ruler" aria-hidden="true"></ha-icon><span>${esc(t("calTabMeasureOne"))}</span></button>` : ""}
           <button type="button" data-action="cal-tab-batch" ${busy || loading || none ? "disabled" : ""}><ha-icon icon="mdi:format-list-numbered" aria-hidden="true"></ha-icon><span>${esc(t("wiz_T496"))}</span></button>
@@ -589,7 +589,7 @@ export class CalibrationTab {
   /** «Come funziona» under an empty state (T-04, T-04b; R-7): it opens in place. */
   _howItWorks(extra = "") {
     const { t } = this._context;
-    return `<details class="cal-empty-how${extra}"><summary>${esc(t("calTabHowItWorks"))}</summary><p class="muted">${esc(t("calTabHowItWorksBody"))}</p></details>`;
+    return `<details class="cal-disclosure cal-empty-how${extra}"><summary><span class="cal-disclosure-label">${esc(t("calTabHowItWorks"))}</span><ha-icon icon="mdi:chevron-down" aria-hidden="true"></ha-icon></summary><p class="muted">${esc(t("calTabHowItWorksBody"))}</p></details>`;
   }
 
   /** T-04 / T-04b: an empty state as a card: the shutter icon, a title, its explanation and an optional extra. */

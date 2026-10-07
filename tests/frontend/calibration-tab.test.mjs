@@ -1363,7 +1363,13 @@ test("the tab's head: title, «Come funziona ›» under it, «Calibra una tappa
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /\.cal-tab-how-text \{ max-width: 720px; margin: 0; font-size: 14px;/, "U-3");
   assert.match(css, /\.cal-tab-top \{[^}]*margin: 22px 0 18px; \}/, "32 px above (after the views bar) and below (with the tab's 14 px gap); 24 on the phone");
-  assert.match(css, /\.cal-tab-how::after \{ content: " ›";/);
+  // Q-32: the panel's one disclosure: a chevron-down that turns when open, underline only from hover or the keyboard.
+  assert.ok(head.querySelector(".cal-tab-how.cal-disclosure-toggle > ha-icon[icon='mdi:chevron-down']"));
+  assert.match(css, /\.cal-disclosure\[open\] summary ha-icon, \.cal-disclosure-toggle\[aria-expanded="true"\] ha-icon \{ transform: rotate\(180deg\); \}/);
+  assert.match(css, /@media \(hover: hover\) \{ :is\(\.cal-disclosure summary, \.cal-disclosure-toggle\):hover \.cal-disclosure-label \{ text-decoration: underline; \} \}/);
+  assert.match(css, /:is\(\.cal-disclosure summary, \.cal-disclosure-toggle\):focus-visible \.cal-disclosure-label \{ text-decoration: underline; \}/);
+  assert.match(css, /-webkit-tap-highlight-color: transparent; \}\n\.cal-disclosure summary::-webkit-details-marker/);
+  assert.doesNotMatch(css, /\.cal-tab-how::after/);
 });
 
 test("with nothing ticked the sequence's Start is a disabled primary (Q-29)", async () => {

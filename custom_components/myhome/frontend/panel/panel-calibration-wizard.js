@@ -498,7 +498,8 @@ export class CalibrationWizard {
 
   /** A closed-by-default explanation (G2-3): a native <details>, so it opens from the keyboard and reads as a toggle. */
   _helpMarkup(help) {
-    return `<details class="wiz-accordion wiz-help"${this._local.helpOpen ? " open" : ""}><summary>${esc(help.summary)}<ha-icon icon="mdi:chevron-down" aria-hidden="true"></ha-icon></summary>${rich(help.text)}</details>`;
+    // Q-32: the panel's one disclosure (`cal-disclosure`): a blue text link with a chevron, over a short paragraph.
+    return `<details class="cal-disclosure wiz-help"${this._local.helpOpen ? " open" : ""}><summary><span class="cal-disclosure-label">${esc(help.summary)}</span><ha-icon icon="mdi:chevron-down" aria-hidden="true"></ha-icon></summary>${rich(help.text)}</details>`;
   }
 
   _choiceMarkup(choice) {
