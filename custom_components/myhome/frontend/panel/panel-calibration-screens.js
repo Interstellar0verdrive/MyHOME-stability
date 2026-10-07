@@ -307,6 +307,10 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     else screen.stopwatch = null;
     screen.actions = [{ id: "stopping", label: t("wiz_T459"), kind: "status" }];
   };
+  // U-9: once the run to an end stop is over (the stop frame, or its full time and a margin gone by: a timed actuator
+  // stops by itself without a frame) Stop gives way to the state, «La corsa è finita: la tapparella è ferma».
+  const ranOut = (seconds) => MOTOR_STOPPED(view) || (seconds > 0 && (elapsed ?? 0) >= seconds + Math.max(2, seconds * 0.15));
+  const stopOrState = (seconds) => ranOut(seconds) ? [{ id: "stopped", label: t("wiz_T498"), kind: "state" }] : [stop];
   const toEndStop = (label, running) => [{ id: "endpoint", label: t(label), kind: "primary", disabled: phase !== running }, ...whileRunning(view, stop)];
   if (phase === "review" || phase === "saving") return summaryScreen(screen, ctx, tx, n, values);
   if (step === "home") {
@@ -318,7 +322,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     // discards the lift-off measurement (§8.9).
     if (phase === "closing" && !positioningRun(closingTime)) {
       Object.assign(screen, { code: p("05"), title: t("wiz_T030"), body: t("wiz_T031"),
-        actions: [{ id: "endpoint", label: t("wiz_T032"), kind: "primary" }, { id: "misbehaved", label: t("wiz_T033"), kind: "secondary" }, ...whileRunning(view, stop)] });
+        actions: [{ id: "endpoint", label: t("wiz_T032"), kind: "primary" }, { id: "misbehaved", label: t("wiz_T033"), kind: "secondary" }, ...stopOrState(closingTime)] });
       stoppedEarly(closingTime, "wiz_T440");
       return screen;
     }
@@ -356,7 +360,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     // The same Stop rule as A-05 (only while the motor runs); no T033 here, a stop would discard the lift-off.
     if (phase === "closing" && !positioningRun(closingTime)) {
       Object.assign(screen, { code: p("10"), title: t("wiz_T053"), body: t("wiz_T054"),
-        actions: [{ id: "endpoint", label: t("wiz_T032"), kind: "primary" }, ...whileRunning(view, stop)] });
+        actions: [{ id: "endpoint", label: t("wiz_T032"), kind: "primary" }, ...stopOrState(closingTime)] });
       // Not on a return before a repeated reading: that one confirms itself on the stop frame (§9.53).
       if (!local.ackReadings) stoppedEarly(closingTime, "wiz_T440");
       return screen;

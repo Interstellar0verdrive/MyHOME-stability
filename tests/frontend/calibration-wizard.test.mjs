@@ -1251,7 +1251,7 @@ test("A-04 lasts the whole positioning; A-05 then offers the end stop and T033 a
   // Home Assistant says the motor stopped (a stop frame, real or the actuator's timer): Stop leaves.
   backend.session.motor_stopped = true; backend.emit(); await tick();
   assert.equal(code(), "A-05");
-  assert.deepEqual(kinds(), [["endpoint", "primary"], ["misbehaved", "secondary"]], "no Stop once the motor stopped");
+  assert.deepEqual(kinds(), [["endpoint", "primary"], ["misbehaved", "secondary"], ["stopped", "status is-still"]], "no Stop once the motor stopped: its state (U-9)");
   await press("misbehaved");
   assert.equal(actions().at(-1), "stop", "today it ends the session: nothing measured yet is lost");
   await tick();
@@ -1265,10 +1265,13 @@ test("A-04 lasts the whole positioning; A-05 then offers the end stop and T033 a
   // The motor stopping ends the positioning before its time.
   assert.equal(run("home", "A", { motor_stopped: true }, 3).code, "A-05");
   assert.deepEqual([run("reset", "A", {}, 3).code, run("reset", "A", {}, 3).actions.map((action) => action.id)], ["A-09", ["endpoint", "stop"]], "A-09 lasts the positioning too, with the end stop at once");
-  assert.deepEqual([run("reset", "A").code, run("reset", "A").actions.map((action) => action.id)], ["A-10", ["endpoint", "stop"]],
+  // U-9: once the estimated run and a margin are over (21.7 s + 15 %), the cover has stopped: its state in place of Stop.
+  assert.deepEqual(run("reset", "A", {}, 30).actions.map((action) => action.id), ["endpoint", "stopped"], "the run is over");
+  assert.deepEqual(run("home", "A", {}, 30).actions.map((action) => action.id), ["endpoint", "misbehaved", "stopped"]);
+  assert.deepEqual([run("reset", "A", {}, 22.5).code, run("reset", "A", {}, 22.5).actions.map((action) => action.id)], ["A-10", ["endpoint", "stop"]],
     "a stop on A-10 would discard the lift-off: no T033 until repeat_step");
-  assert.deepEqual(run("reset", "A", { motor_stopped: true }, 3).actions.map((action) => action.id), ["endpoint"], "Stop only while moving");
-  assert.deepEqual([run("home", "C").code, run("home", "C").actions.map((action) => [action.id, !!action.disabled])],
+  assert.deepEqual(run("reset", "A", { motor_stopped: true }, 3).actions.map((action) => action.id), ["endpoint", "stopped"], "Stop only while moving");
+  assert.deepEqual([run("home", "C", {}, 22.5).code, run("home", "C", {}, 22.5).actions.map((action) => [action.id, !!action.disabled])],
     ["C-05", [["endpoint", false], ["misbehaved", false], ["stop", false]]], "the C clone too");
   // A reader sees Stop only while it moves.
   assert.deepEqual(run("home", "C", { read_only: true, owner: false, owner_present: true, motor_stopped: true }).actions, []);
@@ -1598,7 +1601,7 @@ test("after every change of screen the confirming buttons wait 700 ms, Stop neve
   await tap("choose");
   const a = wiz().querySelector('input[name="path"][value="A"]'); a.checked = true; a.dispatchEvent(new Event("change", { bubbles: true })); await tick();
   await tap("path"); await tap("begin");
-  await move(backend);
+  await move(backend, { seconds: 22.5 }); // past the opening, within the closing time + margin: Stop is still offered
   assert.equal(code(), "A-05");
   assert.equal(button("endpoint").disabled, true, "an end stop is never confirmed by the tap that started the run");
   assert.equal(button("stop").disabled, false, "Stop is always available");

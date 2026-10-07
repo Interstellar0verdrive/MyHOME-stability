@@ -420,6 +420,7 @@ export const translations = {
     wiz_T495: "No timed covers on these gateways",
     wiz_T496: "Calibrate in sequence",
     wiz_T497: "The preview closes: nothing has been saved and no cover has moved.",
+    wiz_T498: "The run is over: the cover has stopped",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1304,6 +1305,7 @@ export const translations = {
     wiz_T495: "Nessuna tapparella a tempo su questi gateway",
     wiz_T496: "Calibra in sequenza",
     wiz_T497: "L'anteprima si chiude: non è stato salvato niente e nessuna tapparella si è mossa.",
+    wiz_T498: "La corsa è finita: la tapparella è ferma",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

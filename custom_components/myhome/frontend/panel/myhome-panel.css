@@ -1235,6 +1235,8 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 /* G2-10: «Stopping…» in the place of ①/② while the backend waits for the actuator's stop. */
 .wiz-action.status { display: flex; align-items: center; justify-content: center; gap: 10px; box-sizing: border-box; margin: 0; padding: 0 16px;
   border: 1px dashed var(--panel-border); color: var(--panel-text-2); font-weight: 500; }
+/* U-9: a state in place of Stop (the cover has stopped): plain, no spinner, no dashed box. */
+.wiz-action.status.is-still { border-style: solid; border-color: transparent; background: transparent; font-weight: 400; }
 .wiz-spinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--panel-accent) 25%, transparent);
   border-top-color: var(--panel-accent); animation: wiz-spin 900ms linear infinite; }
 @keyframes wiz-spin { to { transform: rotate(360deg); } }
