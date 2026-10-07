@@ -340,18 +340,29 @@ test("path A runs the live geometry session from the first close to Save, one me
 });
 
 test("without slats the lift-off is skipped and the slat choice is sent", async () => {
-  const { backend, code, press, startFor, wiz } = await mount();
+  const { backend, code, press, type, startFor, wiz } = await mount();
   await startFor("cover.living_one");
   const no = wiz().querySelector('input[name="slats"][value="no"]');
   no.checked = true; no.dispatchEvent(new Event("change", { bubbles: true }));
   await press("begin");
   assert.equal(backend.subscriptions.find((message) => message.type === "myhome/cover_calibration/start").slats, false);
   await move(backend);
+  const body = () => wiz().querySelector(".wiz-body").textContent;
+  assert.equal(code(), "A-05");
+  assert.doesNotMatch(body(), /slat/i, "D-10: no slats in the starting closure");
   await press("endpoint");
   backend.stopped(); await tick();
   assert.equal(code(), "A-11");
   assert.equal(wiz().querySelector(".wiz-title").textContent, "Full ascent");
   assert.equal([...wiz().querySelectorAll(".wiz-steps li li")].some((item) => item.textContent.startsWith("Lift-off")), false);
+  assert.doesNotMatch(body(), /second run/i, "D-10: the ascent is the first run here");
+  assert.match(body(), /To start the ascent, press button ①/);
+  await press("next"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  assert.equal(code(), "A-13");
+  await type("198");
+  assert.equal(code(), "A-14");
+  assert.doesNotMatch(body(), /slat|NOT press when the edge/i, "D-10: no slats in the descent, nor the late press they need");
+  assert.match(body(), /To start the descent, press button ①/);
 });
 
 test("a wide gap asks before moving on and a reading out of range stays in the field", async () => {

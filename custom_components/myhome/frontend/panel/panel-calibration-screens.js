@@ -321,7 +321,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     // red Stop stays while the motor runs. T033 opens S-01 (nothing measured yet is lost). Not on A-10: there a stop
     // discards the lift-off measurement (§8.9).
     if (phase === "closing" && !positioningRun(closingTime)) {
-      Object.assign(screen, { code: p("05"), title: t("wiz_T030"), body: t("wiz_T031"),
+      Object.assign(screen, { code: p("05"), title: t("wiz_T030"), body: t(slats ? "wiz_T031" : "wiz_T501"),
         actions: [{ id: "endpoint", label: t("wiz_T032"), kind: "primary" }, { id: "misbehaved", label: t("wiz_T033"), kind: "secondary" }, ...stopOrState(closingTime)] });
       stoppedEarly(closingTime, "wiz_T440");
       return screen;
@@ -386,7 +386,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
         field: { label: t("wiz_T064"), hint: t("wiz_T066"), min: 20, max: 500, kind: "travel", value: view.saved_travel_cm ?? null },
         actions: [{ id: "reading", label: t("wiz_T051"), kind: "primary" }] });
     }
-    Object.assign(screen, { code: p("11"), title: slats ? t("wiz_T055") : t("wiz_T040"), body: t("wiz_T056"),
+    Object.assign(screen, { code: p("11"), title: slats ? t("wiz_T055") : t("wiz_T040"), body: t(slats ? "wiz_T056" : "wiz_T499"),
       stopwatch: runWatch(t, n, view, elapsed),
       actions: [{ id: "next", label: t("wiz_T045"), kind: "primary", disabled: phase !== "briefing" },
         { id: "endpoint", label: t("wiz_T057"), kind: "primary", disabled: phase !== "opening" }, ...whileRunning(view, stop)] });
@@ -394,7 +394,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     return screen;
   }
   if (step === "closing") {
-    Object.assign(screen, { code: p("14"), title: t("wiz_T068"), body: t("wiz_T069"), stopwatch: runWatch(t, n, view, elapsed),
+    Object.assign(screen, { code: p("14"), title: t("wiz_T068"), body: t(slats ? "wiz_T069" : "wiz_T500"), stopwatch: runWatch(t, n, view, elapsed),
       actions: [{ id: "next", label: t("wiz_T045"), kind: "primary", disabled: phase !== "briefing" },
         { id: "endpoint", label: t("wiz_T070"), kind: "primary", disabled: phase !== "closing" }, ...whileRunning(view, stop)] });
     if (phase === "geometry_wait_stop") stopping(view.values?.closing_time);
