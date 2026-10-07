@@ -882,7 +882,8 @@ dialog.cal-dialog .cal-resume-entity { display: none; }
   /* T-01 M: every cover is a card of its own, 12 px apart. First line: chevron, icon, name block and ⋮ at the top
      right; second line: status and profile on the left, Measure/Refine on the right. */
   .cal-list { border: 0; border-radius: 0; background: transparent; }
-  .cal-list-rows { display: grid; gap: 12px; }
+  /* D-39: the cards are never wider than the list. */
+  .cal-list-rows { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
   .cal-row, .cal-row:first-of-type, .cal-list-head + .cal-row { border: 1px solid var(--panel-border); border-radius: 12px; background: var(--panel-surface); }
   .cal-row.is-running { border-color: color-mix(in srgb, var(--panel-warning) 60%, transparent); }
   /* M4-6 + P-4: the chips on the left, the action on the right and never wrapping, centred on the chips. Status and
@@ -895,6 +896,9 @@ dialog.cal-dialog .cal-resume-entity { display: none; }
   .cal-row-main:not(:has(.cal-row-profile .cal-profile-chip)) .cal-row-profile { display: none; }
   .cal-row-action { grid-area: action; align-self: center; justify-self: end; white-space: nowrap; }
   .cal-row-main .cal-badge { max-width: 100%; }
+  /* D-39: the 180 px cap is on the cell too, a length (a percentage counts as none while the chips' box is sized, so
+     the cell kept the whole name's width and the chips stopped ~70 px before the action). */
+  .cal-row-main .cal-row-profile { max-width: 180px; }
   .cal-row-main .cal-profile-chip { max-width: min(100%, 180px); }
   .cal-row-last-inline { display: block; color: var(--panel-text-2); }
   /* Responsive map: from 720 px of window a card opens in place; its three blocks one under the other. */
@@ -919,7 +923,10 @@ dialog.cal-dialog .cal-resume-entity { display: none; }
 @media (min-width: 720px), (max-height: 499px) and (orientation: landscape) {
   @container caltab (max-width: 1015px) {
     .cal-row-main { display: flex; flex-wrap: nowrap; align-items: center; gap: 12px 16px; }
-    .cal-row-toggle { flex: 1 1 200px; min-width: 0; padding: 0; }
+    /* D-07/D-39 (decided 8 Oct): one card layout at every width. The line under the name wraps between its units and,
+       inside a unit, only between words when the column is narrower than the unit: never inside a word, never «…»;
+       so the column is never narrower than its longest word. */
+    .cal-row-toggle { flex: 1 1 200px; min-width: min-content; padding: 0; }
     .cal-row-chips { flex: 0 1 auto; min-width: min-content; padding: 0; justify-content: start; }
     .cal-row-actions { display: flex; flex: none; gap: 8px; align-items: center; }
     .cal-row-last-inline { display: none; }

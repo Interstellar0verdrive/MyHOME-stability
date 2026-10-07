@@ -165,6 +165,10 @@ export class CalibrationTab {
           (globalThis.requestAnimationFrame || ((callback) => setTimeout(callback, 16)))(() => { this._band(); this._alignCards(); });
         }).observe(host);
       }
+      // D-39: the measured card layouts (chips, Q-14 edge) are measured again once the fonts have loaded.
+      const fonts = context.host.ownerDocument?.fonts;
+      fonts?.addEventListener?.("loadingdone", () => this._alignCards());
+      fonts?.ready?.then(() => this._alignCards());
     }
     if (changed) {
       const generation = this._generation;
@@ -526,6 +530,7 @@ export class CalibrationTab {
   _alignCards() {
     const host = this._context?.host;
     if (!host) return;
+    this._fitChips(host);
     const active = host.dataset.band === "cards-stacked" && !layout.phone();
     for (const card of host.querySelectorAll(".cal-row.is-expanded")) {
       card.classList.remove("is-aligned");
@@ -555,6 +560,28 @@ export class CalibrationTab {
       if (edge <= 0) continue;
       card.style.setProperty("--cal-col2", `${edge}px`);
       card.classList.add("is-aligned");
+    }
+  }
+
+  /**
+   * D-39: in the cards (not on a phone) the status and profile chips, once stacked, leave their box as wide as the
+   * widest chip, not as wide as the two side by side: the name's column takes the room and the chips end 16 px before
+   * the action, as in a row whose chips sit side by side.
+   */
+  _fitChips(host) {
+    const cards = (host.dataset.band || "").startsWith("cards") && !layout.phone();
+    for (const chips of host.querySelectorAll(".cal-row-main > .cal-row-chips")) {
+      chips.style.removeProperty("flex");
+      chips.style.removeProperty("min-width");
+      if (!chips.getAttribute("style")) chips.removeAttribute("style");
+      if (!cards || !chips.clientWidth) continue;
+      // The chips themselves, not their cells (a cell stretches to the box).
+      const shown = [...chips.children].map((cell) => cell.firstElementChild || cell).filter((chip) => chip.getClientRects().length);
+      if (!shown.length) continue;
+      const box = chips.getBoundingClientRect();
+      const used = Math.max(...shown.map((chip) => chip.getBoundingClientRect().right)) - box.left;
+      // (A cut profile chip counts its whole name as its smallest width: the box is let go below it.)
+      if (box.width - used > 1) { chips.style.flex = `0 0 ${Math.ceil(used)}px`; chips.style.minWidth = "0"; }
     }
   }
 
@@ -621,7 +648,8 @@ export class CalibrationTab {
    */
   _subline(before, entity, after = []) {
     const parts = this._address({ entity }), units = before.filter(Boolean).map(esc), tail = after.filter(Boolean).map(esc);
-    const dot = (last) => (last ? "" : " ·");
+    // D-07: the «·» is held to the word before it, even when a unit wraps between its words.
+    const dot = (last) => (last ? "" : "\u00a0·");
     const address = parts.length ? [`<span class="cal-row-address">${parts.map((part, index) => `<span class="cal-row-address-part">${part}${dot(index === parts.length - 1 && !tail.length)}</span>`).join(" ")}</span>`] : [];
     const lead = units.map((unit, index) => `<span class="cal-row-unit">${unit}${dot(index === units.length - 1 && !address.length && !tail.length)}</span>`);
     return [...lead, ...address, ...tail.map((unit, index) => `<span class="cal-row-unit">${unit}${dot(index === tail.length - 1)}</span>`)].join(" ");

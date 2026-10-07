@@ -59,8 +59,8 @@ test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothin
   // The covers as the sequence view's rows, one radio each: name, room and address, status, profile.
   assert.equal(wiz().querySelector('select[name="cover"]'), null, "no drop-down");
   const rows = () => [...wiz().querySelectorAll(".wiz-picker .wiz-pick-row")];
-  assert.deepEqual(rows().map((row) => [row.querySelector(".cal-row-name strong").textContent, row.querySelector(".cal-row-name .muted").textContent,
-    row.querySelector(".cal-badge").textContent, row.querySelector(".cal-batch-profile").textContent.trim()]), [
+  assert.deepEqual(rows().map((row) => [row.querySelector(".cal-row-name strong").textContent.replace(/\u00a0/g, " "), row.querySelector(".cal-row-name .muted").textContent.replace(/\u00a0/g, " "),
+    row.querySelector(".cal-badge").textContent.replace(/\u00a0/g, " "), row.querySelector(".cal-batch-profile").textContent.trim()]), [
     ["Kitchen shutter 2", "Kitchen · Address: 91 · A: 9 · PL: 1", "Calibrated (times and roll)", "tall_two_leaf"],
     ["Living room shutter 1", "Living room · Address: 91 · A: 9 · PL: 1", "To calibrate", "—"],
     ["Living room shutter 3", "Living room · Address: 91 · A: 9 · PL: 1", "Calibrated (times)", "tall_two_leaf"]]);
@@ -1906,7 +1906,7 @@ test("the panel's entity states never overwrite the wizard's stepper", async () 
 test("A-01's list names the bus address and its notes in Italian too", async () => {
   const { tab, wiz, pickCover } = await mount({ language: "it" });
   tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
-  assert.equal(wiz().querySelector(".wiz-pick-row .cal-row-name .muted").textContent, "Kitchen · Indirizzo: 91 · A: 9 · PL: 1");
+  assert.equal(wiz().querySelector(".wiz-pick-row .cal-row-name .muted").textContent.replace(/\u00a0/g, " "), "Kitchen · Indirizzo: 91 · A: 9 · PL: 1");
   await pickCover("cover.kitchen_two");
   assert.equal(wiz().querySelector(".wiz-pick-notes .cal-note").textContent,
     "Questa tapparella è già calibrata (tempi e rullo, 29 set 2026) e segue il profilo «tall_two_leaf». Una nuova calibrazione, se la scegli al passo successivo, sostituirà i valori in uso; per correggerli, scegli il perfezionamento.");

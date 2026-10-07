@@ -522,8 +522,8 @@ test("several covers in sequence are chosen in a view of the tab, not a dialog, 
   assert.deepEqual([...tab.querySelectorAll(".cal-batch-row .cal-row-name strong")].map((item) => item.textContent),
     ["Bedroom", "Kitchen shutter 2", "Living room shutter 1", "Living room shutter 2"], "inventory names, sorted by name");
   assert.doesNotMatch(tab.textContent, /cover\.bedroom|cover_bedroom_raw|living_two_raw|gruppo/i);
-  assert.match(tab.querySelector('.cal-batch-row[data-entity="cover.kitchen_two"]').textContent, /Kitchen · Indirizzo: 91 · A: 9 · PL: 1/);
-  assert.equal(tab.querySelector('.cal-batch-row[data-entity="cover.living_two"] .cal-badge').textContent, "Calibrata (tempi e rullo)");
+  assert.match(tab.querySelector('.cal-batch-row[data-entity="cover.kitchen_two"]').textContent.replace(/\u00a0/g, " "), /Kitchen · Indirizzo: 91 · A: 9 · PL: 1/);
+  assert.equal(tab.querySelector('.cal-batch-row[data-entity="cover.living_two"] .cal-badge').textContent.replace(/\u00a0/g, " "), "Calibrata (tempi e rullo)");
   assert.equal(tab.querySelector('.cal-batch-row[data-entity="cover.living_two"] .cal-profile-chip').textContent, "tall_two_leaf");
   assert.equal(tab.querySelector('.cal-batch-row input[value="cover.living_one"]').disabled, true);
   tab.querySelector(".cal-batch .wiz-back").click(); await tick();
@@ -678,13 +678,13 @@ test("each row names its room and bus address as the device cards do", async () 
   const address = row(tab, "cover.living_one").querySelector(".cal-row-address");
   assert.equal(address.textContent.replace(/\s+/g, " ").trim(), "Indirizzo: 91 · A: 9 · PL: 1");
   // Responsive map §3.3: units that wrap only between them, the «·» with the unit before it; no «…» anywhere.
-  assert.deepEqual([...row(tab, "cover.living_one").querySelectorAll(".cal-row-name > .muted > span")].map((unit) => [unit.className, unit.textContent]),
+  assert.deepEqual([...row(tab, "cover.living_one").querySelectorAll(".cal-row-name > .muted > span")].map((unit) => [unit.className, unit.textContent.replace(/\u00a0/g, " ")]),
     [["cal-row-unit", "Living room ·"], ["cal-row-address", "Indirizzo: 91 · A: 9 · PL: 1"]]);
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /\.cal-row-address \{ white-space: nowrap; \}/);
   assert.doesNotMatch(css, /\.cal-row-name > \.muted \{[^}]*ellipsis/);
   assert.deepEqual([...address.querySelectorAll(".cal-row-address-label")].map((item) => item.textContent), ["Indirizzo:", "A:", "PL:"]);
-  assert.match(row(tab, "cover.living_one").querySelector(".cal-row-name .muted").textContent, /^Living room · Indirizzo/);
+  assert.match(row(tab, "cover.living_one").querySelector(".cal-row-name .muted").textContent, /^Living room\u00a0· Indirizzo/, "D-07: the «·» held to the word before it");
 });
 
 test("the row menu holds every secondary action, the same as the expanded details", async () => {
@@ -1091,7 +1091,7 @@ test("cards: icon and texts, chips side by side when they fit, action and ⋮; t
   assert.ok(CARD_HEADER_COLUMNS >= LIST_BANDS.tableFull);
   assert.doesNotMatch(css, /@container caltab \(min-width: 900px\)/);
   assert.equal(row(tab, "cover.kitchen_two").querySelector(".cal-row-address-ap"), null, "no short form");
-  assert.deepEqual([...row(tab, "cover.kitchen_two").querySelectorAll(".cal-row-address-part")].map((part) => part.textContent), ["Address: 91 ·", "A: 9 ·", "PL: 1"],
+  assert.deepEqual([...row(tab, "cover.kitchen_two").querySelectorAll(".cal-row-address-part")].map((part) => part.textContent.replace(/\u00a0/g, " ")), ["Address: 91 ·", "A: 9 ·", "PL: 1"],
     "each pair a unit, the «·» with the one before");
   assert.match(css, /\.cal-row-address-part \{ white-space: nowrap; \}/);
   assert.doesNotMatch(css, /is-full/);
@@ -1132,7 +1132,7 @@ test("the list's bands by content width (1200/1016/700) and the wizard's layouts
   assert.match(calibration, /@container caltab \(min-width: 1200px\) \{\s*\.cal-list \{ --cal-cols: repeat\(3, minmax\(0, 1fr\)\) 158px; \}/);
   for (const n of [1, 2, 3]) assert.match(calibration, new RegExp(`\\.cal-details-grid > section:nth-child\\(${n}\\) \\{ grid-column: ${n}; \\}`));
   const address = row(tab, "cover.kitchen_two").querySelector(".cal-row-address");
-  assert.equal(address.textContent, "Address: 91 · A: 9 · PL: 1", "always whole (Q-15)");
+  assert.equal(address.textContent.replace(/\u00a0/g, " "), "Address: 91 · A: 9 · PL: 1", "always whole (Q-15)");
 });
 
 test("the sequence's status and Start stay in view while the list scrolls; on cards the place sits at the row's edge (M5-2)", async () => {
@@ -1450,4 +1450,25 @@ test("D-38: the active filter chip's number is the accent mixed towards the text
   const { readFileSync } = await import("node:fs");
   const css = readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /\.cal-chip\[aria-pressed="true"\] \.count \{ color: color-mix\(in srgb, var\(--panel-accent\) 70%, var\(--primary-text-color, #182b37\)\); \}/);
+});
+
+test("D-07/D-39: one card layout: never wider than the list, the name's column never narrower than a word, the chips end 16 px before the action", async () => {
+  const { readFileSync } = await import("node:fs");
+  const css = readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.cal-list-rows \{ display: grid; grid-template-columns: minmax\(0, 1fr\); gap: 12px; \}/);
+  assert.match(css, /\.cal-row-toggle \{ flex: 1 1 200px; min-width: min-content; padding: 0; \}/);
+  assert.match(css, /\.cal-row-main \.cal-row-profile \{ max-width: 180px; \}/, "the cap as a length on the cell");
+  // Stacked chips leave their box as wide as the widest chip (measured: no layout in jsdom, so the boxes are stubbed).
+  const { panel } = await mount();
+  const host = document.createElement("div"); host.dataset.band = "cards-row";
+  host.innerHTML = '<div class="cal-row-main"><div class="cal-row-chips"><span class="cal-row-status"><span class="cal-badge"></span></span><span class="cal-row-profile"><span class="cal-profile-chip"></span></span></div></div>';
+  const chips = host.querySelector(".cal-row-chips"), [badge, chip] = host.querySelectorAll(".cal-badge, .cal-profile-chip");
+  const rect = (left, width) => ({ left, right: left + width, width, top: 0, bottom: 24, height: 24 });
+  Object.defineProperty(chips, "clientWidth", { value: 234 });
+  chips.getBoundingClientRect = () => rect(400, 234);
+  badge.getBoundingClientRect = () => rect(400, 112); chip.getBoundingClientRect = () => rect(400, 180);
+  badge.getClientRects = chip.getClientRects = () => [rect(0, 1)];
+  panel._calibrationTab._fitChips(host);
+  assert.equal(chips.style.flex, "0 0 180px");
+  assert.ok(["0", "0px"].includes(chips.style.minWidth), "let go below the cut chip's whole name");
 });
