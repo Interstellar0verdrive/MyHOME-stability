@@ -752,16 +752,25 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-filterbar.is-chips .cal-tab-compact .cal-compact-filter { display: none; }
 /* Q-26 (Figma): with the chips, «Ordina per ▾» is drawn as a chip: 24 px, 4 × 8/10 px inside, round, the neutral chip
    colour at 12 % with a 20 % border, 12 px text in the secondary colour, a 16 px chevron 6 px after. */
-.cal-filterbar.is-chips .cal-filterbar-sort { --cal-chip: var(--panel-text-2); flex: none; box-sizing: border-box; gap: 6px; min-height: 24px; height: 24px;
+/* U-11 (Q-31): on the surface colour (white in light) and tappable everywhere: the native drop-down covers the whole chip,
+   invisible, over the label, the current choice and the chevron, which take no taps; no ring of its own on a tap, the
+   chip's outline only from the keyboard. */
+.cal-filterbar.is-chips .cal-filterbar-sort { --cal-chip: var(--panel-text-2); position: relative; flex: none; box-sizing: border-box; gap: 6px; min-height: 24px; height: 24px;
   padding: 4px 8px 4px 10px; border: 1px solid color-mix(in srgb, var(--cal-chip) 20%, transparent); border-radius: 999px;
-  background: color-mix(in srgb, var(--cal-chip) 12%, transparent); font-size: 12px; font-weight: 500; line-height: 16px; color: var(--panel-text-2); }
-.cal-filterbar.is-chips .cal-filterbar-sort select { min-height: 0; height: 16px; padding: 0; border: 0; background: none; font-size: 12px; font-weight: 500;
-  line-height: 16px; color: inherit; cursor: pointer; }
+  background: var(--panel-surface); font-size: 12px; font-weight: 500; line-height: 16px; color: var(--panel-text-2);
+  cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.cal-filterbar.is-chips .cal-filterbar-sort > span { pointer-events: none; }
+.cal-filterbar.is-chips .cal-filterbar-sort select { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; min-height: 0; margin: 0; padding: 0;
+  border: 0; border-radius: inherit; background: none; opacity: 0; font-size: 12px; cursor: pointer; -webkit-appearance: none; appearance: none;
+  -webkit-tap-highlight-color: transparent; }
+.cal-filterbar.is-chips .cal-filterbar-sort select:is(:focus, :focus-visible, :active) { outline: none; box-shadow: none; }
 .cal-filterbar.is-chips .cal-filterbar-sort::after { content: ""; flex: none; width: 16px; height: 16px; background: currentColor; pointer-events: none;
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7.41 8.58 12 13.17l4.59-4.59L18 10l-6 6-6-6z'/%3E%3C/svg%3E") center / 16px 16px no-repeat;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7.41 8.58 12 13.17l4.59-4.59L18 10l-6 6-6-6z'/%3E%3C/svg%3E") center / 16px 16px no-repeat; }
 /* Q-27: the table sorts by its headers (the active one keeps its arrow): from 1016 px of content the bar has no order. */
 @container caltab (min-width: 1016px) { .cal-tab-filters .cal-filterbar-sort { display: none; } }
+.cal-sort-value { display: none; }
+.cal-filterbar.is-chips .cal-sort-value { display: inline; }
 .cal-filterbar.is-chips .cal-sort-short { display: none; }
 .cal-filterbar.is-chips .cal-sort-long { display: inline; }
 /* While measuring, the chips keep one line at their own width. */

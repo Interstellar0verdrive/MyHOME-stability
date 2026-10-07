@@ -357,7 +357,9 @@ export class CalibrationTab {
     const column = (key) => t({ cover: "calTabColCover", status: "calTabColStatus", profile: "calTabColProfile" }[key]);
     const options = SORT_KEYS.flatMap((key) => ["asc", "desc"].map((dir) =>
       `<option value="${key}:${dir}" ${this._sort.key === key && this._sort.dir === dir ? "selected" : ""}>${esc(column(key))} ${dir === "asc" ? "↑" : "↓"}</option>`)).join("");
-    return `<label class="cal-compact-sort cal-filterbar-sort"><span class="cal-sort-short">${esc(t("wiz_T450"))}</span><span class="cal-sort-long">${esc(t("wiz_T379"))}:</span><select ${attribute}="order" aria-label="${esc(t("wiz_T379"))}">${options}</select></label>`;
+    // U-11: as a chip the drop-down covers the whole chip, invisible; the label and the choice are drawn under it.
+    const current = `${column(this._sort.key)} ${this._sort.dir === "asc" ? "↑" : "↓"}`;
+    return `<label class="cal-compact-sort cal-filterbar-sort"><span class="cal-sort-short">${esc(t("wiz_T450"))}</span><span class="cal-sort-long">${esc(t("wiz_T379"))}:</span><span class="cal-sort-value" aria-hidden="true">${esc(current)}</span><select ${attribute}="order" aria-label="${esc(t("wiz_T379"))}">${options}</select></label>`;
   }
 
   /** The header row of the Calibration table: Cover, Status and Profile sort it (the wizard's lists are cards). */

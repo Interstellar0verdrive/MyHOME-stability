@@ -819,6 +819,8 @@ test("the sequence list sorts like the tab, and reordering never changes the pla
   assert.deepEqual(places(tab).filter(([, place]) => place).sort(), [["bedroom", "2"], ["living_two", "1"]], "the places follow the ticks, not the rows");
   sort("profile:asc");
   assert.deepEqual(names(), ["kitchen_two", "living_two", "bedroom", "living_one"], "covers without a profile last");
+  assert.equal(tab.querySelector(".cal-batch .cal-sort-value").textContent, tab.querySelector('.cal-batch .cal-compact-sort select[data-sort="order"]').selectedOptions[0].textContent,
+    "U-11: the chip draws the new choice");
   assert.deepEqual(JSON.parse(window.localStorage.getItem("myhome-panel-calibration-sort-v1")), { key: "profile", dir: "asc" }, "one choice shared with the list");
   const select = tab.querySelector('.cal-batch .cal-compact-sort select[data-sort="order"]');
   select.value = "cover:asc"; select.dispatchEvent(new Event("change", { bubbles: true }));
@@ -1164,7 +1166,10 @@ test("one filter and order bar for the list, A-01 and the sequence: chips and «
   const list = tab.querySelector(".cal-tab-filters.cal-filterbar");
   assert.deepEqual(shape(list), ["cal-tab-chips", "cal-tab-compact"]);
   assert.deepEqual([...list.querySelectorAll(".cal-tab-compact select")].map((select) => select.hasAttribute("data-filter") ? "filter" : select.dataset.sort), ["filter", "order"]);
-  assert.deepEqual([...list.querySelectorAll(".cal-filterbar-sort > span")].map((span) => span.textContent), ["Ordina:", "Ordina per:"], "short when narrow, long when wide");
+  assert.deepEqual([...list.querySelectorAll(".cal-filterbar-sort > span:not(.cal-sort-value)")].map((span) => span.textContent), ["Ordina:", "Ordina per:"], "short when narrow, long when wide");
+  const value = list.querySelector(".cal-filterbar-sort > .cal-sort-value");
+  assert.equal(value.getAttribute("aria-hidden"), "true", "U-11: the chip's choice is drawn, the drop-down is what is read");
+  assert.equal(value.textContent, list.querySelector(".cal-filterbar-sort select").selectedOptions[0].textContent, "the drawn choice is the selected one");
   // The sequence: «Seleziona:» with its three shortcuts as chips, the same «Seleziona ⌄» when narrow.
   const { tab: seq } = await openBatch();
   const batch = seq.querySelector(".cal-batch-filterbar.cal-filterbar");
@@ -1197,6 +1202,12 @@ test("one filter and order bar for the list, A-01 and the sequence: chips and «
   assert.match(css, /@container caltab \(min-width: 1016px\) \{ \.cal-tab-filters \.cal-filterbar-sort \{ display: none; \} \}/);
   const chipSort = css.match(/\.cal-filterbar\.is-chips \.cal-filterbar-sort \{([^}]*)\}/)?.[1] || "";
   for (const part of ["height: 24px", "padding: 4px 8px 4px 10px", "gap: 6px", "border-radius: 999px", "font-size: 12px", "font-weight: 500"]) assert.ok(chipSort.includes(part), `Q-26 ${part}`);
+  for (const part of ["position: relative", "background: var(--panel-surface)", "-webkit-tap-highlight-color: transparent"]) assert.ok(chipSort.includes(part), `U-11 ${part}`);
+  const chipSelect = css.match(/\.cal-filterbar\.is-chips \.cal-filterbar-sort select \{([^}]*)\}/)?.[1] || "";
+  for (const part of ["position: absolute", "inset: 0", "z-index: 1", "opacity: 0", "-webkit-tap-highlight-color: transparent"]) assert.ok(chipSelect.includes(part), `U-11: the drop-down covers the chip, ${part}`);
+  assert.match(css, /\.cal-filterbar\.is-chips \.cal-filterbar-sort > span \{ pointer-events: none; \}/, "U-11: the label takes no taps");
+  assert.match(css, /\.cal-filterbar\.is-chips \.cal-filterbar-sort select:is\(:focus, :focus-visible, :active\) \{ outline: none; box-shadow: none; \}/, "U-11: no inner ring");
+  assert.match(css, /\.cal-compact-sort:has\(select:focus-visible\) \{ outline: 2px solid var\(--panel-accent\);/, "U-11: the chip's outline, from the keyboard only");
   assert.match(css, /\.cal-filterbar\.is-chips \.cal-filterbar-sort::after \{ content: ""; flex: none; width: 16px; height: 16px;/, "a 16 px chevron");
   assert.ok(list.querySelector(":scope > .cal-tab-summary + .cal-filterbar-row"), "the counts above the drop-downs");
   void panel;
