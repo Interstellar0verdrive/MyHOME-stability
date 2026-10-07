@@ -300,6 +300,8 @@ test("Assign profile lists the saved profiles as B-01 does and assigns with the 
   const write = calls.find((message) => message.type === "myhome/cover_profiles/write");
   assert.deepEqual(write, { type: "myhome/cover_profiles/write", entry_id: "one", entity_id: "cover.bedroom", revision: 7, action: "assign", profile_id: "tall" });
   assert.equal(root.querySelector("#dialog-host dialog"), null);
+  await tick(4);
+  assert.match(tab.querySelector(".cal-tab-done").textContent.trim(), /now follows the profile "/, "D-28: confirmed as an unlinking is");
 });
 
 test("notes are opaque, so they never blend with the row that hosts them, and A-01's chosen row is neutral", async () => {

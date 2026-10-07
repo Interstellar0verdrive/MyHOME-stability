@@ -1044,7 +1044,9 @@ export class CalibrationTab {
         await hass.callWS({ type: "myhome/cover_profiles/write", entry_id: item.entry.entry_id, entity_id: item.cover.entity_id,
           revision: data.revision, action: "assign", profile_id: profileId });
         if (generation === this._generation && this._dialog === dialog) {
-          if (profileId === null) this._done = fill(t("wiz_T407"), { cover: item.name });
+          // D-28: an assignment is confirmed as an unlinking is.
+          this._done = profileId === null ? fill(t("wiz_T407"), { cover: item.name })
+            : fill(t("wiz_T511"), { cover: item.name, profile: profiles.find((profile) => profile.id === profileId)?.name ?? "" });
           this._dialogDone();
         }
       } catch (error) {
