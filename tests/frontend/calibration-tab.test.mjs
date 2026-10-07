@@ -1442,3 +1442,10 @@ test("D-05/D-06: a long profile name stays inside its note, and the details' chi
   const whole = chip.closest(".cal-row").querySelector(".cal-details-grid .cal-chip-text");
   assert.equal(whole.innerHTML, "profilo_<wbr>lato_<wbr>giardino-<wbr>nord.<wbr>v2");
 });
+
+test("D-19: «In corso · …» is one line like every chip, its text darkened to read on its fill", async () => {
+  const { readFileSync } = await import("node:fs");
+  const css = readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.cal-badge\[data-status="running"\] \{ --cal-chip: var\(--panel-warning\); white-space: nowrap; color: color-mix\(in srgb, var\(--panel-warning\) 55%, #000\); \}/);
+  assert.match(css, /\[data-theme="dark"\] \.cal-badge\[data-status="running"\] \{ color: color-mix\(in srgb, var\(--panel-warning\) 70%, var\(--primary-text-color, #fff\)\); \}/, "lightened on a dark theme");
+});

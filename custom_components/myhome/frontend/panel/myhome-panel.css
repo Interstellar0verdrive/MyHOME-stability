@@ -828,7 +828,9 @@ dialog.cal-dialog .cal-resume-entity { display: none; }
 .cal-menu button:hover, .cal-menu button:focus-visible { background: var(--panel-accent-soft); }
 .cal-badge[data-status="times"], .cal-badge[data-status="rolls"] { --cal-chip: var(--panel-accent); }
 .cal-badge[data-status="verified"] { --cal-chip: var(--panel-success); }
-.cal-badge[data-status="running"] { --cal-chip: var(--panel-warning); white-space: normal; }
+/* D-19: «In corso · …» on one line like every chip (Q-12), its text the warning colour darkened to read on its light fill
+   (the dark theme lightens it instead, below). */
+.cal-badge[data-status="running"] { --cal-chip: var(--panel-warning); white-space: nowrap; color: color-mix(in srgb, var(--panel-warning) 55%, #000); }
 /* Q-22: in rows, cards and headers a profile's name is cut at 180 px («…», whole in the tooltip); the details'
    «Profilo» block shows it whole. */
 .cal-profile-chip { --cal-chip: var(--panel-accent); max-width: 180px; }
