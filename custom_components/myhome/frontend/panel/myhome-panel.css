@@ -1330,8 +1330,12 @@ dialog.cal-dialog .dialog-head { justify-content: space-between; padding-block: 
     .wiz-actions { border-inline-start: 1px solid var(--panel-border); }
   }
   @container caltab (max-width: 699px) {
-    /* Clipped rather than hidden: the wizard is then no scroll box of its own and the bar sticks to the window. */
-    .wiz, .wiz.cal-batch-wiz { overflow: clip; }
+    /* Clipped rather than hidden: the wizard is then no scroll box of its own. U-1: Home Assistant scrolls the page on
+       <html> while the panel grows, so a sticky bar never sticks: the script docks it to the window (`is-docked`). */
+    .wiz, .wiz.cal-batch-wiz { overflow: clip; --wiz-single: 1; }
+    .wiz.is-docked > .wiz-frame > .wiz-columns { padding-bottom: var(--dock-height); }
+    .wiz.is-docked > .wiz-frame > .wiz-columns > .wiz-actions { position: fixed; z-index: 7; inset-inline-start: var(--dock-left); bottom: 0;
+      width: var(--dock-width); box-sizing: border-box; border-radius: 0; box-shadow: 0 -8px 24px -16px rgb(0 0 0 / 40%); }
     .wiz-actions { position: sticky; bottom: 0; z-index: 2; padding: 12px 16px; border-top: 1px solid var(--panel-border);
       border-radius: 0 0 var(--panel-radius) var(--panel-radius); background: var(--panel-surface); }
     .cal-batch-sticky { position: static; }

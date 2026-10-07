@@ -2260,7 +2260,7 @@ test("the wizard's layouts follow the content width as the layout module says, b
   const { WIZARD_BANDS, wizardBand, SHORT } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-layout.js");
   assert.match(css, new RegExp(`@container caltab \\(min-width: ${WIZARD_BANDS.threeColumns}px\\) \\{\\s*\\.wiz-columns \\{ grid-template-columns: 240px minmax\\(0, 1fr\\) clamp\\(240px, 30%, 320px\\);`));
   assert.match(css, new RegExp(`@container caltab \\(min-width: ${WIZARD_BANDS.intermediate}px\\) and \\(max-width: ${WIZARD_BANDS.threeColumns - 1}px\\) \\{\\s*\\.wiz-columns \\{ grid-template-columns: minmax\\(0, 1fr\\) clamp\\(240px, 30%, 320px\\);`));
-  assert.match(css, new RegExp(`@container caltab \\(max-width: ${WIZARD_BANDS.intermediate - 1}px\\) \\{\\s*/\\*[^*]*\\*/\\s*\\.wiz, \\.wiz\\.cal-batch-wiz \\{ overflow: clip; \\}`));
+  assert.match(css, new RegExp(`@container caltab \\(max-width: ${WIZARD_BANDS.intermediate - 1}px\\) \\{\\s*/\\*[^*]*\\*/\\s*\\.wiz, \\.wiz\\.cal-batch-wiz \\{ overflow: clip; --wiz-single: 1; \\}`));
   assert.match(css, new RegExp(`@container wizbar \\(min-width: ${WIZARD_BANDS.wideBar}px\\)`));
   assert.ok(css.includes(`@media ${SHORT} {`));
   assert.deepEqual([1200, 1000, 999, 700, 699].map((width) => wizardBand(width)), ["three-columns", "three-columns", "intermediate", "intermediate", "single-column"]);
@@ -2326,5 +2326,17 @@ test("a gated primary stays a primary, disabled: A-01's Continue before a choice
   tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
   assert.ok(button("choose").classList.contains("primary"));
   assert.equal(button("choose").disabled, true);
+});
+
+test("in the one-column layout the action bar is docked to the window's bottom (Home Assistant scrolls <html>) (U-1)", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.wiz\.is-docked > \.wiz-frame > \.wiz-columns > \.wiz-actions \{ position: fixed; z-index: 7; inset-inline-start: var\(--dock-left\); bottom: 0;/);
+  assert.match(css, /\.wiz\.is-docked > \.wiz-frame > \.wiz-columns \{ padding-bottom: var\(--dock-height\); \}/, "the wizard keeps the bar's room");
+  const { dockBar } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-layout.js");
+  const { wiz, tab } = await mount();
+  tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
+  const stop = dockBar(wiz());
+  assert.equal(wiz().classList.contains("is-docked"), false, "without a layout nothing is docked");
+  stop();
 });
 

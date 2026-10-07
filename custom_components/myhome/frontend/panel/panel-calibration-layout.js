@@ -101,3 +101,45 @@ export function fitBars(root) {
   }
 }
 
+/**
+ * U-1: in the one-column wizard (content under 700 px, a window of 720 px or more) the actions are a bar held at the
+ * bottom of the window. Home Assistant scrolls the page on <html> while the panel grows with its content, so a sticky
+ * bar never sticks: the bar is docked instead, `position: fixed` over the wizard's own width, whenever the wizard runs
+ * past the window's bottom, and back in its place at the end of the wizard when that end is in view. The wizard keeps
+ * the bar's height as padding meanwhile, so nothing moves. The stylesheet marks the layout with `--wiz-single: 1`.
+ * Returns the function that stops it.
+ */
+export function dockBar(wiz) {
+  if (!wiz || typeof window === "undefined" || typeof window.addEventListener !== "function") return () => {};
+  const view = wiz.ownerDocument.defaultView;
+  let frame = 0;
+  const update = () => {
+    frame = 0;
+    if (!wiz.isConnected) return;
+    const bar = wiz.querySelector(":scope > .wiz-frame > .wiz-columns > .wiz-actions, :scope .wiz-columns > .wiz-actions");
+    const single = view.getComputedStyle(wiz).getPropertyValue("--wiz-single").trim() === "1";
+    const box = wiz.getBoundingClientRect(), height = view.innerHeight;
+    const docked = wiz.classList.contains("is-docked");
+    const barHeight = bar ? (docked ? bar.getBoundingClientRect().height : bar.offsetHeight) : 0;
+    const dock = !!bar && single && box.height > 0 && box.bottom > height + 1 && box.top + barHeight + 80 < height;
+    wiz.classList.toggle("is-docked", dock);
+    if (dock) {
+      wiz.style.setProperty("--dock-left", `${Math.round(box.left)}px`);
+      wiz.style.setProperty("--dock-width", `${Math.round(box.width)}px`);
+      wiz.style.setProperty("--dock-height", `${Math.round(barHeight)}px`);
+    }
+  };
+  const schedule = () => { if (!frame) frame = (view.requestAnimationFrame || ((callback) => setTimeout(callback, 16)))(update); };
+  view.addEventListener("scroll", schedule, { capture: true, passive: true });
+  view.addEventListener("resize", schedule, { passive: true });
+  const observer = typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
+  observer?.observe(wiz);
+  update();
+  return () => {
+    view.removeEventListener("scroll", schedule, { capture: true });
+    view.removeEventListener("resize", schedule);
+    observer?.disconnect();
+    wiz.classList.remove("is-docked");
+  };
+}
+

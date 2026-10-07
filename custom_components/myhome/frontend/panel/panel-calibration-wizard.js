@@ -4,7 +4,7 @@
  * `CalibrationGateway` (live session or local preview); it never builds a WebSocket message itself.
  */
 const asset = (name) => { const url = new URL(name, import.meta.url); url.search = new URL(import.meta.url).search; return url.href; };
-const [{ escapeHtml: esc }, text, screens, gateways, illustration, { morph }, { layout, fitBars }] = await Promise.all([
+const [{ escapeHtml: esc }, text, screens, gateways, illustration, { morph }, { layout, fitBars, dockBar }] = await Promise.all([
   import(asset("panel-dom.js")), import(asset("panel-calibration-text.js")), import(asset("panel-calibration-screens.js")),
   import(asset("panel-calibration-gateway.js")), import(asset("panel-calibration-illustration.js")), import(asset("panel-calibration-morph.js")), import(asset("panel-calibration-layout.js")),
 ]);
@@ -86,6 +86,8 @@ export class CalibrationWizard {
     clearTimeout(this._guardTimer);
     this._gateway?.close();
     this._gateway = null;
+    this._undock?.();
+    this._undock = null;
     this._root?.remove();
     this._root = null;
     this._frame = null;
@@ -110,6 +112,8 @@ export class CalibrationWizard {
     this._engine.hidden = true;
     this._root.append(this._frame, this._engine);
     host.append(this._root);
+    // U-1: the one-column layout docks its action bar to the window's bottom.
+    this._undock = dockBar(this._root);
     this._theme();
     this._root.addEventListener("click", (event) => this._click(event));
     this._root.addEventListener("keydown", (event) => this._keydown(event));
