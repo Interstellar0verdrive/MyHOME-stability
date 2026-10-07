@@ -833,7 +833,9 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-profile-chip { --cal-chip: var(--panel-accent); max-width: 180px; }
 .cal-chip-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cal-details-grid .cal-profile-chip { max-width: 100%; }
-.cal-details-grid .cal-chip-text { white-space: normal; overflow-wrap: anywhere; }
+.cal-details-grid .cal-chip-text { white-space: normal; overflow-wrap: break-word; }
+/* D-05: a note naming a long profile wraps inside its box. */
+.cal-note { overflow-wrap: anywhere; }
 .cal-profile-chip ha-icon { --mdc-icon-size: 8px; }
 /* Details start 12 px below the row (24 px under the cover icon) and end 20 px under the lowest block action. */
 .cal-row-details { padding: 12px 14px 20px; }

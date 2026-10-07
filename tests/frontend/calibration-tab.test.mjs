@@ -1305,7 +1305,7 @@ test("a profile chip is cut at 180 px with its whole name in the tooltip, whole 
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /\.cal-profile-chip \{ --cal-chip: var\(--panel-accent\); max-width: 180px; \}/);
   assert.match(css, /\.cal-chip-text \{ min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; \}/);
-  assert.match(css, /\.cal-details-grid \.cal-chip-text \{ white-space: normal; overflow-wrap: anywhere; \}/);
+  assert.match(css, /\.cal-details-grid \.cal-chip-text \{ white-space: normal; overflow-wrap: break-word; \}/, "whole, wrapping after «_» (D-06)");
 });
 
 test("the lists in the wizard are cards, with the bar's counts above its drop-downs (R-6)", async () => {
@@ -1406,4 +1406,20 @@ test("D-07: a room or gateway under a name never wraps inside itself", async () 
   assert.match(css, /\.cal-row-unit \{ white-space: nowrap; \}/);
   const { tab } = await mount();
   assert.ok(tab.querySelector(".cal-row-sub .cal-row-unit, .cal-row-unit"), "the units are marked");
+});
+
+test("D-05/D-06: a long profile name stays inside its note, and the details' chip wraps only after «_», «-» or «.»", async () => {
+  const { readFileSync } = await import("node:fs");
+  const css = readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.cal-note \{ overflow-wrap: anywhere; \}/);
+  assert.match(css, /\.cal-details-grid \.cal-chip-text \{ white-space: normal; overflow-wrap: break-word; \}/);
+  const data = overview();
+  data.profiles[0].name = "profilo_lato_giardino-nord.v2";
+  const { tab } = await mount({ data });
+  const chip = [...tab.querySelectorAll(".cal-row-profile .cal-chip-text")].find((item) => item.textContent === "profilo_lato_giardino-nord.v2");
+  assert.ok(chip, "in the row the name is one run, cut with «…»");
+  assert.equal(chip.querySelector("wbr"), null);
+  const toggle = chip.closest(".cal-row").querySelector('[data-action="cal-tab-toggle"]'); toggle.click(); await tick();
+  const whole = chip.closest(".cal-row").querySelector(".cal-details-grid .cal-chip-text");
+  assert.equal(whole.innerHTML, "profilo_<wbr>lato_<wbr>giardino-<wbr>nord.<wbr>v2");
 });

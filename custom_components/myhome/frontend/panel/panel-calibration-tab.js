@@ -496,8 +496,10 @@ export class CalibrationTab {
    * Q-22: a profile chip: at most 180 px in rows, cards and headers, its name cut with «…» and whole in the tooltip;
    * the details' «Profilo» block shows it whole.
    */
-  _profileChip(name) {
-    return `<span class="chip cal-profile-chip" title="${esc(name)}"><ha-icon icon="mdi:circle" aria-hidden="true"></ha-icon><span class="cal-chip-text">${esc(name)}</span></span>`;
+  _profileChip(name, whole = false) {
+    // D-06: shown whole (the details' «Profilo»), a long name may wrap only after its «_», «-» or «.», not mid-word.
+    const text = whole ? esc(name).replace(/([_.-])/g, "$1<wbr>") : esc(name);
+    return `<span class="chip cal-profile-chip" title="${esc(name)}"><ha-icon icon="mdi:circle" aria-hidden="true"></ha-icon><span class="cal-chip-text">${text}</span></span>`;
   }
 
   /** Q-3: the list's band for the tab's content width, as the stylesheet's container rules choose it (`data-band`). */
@@ -695,7 +697,7 @@ export class CalibrationTab {
         <section><h4>${esc(t("calTabColLast"))}</h4>${list([[t("calTabDate"), item.last ? dateText(item.last, language).replace(/ /g, "\u00a0") : "—"],
           [t("calTabMethod"), t(`calTabMethod_${item.method || "none"}`)]])}
           ${item.profile && scaled ? `<p class="${note}">${esc(fill(t("calTabInheritedNote"), { profile: item.profile.name }))}</p>` : ""}${action(measure)}</section>
-        <section><h4>${esc(t("calTabColProfile"))}</h4>${item.profile ? `<p>${this._profileChip(item.profile.name)}</p>
+        <section><h4>${esc(t("calTabColProfile"))}</h4>${item.profile ? `<p>${this._profileChip(item.profile.name, true)}</p>
           <p>${esc(followers.length ? fill(t("calTabFollowers"), { names: names(followers, language) }) : t("calTabFollowersNone"))}</p>
           <p class="${note}">${esc(t("calTabProfileNote"))}</p>` : `<p class="muted">${esc(t("calTabProfileNone"))}</p>`}${action(assign)}</section>
       </div>`;
