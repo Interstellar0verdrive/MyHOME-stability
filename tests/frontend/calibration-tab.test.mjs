@@ -1308,13 +1308,21 @@ test("the tab's head: title, «Come funziona ›» under it, «Calibra una tappa
   const { tab } = await mount({ language: "it" });
   const head = tab.querySelector(".cal-tab-head");
   assert.equal(head.querySelector(".cal-tab-heading > .cal-tab-title").textContent, "Calibrazione");
-  assert.equal(head.querySelector(".cal-tab-heading > .cal-tab-how summary").textContent, "Come funziona");
+  assert.equal(head.querySelector(".cal-tab-heading > .cal-tab-how").textContent, "Come funziona");
+  // U-2: the text opens under the whole title row (the buttons keep their place).
+  const how = tab.querySelector(".cal-tab-top > .cal-tab-how-text");
+  assert.equal(how.hidden, true);
+  head.querySelector(".cal-tab-how").click(); await tick();
+  assert.equal(tab.querySelector(".cal-tab-top > .cal-tab-how-text").hidden, false);
+  assert.equal(tab.querySelector(".cal-tab-how").getAttribute("aria-expanded"), "true");
+  assert.ok(tab.querySelector(".cal-tab-top > .cal-tab-head + .cal-tab-how-text"), "after the row, not inside it");
   assert.equal(tab.querySelector(".cal-tab-intro"), null, "no intro paragraph");
   assert.deepEqual([...head.querySelectorAll(".cal-tab-actions > button")].map((button) => [button.dataset.action, button.className, button.textContent.trim()]),
     [["cal-tab-measure", "primary", "Calibra una tapparella"], ["cal-tab-batch", "", "Calibra in sequenza"]]);
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
-  assert.match(css, /\.cal-tab-head \{[^}]*margin: 22px 0 18px; \}/, "32 px above (after the views bar) and below (with the tab's 14 px gap); 24 on the phone");
-  assert.match(css, /\.cal-tab-how summary::after \{ content: " ›";/);
+  assert.match(css, /\.cal-tab-how-text \{ max-width: 720px; margin: 0; font-size: 14px;/, "U-3");
+  assert.match(css, /\.cal-tab-top \{[^}]*margin: 22px 0 18px; \}/, "32 px above (after the views bar) and below (with the tab's 14 px gap); 24 on the phone");
+  assert.match(css, /\.cal-tab-how::after \{ content: " ›";/);
 });
 
 test("with nothing ticked the sequence's Start is a disabled primary (Q-29)", async () => {

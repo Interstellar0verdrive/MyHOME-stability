@@ -441,11 +441,14 @@ export class CalibrationTab {
     } else {
       // The buttons line up with the introduction, not with the title above it.
       // Q-25: the title with «Come funziona ›» under it, and the two actions on the title's row (the primary first).
-      html = `<div class="cal-tab-head"><div class="cal-tab-heading"><h3 class="cal-tab-title">${esc(t("calTabTitle"))}</h3>${this._howItWorks(" cal-tab-how")}</div>
+      // U-2: «Come funziona ›» opens its text under the whole title row, which keeps its place and its buttons.
+      html = `<div class="cal-tab-top"><div class="cal-tab-head"><div class="cal-tab-heading"><h3 class="cal-tab-title">${esc(t("calTabTitle"))}</h3>
+          <button type="button" class="cal-tab-how" data-action="cal-tab-how" aria-expanded="${!!this._howOpen}" aria-controls="cal-tab-how-text">${esc(t("calTabHowItWorks"))}</button></div>
         <div class="actions cal-tab-actions">
           ${this._wizard ? `<button type="button" class="primary" data-action="cal-tab-measure" ${busy || loading || !counts.all ? "disabled" : ""}><ha-icon icon="mdi:ruler" aria-hidden="true"></ha-icon><span>${esc(t("calTabMeasureOne"))}</span></button>` : ""}
           <button type="button" data-action="cal-tab-batch" ${busy || loading ? "disabled" : ""}><ha-icon icon="mdi:format-list-numbered" aria-hidden="true"></ha-icon><span>${esc(t("wiz_T496"))}</span></button>
         </div></div>
+        <p class="muted cal-tab-how-text" id="cal-tab-how-text" ${this._howOpen ? "" : "hidden"}>${esc(t("calTabHowItWorksBody"))}</p></div>
         ${this._filterBar({ extra: " cal-tab-filters", select: this._filterSelect(counts, this._filter),
           count: this._countLine(counts),
           chips: FILTERS.map((filter) => `<button type="button" class="cal-chip" data-action="cal-tab-filter" data-id="${filter}" aria-pressed="${this._filter === filter}">${esc(t(`calTabFilter_${filter}`))} <span class="count">${counts[filter]}</span></button>`).join("") })}
@@ -735,6 +738,7 @@ export class CalibrationTab {
     if (!target) return;
     const { action, id } = target.dataset;
     if (action !== "cal-tab-menu" && this._menu !== null) { this._menu = null; if (!action?.startsWith("cal-tab-")) this._render(); }
+    if (action === "cal-tab-how") { this._howOpen = !this._howOpen; this._render(); return; }
     if (action === "cal-tab-filter") { this._filter = id; this._render(); }
     else if (action === "cal-tab-sort") this._setSort(id);
     else if (action === "cal-tab-expand-all") {

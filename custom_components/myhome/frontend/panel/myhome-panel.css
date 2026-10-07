@@ -655,12 +655,15 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-tab h3 { margin: 0; font-size: 18px; }
 /* Q-25: the tab's head is its title with «Come funziona ›» under it and, on the same row at the right, «Calibra una
    tapparella» (primary) and «Calibra in sequenza»; 32 px above it and 32 px down to the filter bar (24 on the phone). */
-.cal-tab-head { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; justify-content: space-between; margin: 22px 0 18px; }
+.cal-tab-top { display: grid; gap: 12px; margin: 22px 0 18px; }
+.cal-tab-head { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; justify-content: space-between; }
 .cal-tab-heading { display: grid; justify-items: start; gap: 4px; min-width: 0; }
-.cal-tab-how summary { min-height: 0; }
-.cal-tab-how summary::after { content: " ›"; white-space: pre; }
-.cal-tab-how[open] summary::after { content: " ⌄"; }
-.cal-tab-how > p { max-width: 640px; margin: 4px 0 0; }
+/* U-2/U-3: «Come funziona ›» is a link-like toggle; its text opens under the title row, at most 720 px, 14 px. */
+.cal-tab-how { min-height: 0; padding: 0; border: 0; background: transparent; box-shadow: none; color: var(--panel-accent); font-size: 13px; font-weight: 600; }
+.cal-tab-how::after { content: " ›"; white-space: pre; }
+.cal-tab-how[aria-expanded="true"]::after { content: " ⌄"; }
+.cal-tab-how:hover { background: transparent; text-decoration: underline; }
+.cal-tab-how-text { max-width: 720px; margin: 0; font-size: 14px; line-height: 1.5; }
 .cal-tab-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 /* Q-12 (Figma «R · Breakpoint», «Chip»): status, profile and filter chips are one shape: 24 px high, 4 px × 10 px
    inside (3 px plus the 1 px border), 12 px text, filled with their colour at 12 % and bordered with it at 20 %:
@@ -708,7 +711,9 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-sort ha-icon { --mdc-icon-size: 16px; width: 16px; height: 16px; color: var(--panel-text-2); }
 /* Q-25: on the phone the two buttons stack at full width under the title and its link, the primary first. */
 @media (max-width: 719px) and (min-height: 500px), (max-width: 719px) and (orientation: portrait) {
-  .cal-tab-head { flex-direction: column; align-items: stretch; gap: 12px; margin: 14px 0 10px; }
+  .cal-tab-top { margin: 14px 0 10px; }
+  .cal-tab-head { flex-direction: column; align-items: stretch; gap: 12px; }
+  .cal-tab-how-text { font-size: 13px; }
   .cal-tab-actions { flex-direction: column; flex-wrap: nowrap; }
   .cal-tab-actions button { width: 100%; min-height: 48px; justify-content: center; font-size: 14px; }
   .cal-tab-actions button:not(.primary) { background: transparent; }
