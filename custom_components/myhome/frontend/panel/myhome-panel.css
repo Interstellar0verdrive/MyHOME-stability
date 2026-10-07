@@ -809,8 +809,6 @@ dialog.cal-dialog .cal-resume-entity { display: none; }
 /* Responsive map §3.3: the line under a cover's name (list, A-01, sequence, details page, wizard header) wraps only
    between its units; the bus address is one unit that never breaks, and nothing ends in «…». */
 /* Q-15: the address's pairs are the units of the line; the wizard's header keeps its address whole. */
-/* D-07: a unit of the line under a name (a room, a gateway) never wraps inside itself. */
-.cal-row-unit { white-space: nowrap; }
 .cal-row-address { white-space: normal; }
 .cal-row-address-part { white-space: nowrap; }
 .wiz-head-sub .cal-row-address { white-space: nowrap; }
