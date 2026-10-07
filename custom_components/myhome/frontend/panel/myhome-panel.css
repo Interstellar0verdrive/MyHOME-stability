@@ -1019,7 +1019,9 @@ dialog.cal-dialog :is(button, select, input):focus:not(:focus-visible) { outline
   dialog.cal-dialog .dialog-head, dialog.cal-dialog .dialog-foot { flex: none; }
   dialog.cal-dialog .cal-dialog-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
   dialog.cal-dialog .dialog-foot { position: relative; padding-block: 12px; background: var(--panel-surface); }
-  dialog.cal-dialog .dialog-foot::before { content: ""; position: absolute; inset-inline: 0; bottom: 100%; height: 28px; pointer-events: none;
+  /* X-7: the same fade as the wizard's action bars (40 px, the surface to transparent), its bottom 1 px into the band
+     (which has no border, unlike the wizard's bar) so no pixel row is left between them at any sub-pixel position. */
+  dialog.cal-dialog .dialog-foot::before { content: ""; position: absolute; inset-inline: 0; bottom: calc(100% - 1px); height: 40px; pointer-events: none;
     background: linear-gradient(to top, var(--panel-surface), transparent); opacity: 0; transition: opacity var(--panel-ease); }
   dialog.cal-dialog .dialog-foot.has-more::before { opacity: 1; }
   dialog.cal-dialog[open] { animation: wiz-sheet-in 220ms cubic-bezier(.2, 0, 0, 1); }

@@ -1550,3 +1550,13 @@ test("X-6: a sheet opened by a tap focuses its own box (no ring on its ✕); by 
   assert.equal(root.activeElement, dialog, "after a tap: the sheet itself");
   dialog.querySelector(".cal-dialog-close").click(); await tick();
 });
+
+test("X-7: a sheet's fade above its buttons is the wizard bars' fade, anchored into the band with no gap", async () => {
+  const { readFileSync } = await import("node:fs");
+  const css = readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  const sheet = css.match(/dialog\.cal-dialog \.dialog-foot::before \{([^}]*)\}/)?.[1] || "";
+  const bar = css.match(/\.wiz-actions::before \{ content: ""; position: absolute; inset-inline: 0; bottom: calc\(100% \+ 1px\);([^}]*)\}/)?.[1] || "";
+  assert.match(sheet, /bottom: calc\(100% - 1px\); height: 40px;/);
+  const gradient = (rule) => rule.match(/background: [^;]+;/)?.[0];
+  assert.equal(gradient(sheet), gradient(bar), "the same gradient");
+});
