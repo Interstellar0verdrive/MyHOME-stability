@@ -1143,7 +1143,8 @@ test("full runs and the return to the top: once the motor stopped by itself the 
     "past its measured time the end stop is asked, Stop stays while the motor runs");
   const topStopped = screen({ step: "top", phase: "opening", motor_stopped: true, stopped_elapsed: 9.1 }, { ackReadings: true }, 9.5);
   assert.deepEqual([ids(topStopped), topStopped.wait.progress, topStopped.wait.remaining], [["endpoint"], { value: 1, remaining: null }, ""]);
-  assert.deepEqual(ids(screen({ step: "top", phase: "opening", motor_stopped: true, stopped_elapsed: 9.1 })), ["endpoint"], "the return before a repeated descent too");
+  assert.deepEqual(ids(screen({ step: "top", phase: "opening", motor_stopped: true, stopped_elapsed: 9.1 })), ["endpoint", "stopped"],
+    "the return before a repeated descent too, with the stopped state in place of its wait (D-12)");
   // The lift-off run is unchanged: a stop there still ends the session, so it keeps Stop.
   assert.deepEqual(ids(screen({ step: "lift", phase: "opening" }, { ackLift: true })), ["next", "lift", "stop"]);
   // The guided runs of path C (times only).
@@ -1666,7 +1667,12 @@ test("a stop frame well before the estimated run asks to check the end stop; the
   assert.equal(at({ step: "reset", phase: "closing", motor_stopped: true, stopped_elapsed: 5 }).notices.length, 1, "A-10 too");
   assert.equal(at({ step: "reset", phase: "closing", motor_stopped: true, stopped_elapsed: 5 }, { ackReadings: true }).notices.length, 0,
     "not on a return that confirms itself on the stop frame (§9.53)");
-  assert.match(at({ step: "top", phase: "opening", motor_stopped: true, stopped_elapsed: 5 }).notices[0].text, /really fully open/, "the manual return to the top");
+  const top = at({ step: "top", phase: "opening", motor_stopped: true, stopped_elapsed: 5 });
+  assert.match(top.notices[0].text, /really fully open/, "the manual return to the top");
+  // D-12: stopped is not «positioning»: no wait block telling to wait for the stop, the state instead of Stop.
+  assert.deepEqual([top.code, top.title, top.wait ?? null], ["A-09", "The cover has stopped", null]);
+  assert.deepEqual(top.actions.map((action) => [action.id, action.kind]), [["endpoint", "primary"], ["stopped", "state"]]);
+  assert.equal(at({ step: "top", phase: "opening" }).title, "Positioning cover", "while it runs it is still a positioning");
 });
 
 test("S-01 says what happened when the panel knows more: It did not do what it should", async () => {

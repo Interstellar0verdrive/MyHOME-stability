@@ -425,6 +425,14 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
         ? [{ id: "stopping", label: t("wiz_T459"), kind: "status" }] : [stop] });
   }
   if (step === "top" && !local.ackReadings) {
+    // D-12: once the motor has stopped the run is no longer «positioning»: the stop is said in the title, with its
+    // warning when it came early, and the end stop to confirm (the state instead of Stop, U-9).
+    if (phase === "opening" && MOTOR_STOPPED(view)) {
+      Object.assign(screen, { code: p("09"), phase: "descent", title: t("wiz_T504"),
+        actions: [{ id: "endpoint", label: t("wiz_T432"), kind: "primary" }, ...stopOrState(topTime)] });
+      stoppedEarly(topTime, "wiz_T441");
+      return screen;
+    }
     // The return to the top before a repeated descent: a positioning run to confirm at the end stop.
     positioning("09", t("wiz_T086"), topTime);
     screen.phase = "descent";

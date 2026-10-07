@@ -426,6 +426,7 @@ export const translations = {
     wiz_T501: "The cover **has closed fully**: all later measurements start here. Once it stops with the edge resting on the rest, continue.",
     wiz_T502: "Ascent not valid",
     wiz_T503: "Descent not valid",
+    wiz_T504: "The cover has stopped",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1316,6 +1317,7 @@ export const translations = {
     wiz_T501: "La tapparella **si è chiusa completamente**: da qui parte ogni misura successiva. Quando si ferma, con il bordo in appoggio, puoi proseguire.",
     wiz_T502: "La salita non è valida",
     wiz_T503: "La discesa non è valida",
+    wiz_T504: "La tapparella si è fermata",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",
