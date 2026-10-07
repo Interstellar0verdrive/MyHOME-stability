@@ -136,6 +136,9 @@ test("path B with the cover's travel already saved skips its measurement and kee
   assert.match(wiz().querySelector(".wiz-body").textContent, /half of its 195 cm travel/, "the saved travel");
   await type("98");
   assert.equal(code(), "B-07");
+  await press("accept"); await press("save");
+  assert.equal(code(), "B-09");
+  assert.ok([...wiz().querySelectorAll(".wiz-steps ul li")].some((item) => item.textContent === "Curtain travel: 195 cm"), "D-47: the steps keep the travel");
 });
 
 test("leaving a preview says that nothing was saved and nothing moved (U-5)", async () => {

@@ -1002,7 +1002,8 @@ export class CalibrationWizard {
     const local = this._local;
     const target = previewSaved?.target ?? local.pendingSave?.target;
     // The saved screen still shows what the steps measured, and whether the last part was a preview.
-    if (this._gateway?.preview) local.fineReadings = { ...(this._gateway.view?.readings || {}), check: this._gateway.view?.check ?? null };
+    // D-47: path B's stepper keeps the travel typed in B-04 too.
+    if (this._gateway?.preview) local.fineReadings = { ...(this._gateway.view?.readings || {}), check: this._gateway.view?.check ?? null, travel: this._gateway.view?.travel_cm ?? null };
     local.saved = { target, name: previewSaved?.name ?? local.pendingSave?.name ?? null, travel_cm: this._gateway?.view?.travel_cm ?? local.review?.travel ?? null,
       preview: !!this._gateway?.preview, orphan: this._gateway?.preview ? null : local.pendingSave?.orphan ?? null };
     if (local.path === "B") local.saved.target = "follow_profile";
