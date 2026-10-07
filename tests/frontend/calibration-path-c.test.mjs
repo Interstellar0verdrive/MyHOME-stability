@@ -187,3 +187,16 @@ test("D-20: in C-01 a value not known is «—» without its unit", async () => 
   assert.equal(screen.box.lines.at(-1), "Tempo lamelle: —");
   assert.equal(screen.box.lines[1], "Corsa del telo: 150 cm", "known values keep their unit");
 });
+
+test("D-21: before a case or path is confirmed the stepper follows the one chosen so far", async () => {
+  const { buildScreen } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-screens.js");
+  const { translations } = await import("../../custom_components/myhome/frontend/panel/panel-translations.js");
+  const t = (key) => translations.en[key] || key;
+  const cover = { name: "Studio", profile: { name: "standard_3ante" }, travel_cm: 150, effective: { opening: { value: 20 }, closing: { value: 19 } } };
+  const at = (stage, scope = null, local = {}) => buildScreen({ t, stage, path: "C", scope, cover, local });
+  const keys = (screen) => screen.stepper.phases.map((phase) => phase.key);
+  assert.deepEqual(keys(at("current")), ["intro", "prep", "readings", "summary"], "C-01: the preselected case, not path A's seven steps");
+  assert.deepEqual(keys(at("case")), ["intro", "prep", "readings", "summary"]);
+  assert.equal(at("case").stepper.phases[0].substeps[0].value, t("wiz_T236"), "its caption too");
+  assert.deepEqual(keys(at("case", "times_only")), ["intro", "prep", "ascent", "descent", "summary"], "the case just ticked");
+});

@@ -2421,3 +2421,16 @@ test("D-02: with columns the sequence's status and Start are held 16 px under th
     assert.equal(block.style.transform, "");
   } finally { window.getComputedStyle = original; window.requestAnimationFrame = frame; wiz.remove(); }
 });
+
+test("D-21: on A-02 the stepper shows the steps of the path ticked so far", async () => {
+  const { wiz, code, press, pickCover, tab } = await mount();
+  tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
+  await pickCover("cover.living_one"); await press("choose");
+  assert.equal(code(), "A-02");
+  const phases = () => wiz().querySelectorAll(".wiz-steps > ol > li").length;
+  const tick_ = async (value) => { const radio = wiz().querySelector(`input[name="path"][value="${value}"]`); radio.checked = true; radio.dispatchEvent(new Event("change", { bubbles: true })); await tick(); };
+  await tick_("B");
+  assert.equal(phases(), 3, "path B: introduction, readings, summary");
+  await tick_("A");
+  assert.equal(phases(), 7);
+});

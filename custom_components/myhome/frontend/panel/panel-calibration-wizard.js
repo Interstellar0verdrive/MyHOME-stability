@@ -576,7 +576,7 @@ export class CalibrationWizard {
     if (name === "save_profile") { this._local.saveProfile = checked; this._render(); }
     else if (name === "save_choice") { this._local.saveChoice = value; this._render(); }
     else if (name === "slats") this._local.slats = value !== "no";
-    else if (name === "case") this._local.scope = value;
+    else if (name === "case") { this._local.scope = value; this._render(); }
     else if (name === "cover") { this._local.coverKey = value; this._local.coverPicked = true; this._render(); }
     else if (event.target.matches?.("select[data-pick-filter]")) { this._local.pickFilter = value; this._render(); }
     else if (event.target.dataset?.pickSort) {

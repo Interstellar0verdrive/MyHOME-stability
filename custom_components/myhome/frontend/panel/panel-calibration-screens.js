@@ -93,11 +93,14 @@ export function buildScreen(ctx) {
   const tx = (key, values) => fill(t(key), values);
   const name = cover?.name || "";
   const values = { cover: name, profile: cover?.profile?.name ?? "" };
+  // D-21: before the case is confirmed (C-01, C-02) the stepper and its caption follow the case chosen so far, the
+  // preselected «tape readings only» at first.
+  const stepScope = scope ?? (path === "C" && ["current", "case"].includes(stage) ? "points_only" : null);
   const screen = {
     code: "", header: { title: name || t("wiz_T001"), subtitle: cover?.address || "", units: cover?.units || null }, discard: true, preview,
     title: "", subline: "", body: "", help: null, note: null, results: null, stopwatch: null, wait: null, illustration: null, choice: null, picker: null, field: null, box: null, table: null,
     technical: null, profileBlock: null, saveInfo: null, precision: null, status: [], notices: [], actions: [], readOnly: null, phase: "intro",
-    caption: caption(t, path, scope, cover),
+    caption: caption(t, path, stepScope, cover), stepScope,
     // Before any session the header offers a way back to the previous choice (kept as it was).
     back: ["choose", "path", "profile", "current", "case", "before"].includes(stage),
   };
@@ -165,7 +168,9 @@ export function buildScreen(ctx) {
     const body = [t("wiz_T016"), `${reason} ${t("wiz_T475")}`].join("\n\n");
     Object.assign(screen, { code: "A-02", phase: "intro", title: tx("wiz_T015", { name }), subline: pathContext(t, cover, language), body,
       choice: { name: "path", kind: "radio", label: tx("wiz_T015", { name }), legendHidden: true, value: chosen, options },
-      actions: [{ id: "path", label: t("wiz_T006"), kind: "primary", disabled: !chosen }] });
+      actions: [{ id: "path", label: t("wiz_T006"), kind: "primary", disabled: !chosen }],
+      // D-21: the stepper shows the steps of the path chosen so far (the advised one at first).
+      stepPath: chosen || path });
     return finish();
   }
   if (stage === "profile") {
@@ -883,7 +888,7 @@ function finalize(screen, ctx) {
   if (screen.wait) screen.wait.remaining = screen.wait.progress?.remaining != null ? fill(t("wiz_T402"), { seconds: n(screen.wait.progress.remaining, 0) }) : "";
   const refining = (view?.preview && view.path === "refine") || local.refining;
   if (["choose", "path"].includes(ctx.stage)) screen.caption = "";
-  const phases = phasesFor(path, scope, refining);
+  const phases = phasesFor(screen.stepPath || path, screen.stepScope ?? scope, refining);
   let current = phases.indexOf(screen.phase);
   if (refining && screen.phase === "summary") current = phases.length - 1;
   if (screen.phase === "done") current = phases.length;
