@@ -392,7 +392,7 @@ export class CalibrationWizard {
       // Stages done carry ✓, the current one ◐, the next ones an empty circle.
       // The bar and the time left sit under the stage in progress (after the text when there are no stages).
       const current = screen.wait.stages.findIndex((stage) => stage.state === "current");
-      const stages = screen.wait.stages.map((stage, index) => `<li data-step-state="${stage.state}"><ha-icon icon="${STAGE_ICON[stage.state]}" aria-hidden="true"></ha-icon><span>${esc(stage.text)}</span>${index === current ? '<div class="wiz-wait-slot"></div>' : ""}</li>`).join("");
+      const stages = screen.wait.stages.map((stage, index) => `<li data-step-state="${stage.state}"><ha-icon icon="${STAGE_ICON[stage.state]}" aria-hidden="true"></ha-icon><span>${text.units(esc(stage.text))}</span>${index === current ? '<div class="wiz-wait-slot"></div>' : ""}</li>`).join("");
       const list = wait.querySelector(".wiz-wait-stages"), meter = wait.querySelector(".wiz-wait-meter");
       if (list.dataset.stages !== stages) {
         wait.append(meter);
@@ -413,7 +413,7 @@ export class CalibrationWizard {
       remaining.textContent = screen.wait.remaining || "";
       remaining.hidden = !screen.wait.remaining;
     }
-    const markup = (list) => list.map((notice) => `<p class="notice wiz-notice" data-tone="${notice.tone}" ${notice.tone === "error" ? 'role="alert"' : ""}>${esc(notice.text)}</p>`).join("");
+    const markup = (list) => list.map((notice) => `<p class="notice wiz-notice" data-tone="${notice.tone}" ${notice.tone === "error" ? 'role="alert"' : ""}>${text.units(esc(notice.text))}</p>`).join("");
     const top = root.querySelector(".wiz-result-notices");
     const notices = markup(screen.notices.filter((notice) => !(top && notice.result)));
     const box = root.querySelector(".wiz-notices");
@@ -487,7 +487,7 @@ export class CalibrationWizard {
   }
 
   _waitMarkup(wait) {
-    return `<div class="wiz-wait" role="status">${wait.text ? `<p>${esc(wait.text)}</p>` : ""}<ol class="wiz-wait-stages"></ol>
+    return `<div class="wiz-wait" role="status">${wait.text ? `<p>${text.units(esc(wait.text))}</p>` : ""}<ol class="wiz-wait-stages"></ol>
       <div class="wiz-wait-meter"><div class="wiz-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="${esc(this._context.t("wiz_T027"))}"><span></span></div>
       <p class="wiz-wait-remaining muted" aria-live="off" hidden></p></div></div>`;
   }
@@ -517,7 +517,7 @@ export class CalibrationWizard {
   _fieldMarkup(field) {
     const value = field.value == null ? "" : `${field.value}`;
     return `<form class="wiz-field" novalidate autocomplete="off"><label>${esc(field.label)}<span class="input-suffix"><input name="reading_cm" type="text" inputmode="decimal" autocomplete="off" value="${esc(value)}" aria-describedby="wiz-field-hint wiz-field-error" data-kind="${esc(field.kind)}" data-min="${field.min}" data-max="${field.max}"><span>cm</span></span></label>
-      <p id="wiz-field-hint" class="muted">${esc(field.hint)}</p><p id="wiz-field-error" class="wiz-field-error" role="alert" hidden></p></form>`;
+      <p id="wiz-field-hint" class="muted">${text.units(esc(field.hint))}</p><p id="wiz-field-error" class="wiz-field-error" role="alert" hidden></p></form>`;
   }
 
   _tableMarkup(table) {

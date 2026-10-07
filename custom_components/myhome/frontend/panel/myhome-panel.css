@@ -702,6 +702,8 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 /* D-18: hosting the maintainer's view, the tab's dialog names the cover in its title: the view's own line with the
    entity id is left out. */
 dialog.cal-dialog .cal-resume-entity { display: none; }
+/* D-23/D-36: a number and its unit stay on one line (`units()` in panel-calibration-text.js). */
+.cal-nb { white-space: nowrap; }
 /* D-14: native controls (radios, drop-downs) follow the theme: on a dark one an unticked radio is a dark ring, not a
    white disc that reads as ticked. */
 [data-theme="dark"] { color-scheme: dark; }

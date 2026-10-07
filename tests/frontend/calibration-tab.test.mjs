@@ -719,7 +719,7 @@ test("a never measured cover says where its times come from", async () => {
   bedroom.effective.opening = timing(30, unknown, "yaml"); bedroom.effective.closing = timing(28, unknown, "yaml");
   const yaml = await mount({ data });
   row(yaml.tab, "cover.bedroom").querySelector('[data-action="cal-tab-toggle"]').click();
-  assert.match(row(yaml.tab, "cover.bedroom").querySelector(".cal-origin-note").textContent, /^Values from the YAML configuration \(30 \/ 28 s\), never measured/);
+  assert.match(row(yaml.tab, "cover.bedroom").querySelector(".cal-origin-note").textContent, /^Values from the YAML configuration \(30\u00a0\/\u00a028 s\), never measured/);
   row(yaml.tab, "cover.living_one").querySelector('[data-action="cal-tab-toggle"]').click();
   assert.equal(row(yaml.tab, "cover.living_one").querySelector(".cal-origin-note"), null, "a measured cover has no such note");
   assert.equal(row(tab, "cover.bedroom").querySelector(".cal-origin-note").classList.contains("is-warning"), false, "blue in a quiet row");

@@ -2440,3 +2440,13 @@ test("D-22: from a 560 px bar every action is centred at 480, a red Stop alone i
   assert.match(css, /@container wizbar \(min-width: 560px\) \{ \.wiz-actions > \*, \.wiz-actions > button\.danger \{ box-sizing: border-box; width: 100%; max-width: 480px; justify-self: center; \} \}/);
   assert.match(css, /button\.danger \{ color: var\(--panel-error\); justify-self: start; \}/, "the shell's rule it outweighs");
 });
+
+test("D-23/D-36: a number and its unit are held on one line in bodies, notices, waits and hints, the text unchanged", async () => {
+  const { units, inline } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-text.js");
+  assert.equal(units("fra 73,6 e 109,1 cm."), 'fra 73,6 e <span class="cal-nb">109,1 cm</span>.');
+  assert.equal(units("circa 30 s) · 600 secondi · 12 %"), 'circa <span class="cal-nb">30 s</span>) · <span class="cal-nb">600 secondi</span> · <span class="cal-nb">12 %</span>');
+  assert.equal(units("3 scatti, 2 sere"), "3 scatti, 2 sere", "only units");
+  assert.match(inline("**21 s** o 20 s"), /<strong><span class="cal-nb">21 s<\/span><\/strong> o <span class="cal-nb">20 s<\/span>/);
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.cal-nb \{ white-space: nowrap; \}/);
+});

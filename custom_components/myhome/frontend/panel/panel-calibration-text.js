@@ -21,8 +21,15 @@ export function inline(text, values) {
   return escaped.replace(/\*\*([\s\S]+?)\*\*/g, (match, inner) => {
     const lead = /^\s/.test(inner) ? " " : "", trail = /\n\s*$/.test(inner) ? "\n" : /\s$/.test(inner) ? " " : "";
     return inner.trim() ? `${lead}<strong>${inner.trim()}</strong>${trail}` : `${lead}${trail}`;
-  }).replace(/\*\*/g, "").replace(/\n/g, "<br>");
+  }).replace(/\*\*/g, "").replace(/\n/g, "<br>").replace(UNIT, UNIT_HTML);
 }
+
+/**
+ * D-23/D-36: in escaped text a number and its unit («109,1 cm», «30 s», «600 secondi») are held on one line by a
+ * `nowrap` span (the text itself, and so what is read, is unchanged).
+ */
+const UNIT = /(\d+(?:[.,]\d+)?) (s|cm|secondi|seconds|%)(?![\p{L}\d])/gu, UNIT_HTML = '<span class="cal-nb">$1 $2</span>';
+export function units(html) { return String(html).replace(UNIT, UNIT_HTML); }
 
 /** A localized number: tenths of a second or centimetre unless `digits` says otherwise. */
 /** A live value with a fixed number of decimals ("12.0 s", never "12 s"), so it never changes length mid-run. */

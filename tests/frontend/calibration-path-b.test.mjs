@@ -68,7 +68,8 @@ test("path B runs as a preview from the travel to the check and the summary, wit
   await type("99");
   assert.equal(code(), "B-07");
   assert.match(wiz().querySelector(".wiz-body").textContent, /^Gap of about 1 cm at half travel: profile "tall_two_leaf" describes this cover well\./);
-  assert.match(wiz().querySelector(".wiz-body").innerHTML, /The edge should have stopped at 98 cm and stopped at 99 cm\./);
+  assert.match(wiz().querySelector(".wiz-body").innerHTML, /The edge should have stopped at <span class="cal-nb">98 cm<\/span> and stopped at <span class="cal-nb">99 cm<\/span>\./,
+    "D-36: each value held with its unit");
   await press("accept");
   assert.equal(code(), "B-08");
   assert.equal(wiz().querySelector(".wiz-steps-line").textContent, "Summary · 3 of 3");

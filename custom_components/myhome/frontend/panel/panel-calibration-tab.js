@@ -712,8 +712,9 @@ export class CalibrationTab {
     const effective = item.cover.effective, origin = effective.opening?.origin;
     if (item.status !== "to_measure" || !["default", "yaml"].includes(origin) || effective.closing?.origin !== origin) return "";
     const [opening, closing] = [effective.opening.value, effective.closing.value].map((value) => number(value, language));
-    return `<p class="cal-note${this._running(item) ? " is-warning" : ""} cal-origin-note">${esc(fill(this._context.t(origin === "yaml" ? "wiz_T378" : "wiz_T377"),
-      { seconds: opening === closing ? opening : `${opening} / ${closing}` }))}</p>`;
+    // D-36: «21 / 20 s» never breaks inside.
+    return `<p class="cal-note${this._running(item) ? " is-warning" : ""} cal-origin-note">${text.units(esc(fill(this._context.t(origin === "yaml" ? "wiz_T378" : "wiz_T377"),
+      { seconds: opening === closing ? opening : `${opening}\u00a0/\u00a0${closing}` })))}</p>`;
   }
 
   _item(key) {
