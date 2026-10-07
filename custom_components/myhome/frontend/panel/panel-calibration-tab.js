@@ -472,7 +472,7 @@ export class CalibrationTab {
       html = `<div class="cal-tab-top"><div class="cal-tab-head"><div class="cal-tab-heading"><h3 class="cal-tab-title">${esc(t("calTabTitle"))}</h3>
           <button type="button" class="cal-tab-how" data-action="cal-tab-how" aria-expanded="${!!this._howOpen}" aria-controls="cal-tab-how-text">${esc(t("calTabHowItWorks"))}</button></div>
         <div class="actions cal-tab-actions">
-          ${this._wizard ? `<button type="button" class="primary" data-action="cal-tab-measure" ${busy || loading || none ? "disabled" : ""}><ha-icon icon="mdi:ruler" aria-hidden="true"></ha-icon><span>${esc(t("calTabMeasureOne"))}</span></button>` : ""}
+          ${this._wizard ? `<button type="button" class="primary${loading ? " is-settling" : ""}" data-action="cal-tab-measure" ${busy || loading || none ? "disabled" : ""}><ha-icon icon="mdi:ruler" aria-hidden="true"></ha-icon><span>${esc(t("calTabMeasureOne"))}</span></button>` : ""}
           <button type="button" data-action="cal-tab-batch" ${busy || loading || none ? "disabled" : ""}><ha-icon icon="mdi:format-list-numbered" aria-hidden="true"></ha-icon><span>${esc(t("wiz_T496"))}</span></button>
         </div></div>
         <p class="muted cal-tab-how-text" id="cal-tab-how-text" ${this._howOpen ? "" : "hidden"}>${esc(t("calTabHowItWorksBody"))}</p></div>

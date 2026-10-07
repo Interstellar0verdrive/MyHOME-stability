@@ -462,11 +462,14 @@ export class CalibrationWizard {
       const button = column.querySelector(`[data-wiz="${action.id}"]`);
       if (!button || action.kind === "status" || action.kind === "state") continue;
       button.disabled = !!action.disabled || (guarded && action.id !== "stop");
+      // D-13 (decided 8 Oct): off only for a moment, enabling by itself (the hold after a change, a request or the motor
+      // settling) keeps the light primary look; off until the user acts is the neutral grey.
+      button.classList.toggle("is-settling", button.disabled && (!action.disabled || !!action.settling));
       // Disabled by the step itself (not by the short hold after a change): said to assistive technology too.
       if (action.disabled) button.setAttribute("aria-disabled", "true"); else button.removeAttribute("aria-disabled");
     }
     const take = column.querySelector('[data-wiz="take"]');
-    if (take) take.disabled = !!this._gateway?.status.busy || guarded;
+    if (take) { take.disabled = !!this._gateway?.status.busy || guarded; take.classList.toggle("is-settling", take.disabled); }
   }
 
   /** Hold the confirming buttons for CONFIRM_GUARD_MS, then draw them enabled again. */

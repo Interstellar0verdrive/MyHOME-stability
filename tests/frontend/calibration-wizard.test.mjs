@@ -2375,14 +2375,24 @@ test("dialogs are 560 px centred cards, and sheets with a handle, a ✕ that kee
 
 test("a gated primary stays a primary, disabled: A-01's Continue before a choice, the sequence's Start with nothing ticked (Q-29)", async () => {
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
-  const rule = css.match(/\.wiz-action\.primary:disabled, \.wiz-action\.primary:disabled:hover \{([^}]*)\}/)?.[1] || "";
-  assert.match(rule, /background: color-mix\(in srgb, var\(--panel-accent\) 38%, var\(--panel-surface\)\)/);
+  // D-13 (decided 8 Oct): waiting for the user it is neutral; Q-29's light primary is the passing state (`is-settling`).
+  const rule = css.match(/:is\(\.wiz-action\.primary, button\.primary\):disabled, :is\(\.wiz-action\.primary, button\.primary\):disabled:hover \{([^}]*)\}/)?.[1] || "";
+  assert.match(rule, /background: color-mix\(in srgb, var\(--primary-text-color, #182b37\) 12%, var\(--panel-surface\)\)/);
+  assert.match(rule, /color: color-mix\(in srgb, var\(--primary-text-color, #182b37\) 45%, transparent\)/);
   assert.match(rule, /box-shadow: none/);
-  assert.doesNotMatch(rule, /background: transparent/, "not an outlined button");
-  const { wiz, tab, button } = await mount();
+  const settling = css.match(/:is\(\.wiz-action\.primary, button\.primary\)\.is-settling:disabled, [^{]*\{([^}]*)\}/)?.[1] || "";
+  assert.match(settling, /background: color-mix\(in srgb, var\(--panel-accent\) 38%, var\(--panel-surface\)\)/, "Q-29's look, for a moment only");
+  assert.doesNotMatch(css, /\[data-theme="dark"\] :is\(\.wiz-action\.primary, button\.primary\):disabled/, "one rule for both themes");
+  const { wiz, tab, button } = await mount({ guardMs: 700 });
   tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
   assert.ok(button("choose").classList.contains("primary"));
   assert.equal(button("choose").disabled, true);
+  assert.equal(button("choose").classList.contains("is-settling"), false, "nothing chosen yet: off until the user acts");
+  const radio = wiz().querySelector('.wiz-picker input[name="cover"]'); radio.checked = true; radio.dispatchEvent(new Event("change", { bubbles: true })); await tick();
+  await new Promise((resolve) => setTimeout(resolve, 720)); await tick();
+  assert.equal(button("choose").disabled, false);
+  button("choose").click(); await tick();
+  assert.deepEqual([button("path").disabled, button("path").classList.contains("is-settling")], [true, true], "right after the change: the hold, a passing state");
 });
 
 test("in the one-column layout the action bar is docked to the window's bottom (Home Assistant scrolls <html>) (U-1)", async () => {
@@ -2527,4 +2537,15 @@ test("D-44 (decided): during a session the ← is not drawn and leaves no space:
   await press("begin"); await move(backend, { seconds: 2 });
   assert.equal(head().querySelector('[data-wiz="back"]'), null);
   assert.equal(head().querySelector(".wiz-back"), null, "no placeholder keeps its room");
+});
+
+test("D-13: a button off while the motor starts or a request is pending is a passing state; one waiting for a press is not", () => {
+  const t = (key) => translations.en[key] || key;
+  const base = { mode: "geometry", values: { opening_time: 22, closing_time: 21 }, samples: { lift: 4 }, readings: { gap: 3 }, slats: true, owner: true, sequence: 4 };
+  const at = (view, status = {}) => buildScreen({ t, stage: "session", path: "A", view: { ...base, ...view }, status, local: { ackAscent: true }, cover: { name: "K" } });
+  const flags = (screen) => screen.actions.filter((action) => action.disabled).map((action) => [action.id, !!action.settling]);
+  assert.deepEqual(flags(at({ step: "home", phase: "starting_close" })), [["endpoint", true]], "the end stop waits for the motor to start");
+  assert.deepEqual(flags(at({ step: "opening", phase: "opening" })), [["next", false]], "① waits for ② first: off until the user acts");
+  assert.deepEqual(flags(at({ step: "opening", phase: "briefing" }, { locked: true })), [["next", true], ["endpoint", false]],
+    "a request pending: ① passes, ② still waits for ①");
 });

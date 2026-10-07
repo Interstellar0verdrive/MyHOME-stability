@@ -1284,15 +1284,17 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
   border-top-color: var(--panel-accent); animation: wiz-spin 900ms linear infinite; }
 @keyframes wiz-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .wiz-spinner { animation: none; border-color: var(--panel-accent); } }
-/* Q-29: a gated primary («Continua» on A-01, «Avvia la calibrazione in sequenza» with nothing ticked, …) stays a primary,
-   disabled: the accent fill at reduced opacity, its label in the disabled text colour, no hover or shadow. */
-.wiz-action.primary:disabled, .wiz-action.primary:disabled:hover { background: color-mix(in srgb, var(--panel-accent) 38%, var(--panel-surface));
-  border-color: transparent; color: color-mix(in srgb, var(--text-primary-color, #fff) 60%, transparent); box-shadow: none; opacity: 1; cursor: not-allowed; }
-/* D-13: on a dark theme the accent at 38 % reads as an active teal: a disabled primary there (wizard, sequence, the tab's
-   head and dialogs) is neutral, the text colour at 12 % with its label at 45 %, clearly off beside an enabled one. */
-[data-theme="dark"] :is(.wiz-action.primary, button.primary):disabled, [data-theme="dark"] :is(.wiz-action.primary, button.primary):disabled:hover {
-  background: color-mix(in srgb, var(--primary-text-color, #fff) 12%, var(--panel-surface)); border-color: transparent;
-  color: color-mix(in srgb, var(--primary-text-color, #fff) 45%, transparent); box-shadow: none; opacity: 1; }
+/* Q-29's look (the accent at 38 %) is now the passing disabled state only (`is-settling`, D-13 below). */
+/* D-13 (decided 8 Oct): two disabled primaries. Off until the user acts (nothing chosen yet, a form to fill, a session to
+   finish) is neutral like Home Assistant's, the text colour at 12 % with its label at 45 %, in both themes. Off only for
+   a moment, enabling by itself (`is-settling`: the hold after a change, a request, the motor starting or settling)
+   keeps Q-29's light primary, so the change to enabled is quiet. */
+:is(.wiz-action.primary, button.primary):disabled, :is(.wiz-action.primary, button.primary):disabled:hover {
+  background: color-mix(in srgb, var(--primary-text-color, #182b37) 12%, var(--panel-surface)); border-color: transparent;
+  color: color-mix(in srgb, var(--primary-text-color, #182b37) 45%, transparent); box-shadow: none; opacity: 1; cursor: not-allowed; }
+:is(.wiz-action.primary, button.primary).is-settling:disabled, :is(.wiz-action.primary, button.primary).is-settling:disabled:hover {
+  background: color-mix(in srgb, var(--panel-accent) 38%, var(--panel-surface)); border-color: transparent;
+  color: color-mix(in srgb, var(--text-primary-color, #fff) 60%, transparent); box-shadow: none; opacity: 1; cursor: wait; }
 .wiz-action.secondary { border-color: var(--panel-accent); color: var(--panel-accent); background: transparent; }
 .wiz-action.stop, .wiz-action.link { min-height: 44px; border: 0; background: transparent; box-shadow: none; }
 .wiz-action.stop { color: var(--panel-error); }

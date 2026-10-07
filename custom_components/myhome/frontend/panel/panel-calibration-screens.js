@@ -968,8 +968,10 @@ function finalize(screen, ctx) {
   if (typeof local.fieldError === "number" && screen.field?.range) {
     screen.notices.push({ tone: "error", text: fill(t("profileError_reading_out_of_range"), readingRange(view.reading_range, language, local.fieldError)) });
   }
-  // Movement, readings and Save wait for an answer, a connection and ownership; Stop never does.
-  if (status.locked) for (const action of screen.actions) if (!["stop", "reconnect", "close", "start-over"].includes(action.id)) action.disabled = true;
+  // D-13 (decided 8 Oct): a button off while the motor starts or the backend settles after a run enables by itself.
+  if (view && (/^starting_/.test(view.phase) || view.phase === "geometry_wait_stop")) for (const action of screen.actions) if (action.disabled) action.settling = true;
+  // Movement, readings and Save wait for an answer, a connection and ownership; Stop never does (also a passing state).
+  if (status.locked) for (const action of screen.actions) if (!["stop", "reconnect", "close", "start-over"].includes(action.id)) { if (!action.disabled) action.settling = true; action.disabled = true; }
   if (status.locked && screen.field) screen.field = { ...screen.field, disabled: true };
   return screen;
 }

@@ -1411,14 +1411,10 @@ test("D-03: from 1016 to 1199 the profile chip keeps clear of the CTA and ⋮ sh
   assert.match(wide.slice(0, wide.indexOf("\n}\n")), /\.cal-row-profile \{ max-width: none; \}/, "with its own actions column the profile has the whole column");
 });
 
-test("D-13: on a dark theme a disabled primary is neutral, in the tab, the wizard and the tab's dialogs", async () => {
-  const { readFileSync } = await import("node:fs");
-  const css = readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
-  const rule = css.match(/\[data-theme="dark"\] :is\(\.wiz-action\.primary, button\.primary\):disabled, \[data-theme="dark"\] :is\(\.wiz-action\.primary, button\.primary\):disabled:hover \{([^}]*)\}/)?.[1] || "";
-  assert.match(rule, /background: color-mix\(in srgb, var\(--primary-text-color, #fff\) 12%, var\(--panel-surface\)\)/);
-  assert.match(rule, /color: color-mix\(in srgb, var\(--primary-text-color, #fff\) 45%, transparent\)/);
+test("D-13: the tab's dialogs follow its theme; a head action off while the list loads is a passing state", async () => {
   const { root, tab } = await mount();
   assert.equal(root.getElementById("dialog-host").dataset.theme, tab.dataset.theme, "the dialogs follow the tab's theme");
+  assert.equal(tab.querySelector('[data-action="cal-tab-measure"]').classList.contains("is-settling"), false, "loaded: no passing state");
 });
 
 test("D-14: native radios and drop-downs follow the theme (color-scheme)", async () => {
