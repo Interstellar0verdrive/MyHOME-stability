@@ -1498,3 +1498,15 @@ test("D-40: a wizard list's chips sit beside the name while it keeps 200 px, sid
   assert.deepEqual(at(400), [], "under the name");
   root.remove();
 });
+
+test("X-1: where the head stacks (phone), «Come funziona» opens right under its link, before the two buttons", async () => {
+  const { readFileSync } = await import("node:fs");
+  const css = readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  const phone = css.slice(css.indexOf("@media (max-width: 719px) and (min-height: 500px), (max-width: 719px) and (orientation: portrait) {\n  .cal-tab-top"));
+  const block = phone.slice(0, phone.indexOf("\n}\n"));
+  assert.match(block, /\.cal-tab-head \{ display: contents; \}\s*\.cal-tab-heading \{ order: 1; \}\s*\.cal-tab-how-text \{ order: 2; font-size: 13px; \}\s*\.cal-tab-actions \{ order: 3; \}/);
+  const { tab } = await mount();
+  const top = tab.querySelector(".cal-tab-top");
+  assert.deepEqual([...top.querySelectorAll(":scope > .cal-tab-head > *, :scope > .cal-tab-how-text")].map((item) => [...item.classList].find((name) => name.startsWith("cal-tab-"))),
+    ["cal-tab-heading", "cal-tab-actions", "cal-tab-how-text"], "the three parts the stylesheet orders: title and link, buttons, text");
+});

@@ -738,8 +738,12 @@ dialog.cal-dialog .cal-resume-entity { display: none; }
 /* Q-25: on the phone the two buttons stack at full width under the title and its link, the primary first. */
 @media (max-width: 719px) and (min-height: 500px), (max-width: 719px) and (orientation: portrait) {
   .cal-tab-top { margin: 14px 0 10px; }
-  .cal-tab-head { flex-direction: column; align-items: stretch; gap: 12px; }
-  .cal-tab-how-text { font-size: 13px; }
+  /* X-1: stacked, «Come funziona» opens right under its link, before the buttons: the head's two parts and the text
+     are one column of the top block (on wider layouts the text stays under the whole title row). */
+  .cal-tab-head { display: contents; }
+  .cal-tab-heading { order: 1; }
+  .cal-tab-how-text { order: 2; font-size: 13px; }
+  .cal-tab-actions { order: 3; }
   .cal-tab-actions { flex-direction: column; flex-wrap: nowrap; }
   .cal-tab-actions button { width: 100%; min-height: 48px; justify-content: center; font-size: 14px; }
   .cal-tab-actions button:not(.primary) { background: transparent; }
