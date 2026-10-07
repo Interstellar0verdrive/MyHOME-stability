@@ -1111,6 +1111,8 @@ test("the sequence's status and Start stay in view while the list scrolls; on ca
   assert.match(css, /\.cal-batch-wiz \.cal-batch-order \{ position: absolute; inset-inline-end: 12px;/);
   const { tab } = await openBatch();
   assert.ok(tab.querySelector(".cal-batch .wiz-actions > .cal-batch-sticky > .cal-batch-summary"));
+  // Q-28: Start first, the count under it, in every layout (one markup).
+  assert.deepEqual([...tab.querySelectorAll(".cal-batch-sticky > *")].map((part) => part.dataset.action || part.className), ["cal-tab-batch-start", "cal-batch-summary"]);
 });
 
 test("on phones the full-screen views slide down before the list comes back, at once with reduced motion (M5-4)", async () => {

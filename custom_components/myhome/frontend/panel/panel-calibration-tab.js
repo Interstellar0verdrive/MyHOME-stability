@@ -1123,8 +1123,8 @@ export class CalibrationTab {
             <p class="error cal-batch-limit" role="alert">${count > max ? esc(`${t("calBatchLimit")}: ${max}`) : ""}</p>` : ""}
           </div>
           <div class="wiz-actions cal-batch-actions"><div class="cal-batch-sticky">
-            <p class="cal-batch-summary" role="status">${esc(summary)}</p>
             <button type="button" class="wiz-action primary" data-action="cal-tab-batch-start" ${count === 0 || count > max || batch.loading ? "disabled" : ""}>${esc(t("wiz_T365"))}</button>
+            <p class="cal-batch-summary" role="status">${esc(summary)}</p>
           </div></div>
         </div>
         <div class="wiz-sheet" role="dialog" aria-modal="true" aria-label="${esc(t("wiz_T274"))}" ${this._batchStepsOpen ? "" : "hidden"}><div class="wiz-sheet-card">
