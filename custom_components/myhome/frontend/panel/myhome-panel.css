@@ -1262,6 +1262,11 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
    disabled: the accent fill at reduced opacity, its label in the disabled text colour, no hover or shadow. */
 .wiz-action.primary:disabled, .wiz-action.primary:disabled:hover { background: color-mix(in srgb, var(--panel-accent) 38%, var(--panel-surface));
   border-color: transparent; color: color-mix(in srgb, var(--text-primary-color, #fff) 60%, transparent); box-shadow: none; opacity: 1; cursor: not-allowed; }
+/* D-13: on a dark theme the accent at 38 % reads as an active teal: a disabled primary there (wizard, sequence, the tab's
+   head and dialogs) is neutral, the text colour at 12 % with its label at 45 %, clearly off beside an enabled one. */
+[data-theme="dark"] :is(.wiz-action.primary, button.primary):disabled, [data-theme="dark"] :is(.wiz-action.primary, button.primary):disabled:hover {
+  background: color-mix(in srgb, var(--primary-text-color, #fff) 12%, var(--panel-surface)); border-color: transparent;
+  color: color-mix(in srgb, var(--primary-text-color, #fff) 45%, transparent); box-shadow: none; opacity: 1; }
 .wiz-action.secondary { border-color: var(--panel-accent); color: var(--panel-accent); background: transparent; }
 .wiz-action.stop, .wiz-action.link { min-height: 44px; border: 0; background: transparent; box-shadow: none; }
 .wiz-action.stop { color: var(--panel-error); }

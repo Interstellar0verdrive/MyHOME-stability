@@ -144,6 +144,8 @@ export class CalibrationTab {
     // The tab's notes follow Home Assistant's dark mode like the wizard does; without theme data, the system's preference.
     const darkMode = context.hass?.themes?.darkMode;
     context.host.dataset.theme = (typeof darkMode === "boolean" ? darkMode : !!globalThis.matchMedia?.("(prefers-color-scheme: dark)")?.matches) ? "dark" : "light";
+    // D-13: the tab's dialogs (profile, sessions) follow it too.
+    if (context.dialogHost) context.dialogHost.dataset.theme = context.host.dataset.theme;
     // Leaving the tab with a live calibration open asks first (the wizard's "Calibration in progress").
     context.setBeforeLeave?.(() => (this._mode.kind === "wizard" ? this._wizard?.beforeLeave?.() : null) || null);
     if (!this._hosts.has(context.host)) {
