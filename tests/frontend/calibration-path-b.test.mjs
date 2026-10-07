@@ -134,3 +134,14 @@ test("path B with the cover's travel already saved skips its measurement and kee
   await type("98");
   assert.equal(code(), "B-07");
 });
+
+test("leaving a preview says that nothing was saved and nothing moved (U-5)", async () => {
+  const { wiz, press, startFor } = await mount();
+  await startFor("cover.living_one", "B");
+  await press("profile");
+  await press("begin");
+  wiz().querySelector('.wiz-head [data-wiz="exit"]').click(); await tick();
+  assert.equal(wiz().querySelector("#wiz-dialog-body").textContent, translations.en.wiz_T497);
+  assert.equal(translations.it.wiz_T497, "L'anteprima si chiude: non è stato salvato niente e nessuna tapparella si è mossa.");
+});
+

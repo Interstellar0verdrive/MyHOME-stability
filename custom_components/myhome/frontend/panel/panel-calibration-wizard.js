@@ -1076,7 +1076,7 @@ export class CalibrationWizard {
   _exit() {
     if (STAGES_BEFORE_SESSION.includes(this._local.stage) || !this._sessionOpen()) { this._finish(); return; }
     const dialog = this._frame.querySelector(".wiz-dialog"), { t } = this._context;
-    dialog.querySelector("#wiz-dialog-body").textContent = t(this._gateway.preview ? "wiz_T268" : "wizExitBodyLive");
+    dialog.querySelector("#wiz-dialog-body").textContent = t(this._gateway.preview ? "wiz_T497" : "wizExitBodyLive");
     // R-5: a sheet (window under 720 × 500 px) has its ✕ in the title row.
     dialog.querySelector(".wiz-dialog-x").hidden = !layout.sheets();
     dialog.hidden = false;
