@@ -95,9 +95,9 @@ export class CalibrationWizard {
     this._context = null;
   }
 
-  open({ host, hass, t, covers, data, picker = null, start = "choose", item = null, session = null, onOpenCover, onAssignProfile, onClose }) {
+  open({ host, hass, t, covers, data, picker = null, start = "choose", item = null, session = null, onOpenCover, onAssignProfile, onDiscarded, onClose }) {
     this.close();
-    this._context = { host, hass, t, covers, data, picker, onOpenCover, onAssignProfile, onClose };
+    this._context = { host, hass, t, covers, data, picker, onOpenCover, onAssignProfile, onDiscarded, onClose };
     // Opened on a given cover, the choice is made; from the tab's generic button it starts empty.
     this._local = { stage: "choose", path: "A", scope: null, coverKey: item ? key(item) : "", coverPicked: !!item };
     host.innerHTML = "";
@@ -1050,8 +1050,10 @@ export class CalibrationWizard {
   async _navDiscard() {
     const gateway = this._gateway;
     if (!gateway) { this._navAnswer(true); return; }
+    const discarded = this._discarded(gateway);
     await gateway.cancel();
     if (this._gateway === gateway && gateway.status.cancelPending) { this._navAnswer(false); this._render(); return; }
+    discarded();
     this._navAnswer(true);
   }
 
@@ -1102,8 +1104,16 @@ export class CalibrationWizard {
     const gateway = this._gateway;
     if (!gateway) { this._finish(); return; }
     if (gateway.preview) { this._finish(); return; }
+    const discarded = this._discarded(gateway);
     await gateway.cancel();
-    if (this._gateway === gateway && gateway.status.cancelPending) this._render();
+    if (gateway.status.cancelPending) { if (this._gateway === gateway) this._render(); return; }
+    discarded();
+  }
+
+  /** U-10: once the cancel is confirmed the list shows the gateway free at once (taken before the view closes). */
+  _discarded(gateway) {
+    const entryId = this._item()?.entry.entry_id, { onDiscarded } = this._context || {};
+    return () => { if (entryId && !gateway.preview) onDiscarded?.(entryId); };
   }
 
   _finish() {

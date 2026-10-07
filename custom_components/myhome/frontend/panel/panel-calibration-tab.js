@@ -206,27 +206,30 @@ export class CalibrationTab {
     if (row.loading) { row.again = true; return; }
     row.loading = true;
     const { hass } = this._context;
+    // U-10: a read begun before a discard (`_discarded`) may still carry the cancelled session: it is read again.
+    const epoch = row.epoch || 0, stale = () => (row.epoch || 0) !== epoch && (row.again = true);
     try {
       const data = await hass.callWS({ type: "myhome/cover_profiles/overview", entry_id: entryId });
-      if (!this._current(generation) || row.removed) return;
+      if (!this._current(generation) || row.removed || stale()) return;
       if (data.entry_id !== entryId) throw new Error("Wrong gateway");
       if (!row.data || data.revision >= row.data.revision) row.data = data;
       row.error = false;
       // The overview carries no session: a cover read gives the gateway's session (one at a time). If a read
       // fails the next cover is tried; the overview still says when the gateway is reserved (calibration_busy).
       row.reserved = row.data.covers.some((cover) => cover.assignment_reason === "calibration_busy");
-      row.session = null;
-      row.sessionKnown = false;
+      // The row keeps what it showed until the reads are over: a redraw meanwhile shows no transient «busy».
+      let session = null, known = !timedCovers(row.data).length;
       for (const probe of timedCovers(row.data).slice(0, SESSION_PROBES)) {
         try {
           const snapshot = await hass.callWS({ type: "myhome/cover_profiles/read", entry_id: entryId, entity_id: probe.entity_id });
-          if (!this._current(generation)) return;
-          row.session = snapshot.calibration && !["saved", "cancelled"].includes(snapshot.calibration.phase) ? snapshot.calibration : null;
-          row.sessionKnown = true;
+          if (!this._current(generation) || stale()) return;
+          session = snapshot.calibration && !["saved", "cancelled"].includes(snapshot.calibration.phase) ? snapshot.calibration : null;
+          known = true;
           break;
         } catch { /* Try the next cover; the session is read again at the next refresh. */ }
       }
-      if (!timedCovers(row.data).length) row.sessionKnown = true;
+      row.session = session;
+      row.sessionKnown = known;
     } catch {
       if (this._current(generation)) row.error = true;
     } finally {
@@ -236,6 +239,17 @@ export class CalibrationTab {
         if (row.again) { row.again = false; this._read(entryId, generation); }
       }
     }
+  }
+
+  /** U-10: «Esci senza salvare» confirmed by Home Assistant: the gateway's session is gone at once, then read again. */
+  _discarded(entryId) {
+    const row = this._rows.get(entryId);
+    if (!row || !this._context) return;
+    row.epoch = (row.epoch || 0) + 1;
+    row.session = null;
+    row.sessionKnown = true;
+    this._render();
+    this._read(entryId, this._generation);
   }
 
   /** Every timed cover of the scope, with its gateway and inventory entity. */
@@ -825,6 +839,7 @@ export class CalibrationTab {
       picker: { markup: (state) => this._pickerMarkup(state), sort: (key, dir) => this._setSort(key, dir), order: () => ({ ...this._sort }) },
       onOpenCover: (entityId) => onOpenCover?.(entityId),
       onAssignProfile: (profile) => this._assignToCovers(profile),
+      onDiscarded: (entryId) => this._discarded(entryId),
       onClose: () => this._backToList() });
   }
 

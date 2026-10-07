@@ -440,6 +440,30 @@ test("Discard asks first, closes with Escape, and leaves only once Cancel reache
   assert.ok(tab().querySelector(".cal-list"));
 });
 
+test("U-10: after Exit without saving the list is free at once, even with a read begun before the cancel", async () => {
+  const { backend, panel, wiz, startFor, tab } = await mount();
+  await startFor("cover.living_one");
+  wiz().querySelector('[data-wiz="begin"]').click(); await tick(); await move(backend);
+  // The list has read the live session; the next periodic read answers only after the cancel.
+  panel._calibrationTab.refresh(); await tick(8);
+  const callWS = backend.hass.callWS, held = [];
+  backend.hass.callWS = async (message) => {
+    const result = await callWS(message);
+    if (message.type !== "myhome/cover_profiles/overview") return result;
+    return new Promise((resolve) => held.push(() => resolve(result)));
+  };
+  panel._calibrationTab.refresh(); await tick();
+  assert.ok(held.length, "a read is in flight");
+  backend.hass.callWS = callWS;
+  wiz().querySelector('.wiz-head [data-wiz="exit"]').click(); await tick();
+  wiz().querySelector('[data-wiz="leave"]').click(); await tick(6);
+  assert.equal(wiz(), null);
+  const free = () => !tab().querySelector(".cal-tab-busy") && !tab().querySelector('[data-action="cal-tab-measure"]').disabled;
+  assert.ok(free(), "no «In corso» row, notice or disabled header right after the cancel");
+  held.splice(0).forEach((release) => release()); await tick(8);
+  assert.ok(free(), "the read begun before the cancel does not bring the session back");
+});
+
 test("a cover that follows a profile saves only on itself by default, which waits for the backend", async () => {
   const overview = sampleOverview();
   const { backend, wiz, code, press, type, startFor } = await mount({ overview });
