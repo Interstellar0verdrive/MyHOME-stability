@@ -1399,3 +1399,11 @@ test("D-14: native radios and drop-downs follow the theme (color-scheme)", async
   const css = readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /\[data-theme="dark"\] \{ color-scheme: dark; \}\s*\[data-theme="light"\] \{ color-scheme: light; \}/);
 });
+
+test("D-07: a room or gateway under a name never wraps inside itself", async () => {
+  const { readFileSync } = await import("node:fs");
+  const css = readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.cal-row-unit \{ white-space: nowrap; \}/);
+  const { tab } = await mount();
+  assert.ok(tab.querySelector(".cal-row-sub .cal-row-unit, .cal-row-unit"), "the units are marked");
+});
