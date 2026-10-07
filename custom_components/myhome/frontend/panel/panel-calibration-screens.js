@@ -606,9 +606,11 @@ function summaryScreen(screen, ctx, tx, n, values) {
   const base = refine && local.base ? local.base : { opening: effective.opening?.value, closing: effective.closing?.value,
     slat: effective.slat_time_s?.value ?? null, travel: cover?.travel_cm ?? null,
     opening_roll: effective.opening_roll?.value ?? null, closing_roll: effective.closing_roll?.value ?? null };
+  // D-32: a slat time of 0 is a cover without slats: «No», as in the list's details, not «0 s».
+  const format = (key, value, unit, digits) => value == null ? "—" : key === "slat" && value === 0 ? t("calTabSlatsNo") : `${n(value, digits)}${unit}`;
   const row = (label, key, unit, digits = 1) => {
-    const before = base[key] == null ? "—" : `${n(base[key], digits)}${unit}`;
-    const shown = after[key] == null ? "—" : `${n(after[key], digits)}${unit}`;
+    const before = format(key, base[key], unit, digits);
+    const shown = format(key, after[key], unit, digits);
     return { label, before, after: shown === before ? "=" : shown, changed: shown !== before && base[key] != null };
   };
   screen.table = { headers: [t("wizTableValue"), t("wizTableBefore"), t("wizTableAfter")],

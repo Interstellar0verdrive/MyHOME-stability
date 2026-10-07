@@ -2477,3 +2477,12 @@ test("D-31: an ended session with a measurement out of range is titled as such, 
   const screen = buildScreen({ t, language: "it", stage: "session", path: "A", view, local: {}, cover: { name: "K" } });
   assert.deepEqual([screen.code, screen.title, screen.body], ["S-04", "La misura non è valida", "Il tempo misurato deve essere compreso tra 1 e 600 secondi."]);
 });
+
+test("D-32: in the summary a cover without slats reads «No» for the slat time, not «0 s»", async () => {
+  const t = (key) => translations.it[key] || key;
+  const view = { mode: "geometry", phase: "review", step: "check", values: { opening_time: 22, closing_time: 21 }, samples: {}, readings: { half_open: 99, half_close: 98 },
+    geometry: { slat_time_s: 0, opening_roll: 1.8, closing_roll: 1.9 }, slats: false, travel_cm: 198, owner: true, sequence: 9 };
+  const screen = buildScreen({ t, language: "it", stage: "session", path: "A", view, local: {}, cover: { name: "K", effective: {} } });
+  const slat = screen.table.rows.find((row) => row.label === t("wiz_T095"));
+  assert.deepEqual([slat.before, slat.after], ["—", "No"]);
+});
