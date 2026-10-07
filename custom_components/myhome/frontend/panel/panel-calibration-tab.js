@@ -449,6 +449,8 @@ export class CalibrationTab {
     // A live session, or a gateway the overview reports reserved while its session could not be read: no new measurement.
     const rows = gateways.map((entry) => this._rows.get(entry.entry_id)).filter(Boolean);
     const busy = rows.map((row) => row.session).find(Boolean) || (rows.some((row) => row.data && row.reserved && !row.sessionKnown) ? { unknown: true } : null);
+    // D-08: no overview could be read: no filter bar with zero counts, no «nothing matches the filter»; the error says it.
+    const unread = !!failed.length && !this._covers().length;
     let html;
     if (!loading && !failed.length && !this._covers().length) {
       // T-04: no cover estimated from its travel times on the gateway(s); the tab's title stays above.
@@ -465,7 +467,7 @@ export class CalibrationTab {
           <button type="button" data-action="cal-tab-batch" ${busy || loading ? "disabled" : ""}><ha-icon icon="mdi:format-list-numbered" aria-hidden="true"></ha-icon><span>${esc(t("wiz_T496"))}</span></button>
         </div></div>
         <p class="muted cal-tab-how-text" id="cal-tab-how-text" ${this._howOpen ? "" : "hidden"}>${esc(t("calTabHowItWorksBody"))}</p></div>
-        ${this._filterBar({ extra: " cal-tab-filters", select: this._filterSelect(counts, this._filter),
+        ${unread ? "" : this._filterBar({ extra: " cal-tab-filters", select: this._filterSelect(counts, this._filter),
           count: this._countLine(counts),
           chips: FILTERS.map((filter) => `<button type="button" class="cal-chip" data-action="cal-tab-filter" data-id="${filter}" aria-pressed="${this._filter === filter}">${esc(t(`calTabFilter_${filter}`))} <span class="count">${counts[filter]}</span></button>`).join("") })}
         ${this._done ? `<p class="notice cal-tab-done" role="status"><ha-icon icon="mdi:check-circle-outline" aria-hidden="true"></ha-icon><span>${esc(this._done)}</span></p>` : ""}
@@ -474,7 +476,7 @@ export class CalibrationTab {
         ${failed.map((entry) => `<p class="notice error" role="alert">${esc(gateways.length > 1 ? `${entry.title}: ` : "")}${esc(t("calTabError"))}</p>`).join("")}
         ${failed.length ? `<button type="button" data-action="cal-tab-refresh">${esc(t("refresh"))}</button>` : ""}
         ${loading ? `<p class="muted" role="status">${esc(t("loading"))}</p>` : ""}
-        ${visible.length || loading ? "" : this._emptyCard(t("wiz_T493"), t("wiz_T494"), this._howItWorks(), "cal-tab-no-match")}
+        ${visible.length || loading || unread ? "" : this._emptyCard(t("wiz_T493"), t("wiz_T494"), this._howItWorks(), "cal-tab-no-match")}
         ${visible.length ? `<div class="cal-list">
           ${this._sortHeads(this._expandAll(visible))}
           <div class="cal-list-rows" role="list">${visible.map((item) => this._row(item, busy, language)).join("")}</div></div>` : ""}

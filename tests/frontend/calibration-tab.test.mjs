@@ -1363,3 +1363,12 @@ test("D-01: in a landscape sheet the maintainer's view keeps its body: compact b
   assert.match(block, /dialog\.cal-dialog \.calibration-safety-actions \{ bottom: -4px; padding-block: 8px; \}/, "flush with the sheet's bottom");
   assert.match(block, /dialog\.cal-dialog :is\(\.calibration-safety-actions, \.cal-actions\) button \{ min-height: 40px;/);
 });
+
+test("D-08: an overview that cannot be read shows its error, not an empty filter with zero counts", async () => {
+  const { tab } = await mount({ callWS: async (message) => { if (message.type === "myhome/cover_profiles/overview") throw new Error("boom"); } });
+  await tick(6);
+  assert.ok(tab.querySelector(".notice.error[role=alert]"), "the error");
+  assert.ok(tab.querySelector('[data-action="cal-tab-refresh"]'), "and a way to read it again");
+  assert.equal(tab.querySelector(".cal-tab-filters"), null, "no filter bar with zero counts");
+  assert.equal(tab.querySelector(".cal-tab-no-match"), null, "no «nothing matches the filter»");
+});
