@@ -1162,7 +1162,8 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-wait-stages .wiz-wait-meter { flex-basis: 100%; padding-inline-start: 24px; }
 .wiz-wait-stages ha-icon { --mdc-icon-size: 16px; flex-shrink: 0; }
 .wiz-wait-stages li[data-step-state="future"] { color: var(--panel-text-2); }
-.wiz-progress { height: 6px; border-radius: 999px; background: var(--panel-surface); overflow: hidden; }
+/* D-24: the track is the text colour at 14 %, seen on the wait's box in light and dark (the surface vanished on dark). */
+.wiz-progress { height: 6px; border-radius: 999px; background: color-mix(in srgb, var(--primary-text-color, #182b37) 14%, transparent); overflow: hidden; }
 .wiz-progress span { display: block; height: 100%; width: 0; background: var(--primary-text-color, #182b37); transition: width 100ms linear; }
 /* Unknown duration: a short segment sweeps the track instead of a share. */
 .wiz-progress.is-indeterminate span { width: 30%; animation: wiz-progress-sweep 1.6s ease-in-out infinite; }

@@ -2450,3 +2450,8 @@ test("D-23/D-36: a number and its unit are held on one line in bodies, notices, 
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /\.cal-nb \{ white-space: nowrap; \}/);
 });
+
+test("D-24: the progress track is seen at 0 % on light and dark boxes", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.wiz-progress \{ height: 6px; border-radius: 999px; background: color-mix\(in srgb, var\(--primary-text-color, #182b37\) 14%, transparent\); overflow: hidden; \}/);
+});
