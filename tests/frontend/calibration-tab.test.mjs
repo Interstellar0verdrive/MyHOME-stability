@@ -154,7 +154,7 @@ test("the chevron expands a row in place with the values in use, the last measur
   const nb = "\u00a0";
   assert.deepEqual(facts, { "Opening time": `22.4${nb}s`, "Closing time": `21.9${nb}s`, Slats: `Yes · 4.4${nb}s`, "Curtain travel": `196${nb}cm`,
     "Roll on ascent": "1.83", "Roll on descent": "1.91", Date: `Sep${nb}29,${nb}2026`, Method: "From the profile" });
-  assert.match(details.textContent, /Also followed by Kitchen shutter 2\./);
+  assert.match(details.textContent, /Also followed by Kitchen shutter\u00a02\./);
   assert.match(details.textContent, /adapted to the curtain travel of this cover/);
   const blockActions = (entity) => {
     const toggle = row(tab, entity).querySelector('[data-action="cal-tab-toggle"]');
@@ -287,7 +287,7 @@ test("Assign profile lists the saved profiles as B-01 does and assigns with the 
   const options = [...dialog.querySelectorAll(".wiz-radio")].map((label) => [...label.querySelectorAll("strong, small")].map((item) => item.textContent));
   assert.deepEqual(options, [
     ["low_one_leaf", "Times only", "No cover follows it"],
-    ["tall_two_leaf", "With slats · Reference travel 198 cm", "Measured on Living room shutter 1 on Sep 29, 2026", "Followed by Living room shutter 2 and Kitchen shutter 2"]],
+    ["tall_two_leaf", "With slats · Reference travel 198 cm", "Measured on Living room shutter 1 on Sep 29, 2026", "Followed by Living room shutter\u00a02 and Kitchen shutter\u00a02"]],
     "who follows each profile, by name");
   const assign = dialog.querySelector("[data-assign]");
   assert.equal(assign.disabled, true);

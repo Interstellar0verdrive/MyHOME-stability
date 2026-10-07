@@ -502,7 +502,7 @@ test("a cover that follows a profile saves only on itself by default, which wait
   wiz().querySelector(".wiz-save-info").open = false;
   assert.deepEqual([...wiz().querySelectorAll('[name="save_choice"]')].map((input) => input.value), ["update", "new"], "listed as in A-21d");
   assert.equal(wiz().querySelector('[name="save_choice"][value="new"]').checked, true);
-  assert.match(wiz().querySelector(".wiz-profile-block").textContent, /Will also change 1 cover: Living room shutter 3\./);
+  assert.match(wiz().querySelector(".wiz-profile-block").textContent, /Will also change 1 cover: Living room shutter\u00a03\./);
   assert.equal(wiz().querySelector('[data-wiz="save"]').disabled, false);
   const name = wiz().querySelector('[name="profile_name"]');
   const error = () => wiz().querySelector(".wiz-name-error");
