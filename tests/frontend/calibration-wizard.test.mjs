@@ -2549,3 +2549,21 @@ test("D-13: a button off while the motor starts or a request is pending is a pas
   assert.deepEqual(flags(at({ step: "opening", phase: "briefing" }, { locked: true })), [["next", true], ["endpoint", false]],
     "a request pending: ① passes, ② still waits for ①");
 });
+
+test("X-4: notes and notices are plain flow text, never flex or grid: an inline «10 cm» or bold run stays in the sentence", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  const offenders = [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)].filter(([, selector, body]) => /display:\s*(inline-)?(flex|grid)/.test(body))
+    .flatMap(([, selector]) => selector.split(",").map((part) => part.trim()))
+    .filter((part) => /\.(cal-note|wiz-notice|notice)(?![\w-])/.test(part) && !/::before|:has\(> ha-icon\)|^\.notice\.muted$/.test(part));
+  assert.deepEqual(offenders, [], "only an [icon][text] notice is laid out side by side");
+  // The lift-off warning (a gap of 10 cm or more) as drawn: one paragraph whose «10 cm» is held, not a column.
+  const { backend, code, press, type, startFor, wiz } = await mount();
+  await startFor("cover.living_one");
+  await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  await press("ack:lift"); await press("next"); await move(backend); await press("lift"); backend.stopped(); await tick();
+  await type("12");
+  assert.equal(code(), "A-08");
+  const notice = wiz().querySelector(".wiz-result-notices .wiz-notice");
+  assert.ok(notice.classList.contains("notice") && notice.querySelector(".cal-nb"), "the held «10 cm» inside the sentence");
+  assert.equal(notice.querySelector("ha-icon"), null, "no icon: so no side-by-side layout applies");
+});
