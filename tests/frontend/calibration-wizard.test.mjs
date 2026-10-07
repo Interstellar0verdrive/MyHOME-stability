@@ -2486,3 +2486,11 @@ test("D-32: in the summary a cover without slats reads «No» for the slat time,
   const slat = screen.table.rows.find((row) => row.label === t("wiz_T095"));
   assert.deepEqual([slat.before, slat.after], ["—", "No"]);
 });
+
+test("D-33: the stepper's times always carry one decimal", async () => {
+  const t = (key) => translations.en[key] || key;
+  const view = { mode: "geometry", phase: "briefing", step: "opening", values: { opening_time: 22 }, samples: { lift: 5 }, readings: { gap: 3 }, slats: true, owner: true, sequence: 4 };
+  const screen = buildScreen({ t, stage: "session", path: "A", view, local: {}, cover: { name: "K" } });
+  const ascent = screen.stepper.phases.find((phase) => phase.key === "ascent").substeps.map((item) => item.value);
+  assert.deepEqual(ascent.slice(0, 2), ["5.0 s · 3 cm", "22.0 s"]);
+});

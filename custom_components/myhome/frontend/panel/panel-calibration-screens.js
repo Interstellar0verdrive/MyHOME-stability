@@ -900,7 +900,8 @@ function finalize(screen, ctx) {
   const source = view && !view.preview ? view : null;
   const base = local.base || {};
   const values = source?.values || {}, samples = source?.samples || {}, readings = { ...(local.baseReadings || {}), ...(source?.readings || {}) };
-  const seconds = (value) => value == null ? "—" : `${n(value)} s`, cm = (value) => value == null ? "—" : `${n(value)} cm`;
+  // D-33: times always with one decimal («5,0 s» beside «4,9 s», R6-7).
+  const seconds = (value) => value == null ? "—" : `${fixed(value, language, 1)} s`, cm = (value) => value == null ? "—" : `${n(value)} cm`;
   // D-11: a time judged not valid, or discarded by its repeat and not yet measured again, is not shown as a result.
   const kept = (step, value) => local.invalidRun?.step === step || (local.discarded?.step === step && local.discarded.value === value) ? null : value;
   const slats = source ? source.slats !== false : local.slats !== false;
@@ -908,7 +909,7 @@ function finalize(screen, ctx) {
     // The path chosen ("Ⓐ first of its type") is the introduction's sub-line, as the mockups' stepper shows it.
     intro: screen.caption ? [["", screen.caption]] : [],
     ascent: [...(slats && !(path === "C" && scope === "times_only") ? [[t("wiz_T039"), (samples.lift ?? base.lift) != null
-      ? `${n(samples.lift ?? base.lift)} s · ${(readings.gap ?? base.gap) != null ? cm(readings.gap ?? base.gap) : "—"}` : "—"]] : []),
+      ? `${seconds(samples.lift ?? base.lift)} · ${(readings.gap ?? base.gap) != null ? cm(readings.gap ?? base.gap) : "—"}` : "—"]] : []),
       [t("wiz_T040"), seconds(kept("opening", values.opening_time ?? base.opening))],
       ...(path === "C" && scope === "times_only" ? [] : [[t("wiz_T041"), cm(source?.travel_cm ?? base.travel)]])],
     descent: [[t("wiz_T068"), seconds(kept("closing", values.closing_time ?? base.closing))]],
