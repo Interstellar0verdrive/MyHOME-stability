@@ -1070,8 +1070,11 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   .cal-row-toggle { grid-column: 1; display: flex; align-items: center; gap: var(--cal-lead-gap); padding: 0; }
   .cal-row-status { grid-column: 2; padding: 0; }
   .cal-row-profile { grid-column: 3; justify-self: start; }
-  /* 1016–1199: CTA and ⋮ at the right inside the profile column. */
+  /* 1016–1199: CTA and ⋮ at the right inside the profile column. D-03: the profile keeps clear of them, the room of the
+     158 px actions column of the wider table and a 12 px gap; the chip is cut sooner (Q-22's 180 px stays the most). */
   .cal-row-actions { grid-column: 3; justify-self: end; }
+  .cal-row-profile { min-width: 0; max-width: calc(100% - 158px - 12px); }
+  .cal-row-profile .cal-profile-chip { max-width: min(180px, 100%); }
   .cal-row-profile > .muted { display: block; font-size: 13px; }
   .cal-row-last-inline { display: none; }
   .cal-row-details { padding-block: 12px 20px; align-items: start; }
@@ -1088,6 +1091,7 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   .cal-list { --cal-cols: repeat(3, minmax(0, 1fr)) 158px; }
   .cal-list-head > :nth-child(5) { display: block; grid-column: 4; }
   .cal-row-actions { grid-column: 4; }
+  .cal-row-profile { max-width: none; }
 }
 
 /* ---------- Calibration wizard (stepper · instruction · actions) ---------- */

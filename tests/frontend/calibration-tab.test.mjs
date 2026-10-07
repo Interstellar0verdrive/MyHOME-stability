@@ -1372,3 +1372,12 @@ test("D-08: an overview that cannot be read shows its error, not an empty filter
   assert.equal(tab.querySelector(".cal-tab-filters"), null, "no filter bar with zero counts");
   assert.equal(tab.querySelector(".cal-tab-no-match"), null, "no «nothing matches the filter»");
 });
+
+test("D-03: from 1016 to 1199 the profile chip keeps clear of the CTA and ⋮ sharing its column", async () => {
+  const { readFileSync } = await import("node:fs");
+  const css = readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  const table = css.slice(css.indexOf("@container caltab (min-width: 1016px) {\n  /* One grid"));
+  assert.match(table, /\.cal-row-profile \{ min-width: 0; max-width: calc\(100% - 158px - 12px\); \}\s*\.cal-row-profile \.cal-profile-chip \{ max-width: min\(180px, 100%\); \}/);
+  const wide = css.slice(css.indexOf("@container caltab (min-width: 1200px) {"));
+  assert.match(wide.slice(0, wide.indexOf("\n}\n")), /\.cal-row-profile \{ max-width: none; \}/, "with its own actions column the profile has the whole column");
+});
