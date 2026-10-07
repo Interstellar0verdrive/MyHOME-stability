@@ -1263,7 +1263,8 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-action, .wiz-take { padding-block: 8px; line-height: 1.2; text-wrap: balance; }
 /* D18: in a wide bottom bar (phone in portrait from 560 px, the column in the page) the actions keep 480 px, centred. */
 .wiz-actions { container: wizbar / inline-size; }
-@container wizbar (min-width: 560px) { .wiz-actions > * { box-sizing: border-box; width: 100%; max-width: 480px; justify-self: center; } }
+/* D-22: a red Stop alone in the bar is centred too (the shell's `button.danger` sets it to the start). */
+@container wizbar (min-width: 560px) { .wiz-actions > *, .wiz-actions > button.danger { box-sizing: border-box; width: 100%; max-width: 480px; justify-self: center; } }
 /* G2-10: «Stopping…» in the place of ①/② while the backend waits for the actuator's stop. */
 .wiz-action.status { display: flex; align-items: center; justify-content: center; gap: 10px; box-sizing: border-box; margin: 0; padding: 0 16px;
   border: 1px dashed var(--panel-border); color: var(--panel-text-2); font-weight: 500; }

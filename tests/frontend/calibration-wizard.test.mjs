@@ -2434,3 +2434,9 @@ test("D-21: on A-02 the stepper shows the steps of the path ticked so far", asyn
   await tick_("A");
   assert.equal(phases(), 7);
 });
+
+test("D-22: from a 560 px bar every action is centred at 480, a red Stop alone included", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /@container wizbar \(min-width: 560px\) \{ \.wiz-actions > \*, \.wiz-actions > button\.danger \{ box-sizing: border-box; width: 100%; max-width: 480px; justify-self: center; \} \}/);
+  assert.match(css, /button\.danger \{ color: var\(--panel-error\); justify-self: start; \}/, "the shell's rule it outweighs");
+});
