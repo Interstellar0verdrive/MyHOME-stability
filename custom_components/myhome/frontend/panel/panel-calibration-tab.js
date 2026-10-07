@@ -16,7 +16,7 @@ function holdScroll(host) {
 
 /** WHO 2 "Calibration" view: what each timed cover uses, its measurement state and the ways to measure it. */
 const asset = (name) => { const url = new URL(name, import.meta.url); url.search = new URL(import.meta.url).search; return url.href; };
-const [{ escapeHtml: esc }, model, text, { CoverCalibration }, { CalibrationWizard }, { ProfileCatalogueEditor }, { morph }, { layout, SHEETS, listBand, contentWidth, fitBars, dockBar }] = await Promise.all([
+const [{ escapeHtml: esc }, model, text, { CoverCalibration }, { CalibrationWizard }, { ProfileCatalogueEditor }, { morph }, { layout, SHEETS, listBand, contentWidth, fitBars, fitRows, dockBar }] = await Promise.all([
   import(asset("panel-dom.js")), import(asset("panel-model.js")), import(asset("panel-calibration-text.js")),
   import(asset("panel-cover-calibration.js")), import(asset("panel-calibration-wizard.js")), import(asset("panel-profile-catalogue-editor.js")),
   import(asset("panel-calibration-morph.js")), import(asset("panel-calibration-layout.js")),
@@ -498,6 +498,7 @@ export class CalibrationTab {
     // Patched in place (M3): the list, the details page and their scroll stay where they are.
     morph(host, html);
     fitBars(host);
+    fitRows(host);
     this._band();
     this._alignCards();
     this._syncHold();
@@ -1223,6 +1224,7 @@ export class CalibrationTab {
       batch.loading, batch.error, batch.entryId, max, gateways.length, this._sort, t("wiz_T364")]);
     if (host.querySelector(".cal-batch") && this._batchStructure === structure) this._patchBatch(summary, count, max);
     else { this._batchStructure = structure; morph(host, html); fitBars(host.querySelector(".cal-batch")); }
+    fitRows(host.querySelector(".cal-batch"));
     // U-1: the sequence's one-column layout docks its action bar too (once per view).
     const docked = host.querySelector(".cal-batch");
     if (docked && this._dockedView !== docked) { this._undockView?.(); this._dockedView = docked; this._undockView = dockBar(docked); }

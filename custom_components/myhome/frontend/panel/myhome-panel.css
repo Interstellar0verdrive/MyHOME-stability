@@ -1038,14 +1038,15 @@ dialog.cal-dialog .cal-resume-entity { display: none; }
 /* R-6 (Figma «R · Breakpoint», «Liste nel wizard»): A-01's and the sequence's covers are cards, 12 px apart, as the
    list's: [circle][icon][name and its line] with the chips beside them while they fit (side by side, or one under the
    other), under them on a narrow list. */
-.cal-batch-rows { display: grid; gap: 12px; container: calcards / inline-size; }
+.cal-batch-rows { display: grid; gap: 12px; }
 .cal-batch-row { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "lead name" "status status"; align-items: center; gap: 8px 12px;
   min-height: 48px; padding: 12px; border: 1px solid var(--panel-border); border-radius: 12px; background: var(--panel-surface); cursor: pointer;
   font-size: 13px; font-weight: 400; color: inherit; }
-@container calcards (min-width: 600px) {
-  .cal-batch-row { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "lead name status"; }
-  .cal-batch-chips { justify-content: end; }
-}
+/* D-40 (decided 8 Oct): beside the name when it keeps 200 px (`fitRows()`, measured as the page cards, Q-15): side by
+   side, or one under the other (`is-stacked`); under the name otherwise. */
+.cal-batch-row.is-beside { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "lead name status"; }
+.cal-batch-row.is-beside .cal-batch-chips { justify-content: end; }
+.cal-batch-row.is-stacked .cal-batch-chips { flex-direction: column; align-items: end; }
 .cal-batch-row:hover { background: var(--panel-accent-soft); }
 .cal-batch-row.is-selected { background: color-mix(in srgb, var(--panel-accent) 6%, var(--panel-surface)); }
 .cal-batch-lead { grid-area: lead; display: inline-flex; align-items: center; gap: 12px; }

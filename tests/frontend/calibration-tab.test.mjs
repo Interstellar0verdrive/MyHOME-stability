@@ -1111,7 +1111,7 @@ test("the list's bands by content width (1200/1016/700) and the wizard's layouts
   assert.match(calibration, /#cover-calibration-tab \{ container: caltab \/ inline-size; \}/, "the tab's width decides, not the window's");
   const widths = [...calibration.matchAll(/@(media|container caltab|container wizbar|container calblock|container calcards) ([^{]+)\{/g)].flatMap(([, kind, query]) =>
     [...query.matchAll(/(min|max)-width: (\d+)px/g)].map(([, edge, px]) => `${kind === "media" ? "window" : kind.endsWith("wizbar") ? "bar" : kind.endsWith("calblock") ? "block" : kind.endsWith("calcards") ? "cards" : "tab"} ${edge}-${px}`));
-  assert.deepEqual([...new Set(widths)].sort(), ["bar min-560", "block min-480", "cards min-600", "tab max-1015", "tab max-699", "tab max-999",
+  assert.deepEqual([...new Set(widths)].sort(), ["bar min-560", "block min-480", "tab max-1015", "tab max-699", "tab max-999",
     "tab min-1000", "tab min-1016", "tab min-1200", "tab min-700", "window max-719", "window min-720"],
     "the content at 1200/1016/700 (list), 700 and 1000 (wizard); the actions bar at 560; a details block at 480 (pairs in two halves); the filter bar measured (Q-24); the window at 720 (phone, dialogs; with 500 px of height)");
   // Q-3 parity: the script's list bands are the stylesheet's container rules.
@@ -1339,9 +1339,10 @@ test("the lists in the wizard are cards, with the bar's counts above its drop-do
   const { tab } = await openBatch();
   assert.match(tab.querySelector(".cal-batch-filterbar > .cal-tab-summary").textContent, /^\d+ tapparell[ae] · /);
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
-  assert.match(css, /\.cal-batch-rows \{ display: grid; gap: 12px; container: calcards \/ inline-size; \}/);
+  assert.match(css, /\.cal-batch-rows \{ display: grid; gap: 12px; \}/, "D-40: no fixed width any more");
   assert.match(css, /\.cal-batch-row \{[^}]*border: 1px solid var\(--panel-border\); border-radius: 12px; background: var\(--panel-surface\);/);
-  assert.match(css, /@container calcards \(min-width: 600px\) \{\s*\.cal-batch-row \{ grid-template-columns: auto minmax\(0, 1fr\) auto; grid-template-areas: "lead name status"; \}/);
+  assert.match(css, /\.cal-batch-row\.is-beside \{ grid-template-columns: auto minmax\(0, 1fr\) auto; grid-template-areas: "lead name status"; \}/);
+  assert.match(css, /\.cal-batch-row\.is-stacked \.cal-batch-chips \{ flex-direction: column; align-items: end; \}/);
 });
 
 test("the tab's head: title, «Come funziona ›» under it, «Calibra una tapparella» (primary) then «Calibra in sequenza» (Q-25)", async () => {
@@ -1471,4 +1472,23 @@ test("D-07/D-39: one card layout: never wider than the list, the name's column n
   panel._calibrationTab._fitChips(host);
   assert.equal(chips.style.flex, "0 0 180px");
   assert.ok(["0", "0px"].includes(chips.style.minWidth), "let go below the cut chip's whole name");
+});
+
+test("D-40: a wizard list's chips sit beside the name while it keeps 200 px, side by side or stacked, under it otherwise", async () => {
+  const { fitRows, ROW_NAME_MIN } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-layout.js");
+  assert.equal(ROW_NAME_MIN, 200);
+  const root = document.createElement("div");
+  root.innerHTML = '<div class="cal-batch-rows"><label class="cal-batch-row"><span class="cal-batch-lead"></span><span class="cal-row-name"></span><span class="cal-batch-chips"><span class="badge"></span><span class="chip"></span></span></label></div>';
+  document.body.append(root);
+  const row = root.querySelector(".cal-batch-row"), [badge, chip] = row.querySelectorAll(".badge, .chip");
+  const rect = (width) => ({ width, left: 0, right: width, top: 0, bottom: 24, height: 24 });
+  row.querySelector(".cal-batch-lead").getBoundingClientRect = () => rect(72);
+  badge.getBoundingClientRect = () => rect(150); chip.getBoundingClientRect = () => rect(180);
+  badge.getClientRects = chip.getClientRects = () => [rect(1)];
+  const at = (width) => { Object.defineProperty(row, "clientWidth", { value: width, configurable: true }); fitRows(root); return [...row.classList].filter((name) => name !== "cal-batch-row"); };
+  // jsdom computes no padding or gap: room = width − 72 − 2 × 12.
+  assert.deepEqual(at(800), ["is-beside"], "150 + 8 + 180 leave the name 266 px");
+  assert.deepEqual(at(500), ["is-beside", "is-stacked"], "stacked: 180 leave the name 224 px");
+  assert.deepEqual(at(400), [], "under the name");
+  root.remove();
 });

@@ -106,6 +106,47 @@ export function fitBars(root) {
   }
 }
 
+/** D-40: the room the name of a wizard list's row keeps before its chips leave the side for under it. */
+export const ROW_NAME_MIN = 200;
+
+/**
+ * D-40 (decided 8 Oct): A-01's and the sequence's rows follow the page cards' measured rule (Q-15) instead of a fixed
+ * list width: the chips beside the name, side by side while the name keeps ROW_NAME_MIN px (`is-beside`), one under
+ * the other while it still does (`is-beside is-stacked`), under the name otherwise. Measured again when a list's
+ * width changes.
+ */
+export function fitRows(root) {
+  for (const list of root?.querySelectorAll?.(".cal-batch-rows") || []) {
+    for (const row of list.querySelectorAll(":scope > .cal-batch-row")) fitRow(row);
+    if (typeof ResizeObserver !== "function" || rowsWatched.has(list)) continue;
+    rowsObserver ||= new ResizeObserver((entries) => {
+      const lists = entries.map((entry) => entry.target);
+      (globalThis.requestAnimationFrame || ((callback) => setTimeout(callback, 16)))(() => {
+        for (const target of lists) if (target.isConnected) for (const row of target.querySelectorAll(":scope > .cal-batch-row")) fitRow(row);
+      });
+    });
+    rowsObserver.observe(list);
+    rowsWatched.add(list);
+  }
+}
+const rowsWatched = new WeakSet();
+let rowsObserver = null;
+
+function fitRow(row) {
+  row.classList.remove("is-beside", "is-stacked");
+  const lead = row.querySelector(".cal-batch-lead"), chips = [...row.querySelectorAll(".cal-batch-chips .badge, .cal-batch-chips .chip, .cal-batch-chips .muted")]
+    .filter((chip) => chip.getClientRects().length);
+  const view = row.ownerDocument.defaultView, style = view.getComputedStyle(row);
+  const inner = row.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0);
+  if (!inner || !lead || !chips.length) return;
+  const gap = parseFloat(style.columnGap) || 12, chipGap = 8;
+  const widths = chips.map((chip) => chip.getBoundingClientRect().width);
+  const room = inner - lead.getBoundingClientRect().width - 2 * gap;
+  const together = widths.reduce((sum, width) => sum + width, 0) + chipGap * (widths.length - 1);
+  if (room - together >= ROW_NAME_MIN) row.classList.add("is-beside");
+  else if (room - Math.max(...widths) >= ROW_NAME_MIN) row.classList.add("is-beside", "is-stacked");
+}
+
 /**
  * U-1: in the one-column wizard (content under 700 px, a window of 720 px or more) the actions are a bar held at the
  * bottom of the window. Home Assistant scrolls the page on <html> while the panel grows with its content, so a sticky
