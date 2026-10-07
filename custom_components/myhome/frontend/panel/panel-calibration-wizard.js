@@ -355,10 +355,8 @@ export class CalibrationWizard {
         morph(picker, html);
         fitBars(picker);
         fitRows(picker);
-        // A new choice opens its row with notes: the row stays in view.
-        const chosen = picker.querySelector(".wiz-pick-row.is-selected");
-        if (chosen && chosen.dataset.entity !== this._pickedEntity) chosen.scrollIntoView?.({ block: "nearest" });
-        this._pickedEntity = chosen?.dataset.entity;
+        // X-3: a new choice only shows as selected (its notes open under it): nothing scrolls, the row stays where the
+        // finger left it.
         if (focus) {
           const [kind, value] = focus;
           [...picker.querySelectorAll("button, input, select")].find((element) => (kind === "cover" ? element.name === "cover" && element.value : element.dataset[kind]) === value)
@@ -456,7 +454,7 @@ export class CalibrationWizard {
           ? `<p class="wiz-action status${action.kind === "state" ? " is-still" : ""}" data-wiz="${esc(action.id)}" role="status">${action.kind === "status" ? '<span class="wiz-spinner" aria-hidden="true"></span>' : ""}${esc(action.label)}</p>`
           : `<button type="button" class="wiz-action ${action.kind}" data-wiz="${esc(action.id)}"${action.note ? ` aria-describedby="wiz-note-${esc(action.id.replace(/\W/g, "-"))}"` : ""}>${esc(action.label)}</button>${action.note
           ? `<p class="wiz-action-note muted" id="wiz-note-${esc(action.id.replace(/\W/g, "-"))}">${esc(action.note)}</p>` : ""}`).join("")}`;
-      if (focused) column.querySelector(`[data-wiz="${focused}"]`)?.focus();
+      if (focused) column.querySelector(`[data-wiz="${focused}"]`)?.focus({ preventScroll: true });
     }
     const guarded = this._guarded();
     for (const action of screen.actions) {

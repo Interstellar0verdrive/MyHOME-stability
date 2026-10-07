@@ -106,6 +106,44 @@ export function fitBars(root) {
   }
 }
 
+/**
+ * X-2: on iOS a native drop-down opens its picker over the lower half of the screen and scrolls the page to keep the
+ * <select> above it; when the picker closes the page stays there (only the first time: afterwards the select is already
+ * high enough). Around a filter's or an order's drop-down the panel notes where every scrolling box (and the window)
+ * stood when it got the focus, and puts them back once the choice is made or the picker closes, after the list has
+ * been redrawn. Returns the function that stops it.
+ */
+export function keepScrollOnPick(host) {
+  if (!host?.addEventListener) return () => {};
+  const view = host.ownerDocument?.defaultView || globalThis;
+  let saved = null, timer = 0;
+  const boxes = (start) => {
+    const out = [];
+    for (let node = start; node; node = node.parentNode || node.host) {
+      if (node.nodeType === 11) { node = node.host; if (!node) break; }
+      if (node.nodeType === 1 && node.scrollHeight > node.clientHeight + 1) out.push([node, node.scrollTop]);
+    }
+    return out;
+  };
+  const picker = (target) => target?.matches?.("select") && target.closest?.(".cal-filterbar, .cal-batch-tools, .wiz-pick-bar");
+  const restore = () => {
+    if (!saved || view.performance.now() - saved.at > 10000) { saved = null; return; }
+    const { list, x, y } = saved;
+    const apply = () => { for (const [node, top] of list) if (node.isConnected && Math.abs(node.scrollTop - top) > 1) node.scrollTop = top;
+      if (Math.abs((view.scrollY || 0) - y) > 1) view.scrollTo?.(x, y); };
+    (view.requestAnimationFrame || ((callback) => setTimeout(callback, 16)))(apply);
+    clearTimeout(timer);
+    // iOS animates the picker away: once more when it has gone.
+    timer = setTimeout(() => { apply(); saved = null; }, 350);
+  };
+  const focusin = (event) => { if (picker(event.target)) saved = { list: boxes(event.target.parentNode), x: view.scrollX || 0, y: view.scrollY || 0, at: view.performance.now() }; };
+  const settle = (event) => { if (picker(event.target)) restore(); };
+  host.addEventListener("focusin", focusin);
+  host.addEventListener("change", settle);
+  host.addEventListener("focusout", settle);
+  return () => { host.removeEventListener("focusin", focusin); host.removeEventListener("change", settle); host.removeEventListener("focusout", settle); clearTimeout(timer); };
+}
+
 /** D-40: the room the name of a wizard list's row keeps before its chips leave the side for under it. */
 export const ROW_NAME_MIN = 200;
 

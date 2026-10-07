@@ -1510,3 +1510,28 @@ test("X-1: where the head stacks (phone), «Come funziona» opens right under it
   assert.deepEqual([...top.querySelectorAll(":scope > .cal-tab-head > *, :scope > .cal-tab-how-text")].map((item) => [...item.classList].find((name) => name.startsWith("cal-tab-"))),
     ["cal-tab-heading", "cal-tab-actions", "cal-tab-how-text"], "the three parts the stylesheet orders: title and link, buttons, text");
 });
+
+test("X-2: a filter's or an order's drop-down leaves every scrolling box where it was (iOS scrolls for its picker)", async () => {
+  const { keepScrollOnPick } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-layout.js");
+  const outer = document.createElement("div"), host = document.createElement("div");
+  host.innerHTML = '<div class="cal-filterbar"><select data-sort><option>a</option><option>b</option></select></div>';
+  outer.append(host); document.body.append(outer);
+  Object.defineProperty(outer, "scrollHeight", { value: 3000 }); Object.defineProperty(outer, "clientHeight", { value: 800 });
+  outer.scrollTop = 900;
+  const stop = keepScrollOnPick(host), select = host.querySelector("select");
+  select.dispatchEvent(new Event("focusin", { bubbles: true }));
+  outer.scrollTop = 1300; // the picker opened: the page moved up
+  select.dispatchEvent(new Event("change", { bubbles: true }));
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  assert.equal(outer.scrollTop, 900, "back where it was");
+  outer.scrollTop = 500; // later, the user's own scroll is never undone
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  assert.equal(outer.scrollTop, 500);
+  stop(); outer.remove();
+});
+
+test("X-3: choosing a cover in A-01 scrolls nothing: the row only shows as selected", async () => {
+  const source = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/panel-calibration-wizard.js", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /chosen\.scrollIntoView|is-selected"\)[^;]*scrollIntoView/, "no scroll on a choice");
+  assert.match(source, /column\.querySelector\(`\[data-wiz="\$\{focused\}"\]`\)\?\.focus\(\{ preventScroll: true \}\)/, "the actions' focus comes back without scrolling");
+});

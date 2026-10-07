@@ -16,7 +16,7 @@ function holdScroll(host) {
 
 /** WHO 2 "Calibration" view: what each timed cover uses, its measurement state and the ways to measure it. */
 const asset = (name) => { const url = new URL(name, import.meta.url); url.search = new URL(import.meta.url).search; return url.href; };
-const [{ escapeHtml: esc }, model, text, { CoverCalibration }, { CalibrationWizard }, { ProfileCatalogueEditor }, { morph }, { layout, SHEETS, listBand, contentWidth, fitBars, fitRows, dockBar }] = await Promise.all([
+const [{ escapeHtml: esc }, model, text, { CoverCalibration }, { CalibrationWizard }, { ProfileCatalogueEditor }, { morph }, { layout, SHEETS, listBand, contentWidth, fitBars, fitRows, dockBar, keepScrollOnPick }] = await Promise.all([
   import(asset("panel-dom.js")), import(asset("panel-model.js")), import(asset("panel-calibration-text.js")),
   import(asset("panel-cover-calibration.js")), import(asset("panel-calibration-wizard.js")), import(asset("panel-profile-catalogue-editor.js")),
   import(asset("panel-calibration-morph.js")), import(asset("panel-calibration-layout.js")),
@@ -153,6 +153,8 @@ export class CalibrationTab {
       context.host.addEventListener("click", (event) => this._click(event));
       context.host.addEventListener("keydown", (event) => this._keydown(event));
       context.host.addEventListener("change", (event) => this._change(event));
+      // X-2: a filter's or an order's native drop-down never leaves the page scrolled (iOS's picker).
+      keepScrollOnPick(context.host);
       // Q-3: a new width may change the list's band.
       if (typeof ResizeObserver === "function") {
         const host = context.host;
