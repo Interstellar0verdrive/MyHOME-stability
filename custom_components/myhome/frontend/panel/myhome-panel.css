@@ -943,10 +943,11 @@ dialog.cal-dialog :is(button, select, input):focus:not(:focus-visible) { outline
   .cal-details-grid .cal-block-action { margin-top: auto; }
 }
 .cal-row-toggle .cal-row-name { flex: 1 1 auto; }
-/* Q-13/Q-15, the cards' header outside the phone (Figma «R · Breakpoint», «Scheda tapparella»): no chevron (a card
-   opens by a tap anywhere), the icon and its texts filling the space (names wrap), the status and profile chips side
-   by side while they fit and one under the other when not, then the action (never wrapping) and ⋮. */
-@container caltab (max-width: 1015px) { .cal-row-chevron { display: none; } }
+/* Q-13/Q-15, the cards' header outside the phone (Figma «R · Breakpoint», «Scheda tapparella»): L-2, the chevron of
+   the table rows (same place, same turn) says the card opens in place (a tap anywhere opens it); the icon and its texts
+   fill the space (names wrap), the status and profile chips side by side while they fit and one under the other when
+   not, then the action (never wrapping) and ⋮. On the phone a card opens its page: no chevron. */
+@media (max-width: 719px) and (min-height: 500px), (max-width: 719px) and (orientation: portrait) { .cal-row-chevron { display: none; } }
 @media (min-width: 720px), (max-height: 499px) and (orientation: landscape) {
   @container caltab (max-width: 1015px) {
     .cal-row-main { display: flex; flex-wrap: nowrap; align-items: center; gap: 12px 16px; }

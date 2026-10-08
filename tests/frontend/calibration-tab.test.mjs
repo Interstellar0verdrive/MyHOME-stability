@@ -1312,6 +1312,14 @@ test("an open card with stacked blocks shares one edge between its chips and the
   assert.equal(row(tab, "cover.living_one").getAttribute("style"), null);
 });
 
+test("L-2: the cards that open in place keep the rows' chevron; only the phone, where a card opens its page, has none", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.doesNotMatch(css, /@container caltab \(max-width: 1015px\) \{ \.cal-row-chevron \{ display: none; \} \}/);
+  assert.match(css, /@media \(max-width: 719px\) and \(min-height: 500px\), \(max-width: 719px\) and \(orientation: portrait\) \{ \.cal-row-chevron \{ display: none; \} \}/,
+    "the phone layout's own query (layout.PHONE)");
+  assert.match(css, /\.cal-row-toggle\[aria-expanded="true"\] \.cal-row-chevron \{ transform: rotate\(90deg\); \}/, "the same turn");
+});
+
 test("every row and card shows the same 40 px cover icon, the sequence's too (Q-11)", async () => {
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /\.cal-row-icon \{ display: inline-grid; place-items: center; width: 40px; height: 40px;/);
