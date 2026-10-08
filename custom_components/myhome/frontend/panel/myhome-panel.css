@@ -1268,7 +1268,8 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 /* G3-4: why a value is refused, under the field, in the error colour. */
 .wiz-field-error { margin: 0; color: var(--panel-error); font-size: 13px; font-weight: 500; scroll-margin-bottom: 36px; }
 .wiz-field input[aria-invalid="true"] { border-color: var(--panel-error); box-shadow: 0 0 0 3px color-mix(in srgb, var(--panel-error) 20%, transparent); }
-.wiz-field input[aria-invalid="true"] ~ span, .wiz-field:has(input[aria-invalid="true"]) .muted { color: var(--panel-error); }
+/* Z-2: in error only the field's border, its unit and the message are red; the help line stays grey. */
+.wiz-field input[aria-invalid="true"] ~ span { color: var(--panel-error); }
 .input-suffix { display: flex; align-items: center; gap: 8px; }
 .wiz-precision { margin: 0; font-size: 13px; }
 .wiz-table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }

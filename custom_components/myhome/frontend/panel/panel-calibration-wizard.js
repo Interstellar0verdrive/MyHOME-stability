@@ -460,8 +460,10 @@ export class CalibrationWizard {
     for (const action of screen.actions) {
       const button = column.querySelector(`[data-wiz="${action.id}"]`);
       if (!button || action.kind === "status" || action.kind === "state") continue;
-      // N-06: a reading's «Fatto, avanti» waits for a value in the field: off until the user types one.
-      const empty = action.id === "reading" && !(root.querySelector('[name="reading_cm"]')?.value || "").trim();
+      // N-06/Z-13: a reading's «Fatto, avanti» waits for a value in the field: off until the user types one. Z-2: after a
+      // refused value it stays off until the value typed is one the field accepts.
+      const input = action.id === "reading" ? root.querySelector('[name="reading_cm"]') : null;
+      const empty = !!input && (!input.value.trim() || (this._local.fieldError != null && !accepted(input)));
       button.disabled = !!action.disabled || empty || (guarded && action.id !== "stop");
       // D-13 (decided 8 Oct): off only for a moment, enabling by itself (the hold after a change, a request or the motor
       // settling) keeps the light primary look; off until the user acts is the neutral grey.
@@ -571,8 +573,8 @@ export class CalibrationWizard {
   _input(event) {
     if (event.target.name === "profile_name") { this._local.profileName = event.target.value.trim(); this._patch(this._screen()); }
     if (event.target.name === "reading_cm") {
-      event.target.removeAttribute("aria-invalid");
-      if (this._local.fieldError != null) this._local.fieldError = null;
+      // Z-2: a refused value stays marked until what is typed is accepted; then the message goes and the button comes on.
+      if (this._local.fieldError != null && accepted(event.target)) { this._local.fieldError = null; event.target.removeAttribute("aria-invalid"); }
       // N-06: the button follows the field (typing never redraws the field itself).
       this._patch(this._screen());
     }
@@ -1139,6 +1141,12 @@ export class CalibrationWizard {
 }
 
 function key(item) { return JSON.stringify([item.entry.entry_id, item.cover.entity_id]); }
+
+/** Z-2: a value the reading field accepts (a number within its own limits). */
+function accepted(input) {
+  const value = parseReading(input.value), min = Number(input.dataset.min), max = Number(input.dataset.max);
+  return Number.isFinite(value) && value >= min && value <= max;
+}
 
 /**
  * Everything a measurement leaves behind, cleared for a new session or «Start over»: acknowledgements, runs, the

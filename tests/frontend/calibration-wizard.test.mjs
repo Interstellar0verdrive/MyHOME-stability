@@ -2254,11 +2254,18 @@ test("a value the field refuses says why under it, never a silent red (G3-4)", a
   assert.equal(wiz().querySelector('[name="reading_cm"]').getAttribute("aria-invalid"), "true");
   assert.match(wiz().querySelector('[name="reading_cm"]').getAttribute("aria-describedby"), /wiz-field-error/);
   assert.equal(actions().includes("reading"), false, "nothing sent");
+  const input = wiz().querySelector('[name="reading_cm"]'), button = () => wiz().querySelector('.wiz-actions [data-wiz="reading"]');
+  // Z-2: refused, «Fatto, avanti» stays off (the user must act) until the value is one the field accepts.
+  input.value = "due"; input.dispatchEvent(new Event("input", { bubbles: true })); await tick();
+  assert.deepEqual([button().disabled, button().classList.contains("is-settling"), error().hidden], [true, false, false]);
+  input.value = "2"; input.dispatchEvent(new Event("input", { bubbles: true })); await tick();
+  assert.equal(error().hidden, true, "an accepted value clears it");
+  assert.equal(button().disabled, false);
+  // A word typed from scratch says what is expected.
   await type("due");
   assert.equal(error().textContent, "Scrivi un numero di centimetri, con la virgola o il punto per i decimali.");
-  const input = wiz().querySelector('[name="reading_cm"]');
-  input.value = "2"; input.dispatchEvent(new Event("input", { bubbles: true })); await tick();
-  assert.equal(error().hidden, true, "typing again clears it");
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.doesNotMatch(css, /\.wiz-field:has\(input\[aria-invalid="true"\]\) \.muted/, "Z-2: the help line stays grey");
 });
 
 test("A-08b advises repeating: «Repeat the run» is the primary, «Ignore and continue» the outlined secondary; its warning is amber on dark themes (G3-5)", async () => {
