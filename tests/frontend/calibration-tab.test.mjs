@@ -1564,3 +1564,14 @@ test("X-7: a sheet's fade above its buttons is the wizard bars' fade, anchored i
   const gradient = (rule) => rule.match(/background: [^;]+;/)?.[0];
   assert.equal(gradient(sheet), gradient(bar), "the same gradient");
 });
+
+test("N-04: a centred dialog with a long list scrolls only its body: title row and buttons stay in view", async () => {
+  const { readFileSync } = await import("node:fs");
+  const css = readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  const outside = css.slice(0, css.indexOf("@media (max-width: 719px), (max-height: 499px) {"));
+  const rest = css.slice(css.indexOf("/* N-04:"));
+  assert.ok(css.indexOf("/* N-04:") > 0);
+  assert.match(rest, /^\/\* N-04:[^]*?dialog\.cal-dialog\[open\] \{ display: flex; flex-direction: column; max-height: calc\(100vh - 48px\); max-height: calc\(100dvh - 48px\); overflow: hidden; \}/);
+  assert.match(rest, /dialog\.cal-dialog \.cal-dialog-body \{ flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; \}/);
+  void outside;
+});

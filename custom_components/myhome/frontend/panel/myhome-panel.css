@@ -1388,6 +1388,15 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
   justify-content: center; border: 0; background: transparent; color: var(--panel-text-2); }
 .wiz-dialog-x ha-icon, .cal-dialog-x ha-icon { --mdc-icon-size: 24px; }
 .wiz-dialog-x[hidden], .cal-dialog-x[hidden] { display: none; }
+/* N-04: centred too, the tab's dialogs keep their title row and buttons in view: only the body scrolls, within the
+   window less 48 px, with the bars' fade above the buttons while it goes on. */
+dialog.cal-dialog[open] { display: flex; flex-direction: column; max-height: calc(100vh - 48px); max-height: calc(100dvh - 48px); overflow: hidden; }
+dialog.cal-dialog .dialog-head, dialog.cal-dialog .dialog-foot { flex: none; }
+dialog.cal-dialog .cal-dialog-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+dialog.cal-dialog .dialog-foot { position: relative; background: var(--panel-surface); }
+dialog.cal-dialog .dialog-foot::before { content: ""; position: absolute; inset-inline: 0; bottom: calc(100% - 1px); height: 40px; pointer-events: none;
+  background: linear-gradient(to top, var(--panel-surface), transparent); opacity: 0; transition: opacity var(--panel-ease); }
+dialog.cal-dialog .dialog-foot.has-more::before { opacity: 1; }
 dialog.cal-dialog > * { padding-inline: 24px; }
 dialog.cal-dialog .dialog-icon { display: none; }
 dialog.cal-dialog .dialog-head { justify-content: space-between; padding-block: 24px 12px; }
