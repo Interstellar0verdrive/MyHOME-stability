@@ -413,7 +413,7 @@ test("batch interruptions discard the review and escape target names", async () 
   assert.equal(host.querySelector("img"), null);
   push({ phase: "interrupted", reason: "automatic_cutoff", results: [], values: {}, stop_requested: true });
   assert.equal(host.querySelector("#cal-save").hidden, true);
-  assert.match(host.querySelector("#cal-targets").textContent, /Misurazione scartata/);
+  assert.match(host.querySelector("#cal-targets").textContent, /Misura scartata/);
   assert.equal(host.querySelector("#cal-stop").disabled, false);
 });
 
@@ -623,7 +623,7 @@ test("the lift-off reading states its limit from the session and a repeat says w
   push({ touching_cm: 1.5 });
   assert.match(phase.textContent, /almeno 1\.5 cm, inserisci 0/);
   push({ touching_cm: 1, lift_repeat: false });
-  assert.match(phase.textContent, /Sotto 1 cm il bordo conta come ancora appoggiato: ripeti la misurazione\./);
+  assert.match(phase.textContent, /Sotto 1 cm il bordo conta come ancora appoggiato: ripeti la misura\./);
   const form = host.querySelector("#cal-reading");
   form.elements.reading_cm.value = "60";
   form.dispatchEvent(new dom.window.Event("submit", { cancelable: true })); await tick();
@@ -748,7 +748,7 @@ test("an intermediate reading outside the range is held back while typed and the
   const form = host.querySelector("#cal-reading"), input = form.elements.reading_cm;
   const button = form.querySelector('button[type="submit"]'), range = host.querySelector("#cal-reading-range");
   const type = (value) => { input.value = value; input.dispatchEvent(new dom.window.Event("input", { bubbles: true })); };
-  const refusal = (value) => `La lettura (${value} cm) è fuori dall’intervallo ammesso (36,7–54,8 cm). Controlla il riferimento e ripeti il passaggio. Se i tempi misurati prima erano errati, annulla e riparti con la misurazione guidata.`;
+  const refusal = (value) => `La lettura (${value} cm) è fuori dall’intervallo ammesso (36,7–54,8 cm). Controlla il riferimento e ripeti il passaggio. Se i tempi misurati prima erano errati, annulla e riparti con la misura guidata.`;
   push({ phase: "reading", step: "half_open", reading_kind: "half_open", can_repeat: true, save_modes: ["new"],
     reading_range: { min_cm: 36.666666666666664, max_cm: 54.87 } });
   for (const [value, outside] of [["55", true], ["54,87", false], ["54,85", false], ["36,6", true], ["36,666666666666664", false],
@@ -1104,7 +1104,7 @@ test("a read-only tab keeps Stop, cannot move or save, and takes control only on
   assert.equal(host.querySelector("#cal-read-only").hidden, true);
   assert.equal(host.querySelector("#cal-take-control").hidden, true);
   assert.equal(host.querySelector('#cal-save button[type="submit"]').disabled, false);
-  assert.equal(host.querySelector("#cal-cancel").textContent, "Annulla la misurazione");
+  assert.equal(host.querySelector("#cal-cancel").textContent, "Annulla misurazione");
 });
 
 test("closing a read-only tab detaches instead of cancelling the owner's session", async () => {
@@ -1487,7 +1487,7 @@ test("a batch paused before the next cover names it, keeps the results, and Stop
     next_step: { step: "next_cover", cover_index: 1, entity_id: "cover.two" } });
   const notice = host.querySelector("#cal-paused");
   assert.equal(notice.textContent, translations.it.calPausedBody
-    .replace("{step}", "la misurazione della tapparella successiva, «cover.two»").replace("{expires}", "—"));
+    .replace("{step}", "la misura della tapparella successiva, «cover.two»").replace("{expires}", "—"));
   const targets = host.querySelector("#cal-targets").textContent;
   assert.match(targets, /cover\.one · 20 \/ 22 s/);
   assert.doesNotMatch(targets, new RegExp(translations.it.calBatchDiscarded));
@@ -1526,7 +1526,7 @@ test("a deadline on another day carries its date, and a cover name is shown exac
     targets: [{ entity_id: "cover.one", name: "One" }, { entity_id: "cover.two", name: "Attic $& $' $1" }],
     results: [], idle_expires_at: tomorrow, next_step: { step: "next_cover", cover_index: 1, entity_id: "cover.two" } });
   assert.equal(host.querySelector("#cal-paused").textContent, translations.it.calPausedBody
-    .replace("{step}", () => "la misurazione della tapparella successiva, «Attic $& $' $1»")
+    .replace("{step}", () => "la misura della tapparella successiva, «Attic $& $' $1»")
     .replace("{expires}", () => at(tomorrow, { dateStyle: "short", timeStyle: "short" })));
 });
 
