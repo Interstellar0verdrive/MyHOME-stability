@@ -2447,6 +2447,11 @@ test("D-21: on A-02 the stepper shows the steps of the path ticked so far", asyn
   assert.equal(phases(), 3, "path B: introduction, readings, summary");
   await tick_("A");
   assert.equal(phases(), 7);
+  // (Fine-tuning needs a calibrated cover: here it is offered only when enabled.)
+  if (!wiz().querySelector('input[name="path"][value="C"]').disabled) {
+    await tick_("C");
+    assert.equal(phases(), 1, "fine-tuning: its case is chosen later, only the introduction for now");
+  }
 });
 
 test("D-22: from a 560 px bar every action is centred at 480, a red Stop alone included", async () => {

@@ -95,7 +95,8 @@ export function buildScreen(ctx) {
   const values = { cover: name, profile: cover?.profile?.name ?? "" };
   // D-21: before the case is confirmed (C-01, C-02) the stepper and its caption follow the case chosen so far, the
   // preselected «tape readings only» at first.
-  const stepScope = scope ?? (path === "C" && ["current", "case"].includes(stage) ? "points_only" : null);
+  // D-21 (Y): on C-01 the case is not chosen yet: the stepper shows only the introduction under «Perfezionamento».
+  const stepScope = scope ?? (path === "C" && stage === "case" ? "points_only" : null);
   const screen = {
     code: "", header: { title: name || t("wiz_T001"), subtitle: cover?.address || "", units: cover?.units || null }, discard: true, preview,
     title: "", subline: "", body: "", help: null, note: null, results: null, stopwatch: null, wait: null, illustration: null, choice: null, picker: null, field: null, box: null, table: null,
@@ -259,7 +260,7 @@ export function buildScreen(ctx) {
 
 function caption(t, path, scope, cover) {
   if (path === "B") return fill(t("wiz_T169"), { profile: cover?.followProfile ?? cover?.profile?.name ?? "" });
-  if (path === "C") return t(scope === "times_only" ? "wiz_T231" : scope === "points_only" ? "wiz_T236" : "wiz_T200");
+  if (path === "C") return t(scope === "times_only" ? "wiz_T231" : scope === "points_only" ? "wiz_T236" : scope === "times_and_rolls" ? "wiz_T200" : "wiz_T114");
   return t("wiz_T026");
 }
 
@@ -887,7 +888,9 @@ function finalize(screen, ctx) {
   if (screen.wait) screen.wait.remaining = screen.wait.progress?.remaining != null ? fill(t("wiz_T402"), { seconds: n(screen.wait.progress.remaining, 0) }) : "";
   const refining = (view?.preview && view.path === "refine") || local.refining;
   if (["choose", "path"].includes(ctx.stage)) screen.caption = "";
-  const phases = phasesFor(screen.stepPath || path, screen.stepScope ?? scope, refining);
+  // D-21: fine-tuning before its case is chosen (A-02 with it ticked, C-01): only the introduction, no count.
+  const unknownCase = (screen.stepPath || path) === "C" && !(screen.stepScope ?? scope) && !refining && ["path", "current"].includes(ctx.stage);
+  const phases = unknownCase ? ["intro"] : phasesFor(screen.stepPath || path, screen.stepScope ?? scope, refining);
   let current = phases.indexOf(screen.phase);
   if (refining && screen.phase === "summary") current = phases.length - 1;
   if (screen.phase === "done") current = phases.length;
@@ -916,7 +919,7 @@ function finalize(screen, ctx) {
   const finetuneLabel = refining ? t("wiz_T114") : t("wiz_T013");
   screen.stepper = {
     interrupted: !!screen.interrupted,
-    line: screen.phase === "done" ? t("wiz_T153") : fill(t(screen.interrupted ? "wiz_T461" : "wizPhaseLine"), { phase: screen.phase === "finetune" ? t("wiz_T114") : t(PHASES[screen.phase] || "wiz_T007"),
+    line: screen.phase === "done" ? t("wiz_T153") : unknownCase ? t(PHASES.intro) : fill(t(screen.interrupted ? "wiz_T461" : "wizPhaseLine"), { phase: screen.phase === "finetune" ? t("wiz_T114") : t(PHASES[screen.phase] || "wiz_T007"),
       n: current + 1, total: phases.length }),
     phases: phases.map((key, index) => ({ key, label: key === "finetune" ? finetuneLabel : t(PHASES[key]),
       // A-34 after a real save: fine-tuning (optional) is still ahead, so it is not ticked.

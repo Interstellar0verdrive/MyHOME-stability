@@ -197,7 +197,9 @@ test("D-21: before a case or path is confirmed the stepper follows the one chose
   const cover = { name: "Studio", profile: { name: "standard_3ante" }, travel_cm: 150, effective: { opening: { value: 20 }, closing: { value: 19 } } };
   const at = (stage, scope = null, local = {}) => buildScreen({ t, stage, path: "C", scope, cover, local });
   const keys = (screen) => screen.stepper.phases.map((phase) => phase.key);
-  assert.deepEqual(keys(at("current")), ["intro", "prep", "readings", "summary"], "C-01: the preselected case, not path A's seven steps");
+  assert.deepEqual(keys(at("current")), ["intro"], "C-01: the case is not chosen yet: only the introduction, not path A's seven steps");
+  assert.doesNotMatch(at("current").stepper.line, / of \d/, "no «1 of N» before the case");
+  assert.equal(at("current").stepper.phases[0].substeps[0].value, t("wiz_T114"), "under «Fine-tuning»");
   assert.deepEqual(keys(at("case")), ["intro", "prep", "readings", "summary"]);
   assert.equal(at("case").stepper.phases[0].substeps[0].value, t("wiz_T236"), "its caption too");
   assert.deepEqual(keys(at("case", "times_only")), ["intro", "prep", "ascent", "descent", "summary"], "the case just ticked");
