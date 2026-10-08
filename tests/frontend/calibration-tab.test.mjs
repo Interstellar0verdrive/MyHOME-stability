@@ -438,6 +438,7 @@ test("a session in progress marks its cover, blocks new measurements and opens a
   assert.equal(dialog.open, true);
   assert.equal(dialog.querySelector("h2").textContent, "Calibration in sequence");
   assert.equal(dialog.querySelector("#cal-paused").hidden, false);
+  assert.match(dialog.querySelector("#cal-paused").textContent, /To resume it, take control here: then "Continue" starts/, "D-18: a reader is told to take control first");
   assert.ok(tab.querySelector(".cal-list"), "the list stays behind the dialog");
   assert.equal(commands(calls).length, 0);
   // D-17/D-18: one bar (the view's own Stop and Cancel/Close), closed by its ✕ at every size; no entity id line.
