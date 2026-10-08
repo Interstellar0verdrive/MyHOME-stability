@@ -486,6 +486,9 @@ test("D-09: a search without results is cleared from the empty list's own button
   assert.ok(tab.querySelector(".cal-tab-no-match"));
   assert.equal(tab.querySelector('[data-action="cal-tab-measure"]').disabled, false, "not off because of the search");
   assert.equal(tab.querySelector('[data-action="cal-tab-clear"]').textContent, "Togli filtro e ricerca");
+  assert.equal(tab.querySelector(".cal-tab-no-match h4").textContent, "Nessuna tapparella corrisponde alla ricerca", "D-09: only the search hides them");
+  const filter = tab.querySelector("select[data-filter]"); filter.value = "to_measure"; filter.dispatchEvent(new Event("change", { bubbles: true })); await tick();
+  assert.equal(tab.querySelector(".cal-tab-no-match h4").textContent, "Nessuna tapparella corrisponde al filtro e alla ricerca", "both");
   tab.querySelector('[data-action="cal-tab-clear"]').click(); await tick();
   assert.equal(search.value, "");
   assert.equal(tab.querySelector(".cal-tab-no-match"), null);

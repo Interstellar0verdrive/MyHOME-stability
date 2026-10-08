@@ -464,7 +464,10 @@ export class CalibrationTab {
     const unread = !!failed.length && !this._covers().length;
     // D-09: the two head actions go off only when there is no cover at all, never because of a filter or the search.
     const none = !this._covers().length;
-    const narrowed = this._filter !== "all" || !!this._context.filters.query.trim();
+    const searched = !!this._context.filters.query.trim(), filtered = this._filter !== "all";
+    const narrowed = filtered || searched;
+    // D-09: the title names what hides the covers: the filter, the search, or both.
+    const noMatchTitle = searched && !filtered ? "wiz_T514" : searched && filtered ? "wiz_T515" : "wiz_T493";
     const clear = narrowed ? `<button type="button" class="cal-tab-clear" data-action="cal-tab-clear">${esc(t("wiz_T510"))}</button>` : "";
     let html;
     if (!loading && !failed.length && !this._covers().length) {
@@ -491,7 +494,7 @@ export class CalibrationTab {
         ${failed.map((entry) => `<p class="notice error" role="alert">${esc(gateways.length > 1 ? `${entry.title}: ` : "")}${esc(t("calTabError"))}</p>`).join("")}
         ${failed.length ? `<button type="button" data-action="cal-tab-refresh">${esc(t("refresh"))}</button>` : ""}
         ${loading ? `<p class="muted" role="status">${esc(t("loading"))}</p>` : ""}
-        ${visible.length || loading || unread ? "" : this._emptyCard(t("wiz_T493"), t("wiz_T494"), clear + this._howItWorks(), "cal-tab-no-match")}
+        ${visible.length || loading || unread ? "" : this._emptyCard(t(noMatchTitle), t("wiz_T494"), clear + this._howItWorks(), "cal-tab-no-match")}
         ${visible.length ? `<div class="cal-list">
           ${this._sortHeads(this._expandAll(visible))}
           <div class="cal-list-rows" role="list">${visible.map((item) => this._row(item, busy, language)).join("")}</div></div>` : ""}

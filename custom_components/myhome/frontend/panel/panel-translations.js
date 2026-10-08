@@ -436,6 +436,8 @@ export const translations = {
     wiz_T511: "\"{cover}\" now follows the profile \"{profile}\".",
     wiz_T512: "The run is not valid",
     wiz_T513: "Verified accuracy: a gap under 1 cm after {seconds} s of descent.",
+    wiz_T514: "No cover matches the search",
+    wiz_T515: "No cover matches the filter and the search",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1336,6 +1338,8 @@ export const translations = {
     wiz_T511: "«{cover}» ora segue il profilo «{profile}».",
     wiz_T512: "La corsa non è valida",
     wiz_T513: "Precisione verificata: scarto sotto 1 cm dopo {seconds} s di discesa.",
+    wiz_T514: "Nessuna tapparella corrisponde alla ricerca",
+    wiz_T515: "Nessuna tapparella corrisponde al filtro e alla ricerca",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",
