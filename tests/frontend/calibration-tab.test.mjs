@@ -317,7 +317,8 @@ test("a cover in progress keeps yellow tints in every state of its row", async (
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   for (const selector of [".cal-row.is-running .cal-row-main:hover", ".cal-row.is-running.is-expanded .cal-row-main",
     ".cal-row.is-running.is-expanded .cal-row-main:hover", ".cal-row.is-running.is-expanded .cal-row-details"]) {
-    const rule = css.split("\n").find((line) => line.startsWith(`${selector} {`));
+    // L-7: the pointer's tints sit inside `@media (hover: hover)`.
+    const rule = css.split("\n").find((line) => line.startsWith(`${selector} {`) || line.startsWith(`@media (hover: hover) { ${selector} {`));
     assert.ok(rule, selector);
     assert.match(rule, /var\(--panel-warning\)/, `${selector} is yellow`);
     assert.doesNotMatch(rule, /accent/, `${selector} has no blue`);
@@ -922,6 +923,38 @@ test("a cover's details open in place outside the phone layout, a landscape phon
   assert.match(css, /@media \(min-width: 720px\), \(max-height: 499px\) and \(orientation: landscape\) \{ \.cal-page \{ display: none; \} \}/, "never a page over the sidebar");
   assert.match(css, /@container caltab \(min-width: 700px\) and \(max-width: 1015px\) \{\s*\.cal-details-grid \{ grid-template-columns: repeat\(3, minmax\(0, 1fr\)\); \}/,
     "cards from 700 px of content: the three blocks in one row, equal (Q-3)");
+});
+
+test("L-6: a rotation redraws the list for its layout: no card left open in place on the phone, no page outside it", async () => {
+  const original = globalThis.matchMedia;
+  const settleRotation = async () => { window.dispatchEvent(new Event("orientationchange")); await new Promise((resolve) => setTimeout(resolve, 350)); await tick(); };
+  try {
+    // Landscape (accordion): a card open in place; then portrait (phone).
+    globalThis.matchMedia = viewport(844, 390);
+    const { tab } = await mount({ language: "it" });
+    const card = () => row(tab, "cover.living_one");
+    card().querySelector(".cal-row-toggle").click(); await tick();
+    assert.equal(card().classList.contains("is-expanded"), true);
+    globalThis.matchMedia = viewport(390, 844);
+    await settleRotation();
+    assert.equal(tab.querySelectorAll(".cal-row.is-expanded").length, 0, "portrait: no card open in place");
+    assert.equal(card().querySelector(".cal-row-details").hidden, true);
+    assert.equal(tab.querySelector(".cal-page"), null, "and no page opened by surprise");
+    card().querySelector(".cal-row-toggle").click(); await tick();
+    assert.ok(tab.querySelector(".cal-page"), "a tap opens the page");
+    tab.querySelector(".cal-page-close").click(); await tick();
+    assert.equal(tab.querySelector(".cal-page"), null);
+    assert.equal(tab.querySelectorAll(".cal-row.is-expanded").length, 0, "closing it lands on a closed card");
+    // The reverse: the page open in portrait becomes the card open in place in landscape, and its toggle closes it.
+    card().querySelector(".cal-row-toggle").click(); await tick();
+    assert.ok(tab.querySelector(".cal-page"));
+    globalThis.matchMedia = viewport(844, 390);
+    await settleRotation();
+    assert.equal(tab.querySelector(".cal-page"), null, "landscape: no page");
+    assert.equal(card().classList.contains("is-expanded"), true, "the card is open in place instead");
+    card().querySelector(".cal-row-toggle").click(); await tick();
+    assert.equal(card().classList.contains("is-expanded"), false, "the accordion toggle works");
+  } finally { globalThis.matchMedia = original; }
 });
 
 test("the tab's dialogs are centred from 720 × 500 px of window and sheets below, a landscape phone included (responsive map, D14)", async () => {

@@ -16,7 +16,7 @@ function holdScroll(host) {
 
 /** WHO 2 "Calibration" view: what each timed cover uses, its measurement state and the ways to measure it. */
 const asset = (name) => { const url = new URL(name, import.meta.url); url.search = new URL(import.meta.url).search; return url.href; };
-const [{ escapeHtml: esc }, model, text, { CoverCalibration }, { CalibrationWizard }, { ProfileCatalogueEditor }, { morph }, { layout, SHEETS, listBand, contentWidth, fitBars, fitRows, dockBar, keepScrollOnPick, focusOnOpen }] = await Promise.all([
+const [{ escapeHtml: esc }, model, text, { CoverCalibration }, { CalibrationWizard }, { ProfileCatalogueEditor }, { morph }, { layout, SHEETS, PHONE, SHORT, listBand, contentWidth, fitBars, fitRows, dockBar, keepScrollOnPick, focusOnOpen }] = await Promise.all([
   import(asset("panel-dom.js")), import(asset("panel-model.js")), import(asset("panel-calibration-text.js")),
   import(asset("panel-cover-calibration.js")), import(asset("panel-calibration-wizard.js")), import(asset("panel-profile-catalogue-editor.js")),
   import(asset("panel-calibration-morph.js")), import(asset("panel-calibration-layout.js")),
@@ -164,9 +164,27 @@ export class CalibrationTab {
           const now = Math.round(entry.contentRect.width);
           if (now === width) return;
           width = now;
-          (globalThis.requestAnimationFrame || ((callback) => setTimeout(callback, 16)))(() => { this._band(); this._alignCards(); });
+          (globalThis.requestAnimationFrame || ((callback) => setTimeout(callback, 16)))(() => {
+            if (this._mode.kind === "list" && layout.phone() !== this._wasPhone) { this._render(); return; }
+            this._band(); this._alignCards();
+          });
         }).observe(host);
       }
+      // L-6/L-7: a rotation or a window that crosses the phone's edge changes the layout without always changing the
+      // tab's width first (iOS settles the media queries after the resize): the list is drawn again for the new mode
+      // (no card open in place on the phone, no page outside it), and every card is measured again, also once the
+      // rotation has settled.
+      const view = context.host.ownerDocument?.defaultView;
+      const relayout = () => {
+        if (this._mode.kind !== "list") return;
+        if (layout.phone() !== this._wasPhone) this._render(); else { this._band(); this._alignCards(); }
+      };
+      const frame = globalThis.requestAnimationFrame || ((callback) => setTimeout(callback, 16));
+      for (const query of [PHONE, SHORT]) {
+        const list = typeof view?.matchMedia === "function" ? view.matchMedia(query) : null;
+        list?.addEventListener?.("change", () => frame(relayout));
+      }
+      view?.addEventListener?.("orientationchange", () => { frame(relayout); setTimeout(relayout, 300); });
       // D-39: the measured card layouts (chips, Q-14 edge) are measured again once the fonts have loaded.
       const fonts = context.host.ownerDocument?.fonts;
       fonts?.addEventListener?.("loadingdone", () => this._alignCards());
@@ -448,6 +466,7 @@ export class CalibrationTab {
     if (this._context?.host.isConnected && this._mode.kind === "batch") { this._renderBatch(); return; }
     if (!this._context?.host.isConnected || this._mode.kind !== "list") return;
     if (this._openPendingWizard()) return;
+    this._syncLayout();
     const { host, t, hass, gateways } = this._context;
     const language = hass.language || "en";
     const loading = gateways.some((entry) => !this._rows.get(entry.entry_id)?.data && !this._rows.get(entry.entry_id)?.error && !this._rows.get(entry.entry_id)?.removed);
@@ -608,7 +627,8 @@ export class CalibrationTab {
     const { t, gateways, addressDetails } = this._context;
     const key = JSON.stringify([item.entry.entry_id, item.cover.entity_id]);
     const id = `cal-row-${encodeURIComponent(key).replace(/%/g, "")}`;
-    const expanded = this._expanded.has(key);
+    // L-6: on the phone a card never opens in place (its details are the page).
+    const expanded = this._expanded.has(key) && !this._phone();
     const running = this._running(item);
     const session = running ? item.session : null;
     const badge = session ? `<span class="badge cal-badge" data-status="running">${esc(t(session.waiting_for_stop ? "calTabRunning_waiting"
@@ -692,6 +712,21 @@ export class CalibrationTab {
    * row or the card opens in place, so the page never covers Home Assistant's sidebar (responsive map, D3).
    */
   _phone() { return layout.phone(); }
+
+  /**
+   * L-6: the open state follows the layout. Into the phone layout the cards open in place close (a card's details are
+   * a page there, opened by a tap); out of it an open page becomes that card open in place (the page is never shown
+   * outside the phone). Called before each drawing of the list.
+   */
+  _syncLayout() {
+    const phone = this._phone();
+    if (phone === this._wasPhone) return;
+    const first = this._wasPhone === undefined;
+    this._wasPhone = phone;
+    if (first) return;
+    if (phone) this._expanded.clear();
+    else if (this._page) { this._expanded.add(this._page); this._page = null; }
+  }
 
   _closePage() {
     const page = this._context.host.querySelector(".cal-page");

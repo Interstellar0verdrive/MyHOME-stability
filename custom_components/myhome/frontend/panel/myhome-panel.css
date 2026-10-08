@@ -816,17 +816,19 @@ dialog.cal-dialog :is(button, select, input):focus:not(:focus-visible) { outline
 .cal-filterbar.is-measuring .cal-tab-chips { flex: none; flex-wrap: nowrap; }
 .cal-row { border-top: 1px solid var(--panel-border); }
 .cal-row:first-of-type, .cal-list-head + .cal-row { border-top: 0; }
-.cal-row-main { cursor: pointer; transition: background var(--panel-ease); }
-.cal-row-main:hover { background: var(--panel-accent-soft); }
+/* L-7: the tints under the pointer only with a real pointer: a tap on a phone leaves no tinted card behind (iOS keeps
+   :hover after a tap), no tap flash; the keyboard's ring stays (:focus-visible). */
+.cal-row-main { cursor: pointer; transition: background var(--panel-ease); -webkit-tap-highlight-color: transparent; }
+@media (hover: hover) { .cal-row-main:hover { background: var(--panel-accent-soft); } }
 .cal-row.is-running { background: color-mix(in srgb, var(--panel-warning) 7%, var(--panel-surface)); }
 /* An expanded cover: its title row at accent 8 % (12 % under the pointer, as closed rows), its details at 4 %. */
 .cal-row.is-expanded .cal-row-main { background: color-mix(in srgb, var(--panel-accent) 8%, transparent); }
-.cal-row.is-expanded .cal-row-main:hover { background: var(--panel-accent-soft); }
+@media (hover: hover) { .cal-row.is-expanded .cal-row-main:hover { background: var(--panel-accent-soft); } }
 .cal-row.is-expanded .cal-row-details { background: color-mix(in srgb, var(--panel-accent) 4%, transparent); }
 /* A cover in progress keeps its yellow in every state (pointer, expanded title, details): no blue over the yellow. */
-.cal-row.is-running .cal-row-main:hover { background: color-mix(in srgb, var(--panel-warning) 14%, transparent); }
+@media (hover: hover) { .cal-row.is-running .cal-row-main:hover { background: color-mix(in srgb, var(--panel-warning) 14%, transparent); } }
 .cal-row.is-running.is-expanded .cal-row-main { background: color-mix(in srgb, var(--panel-warning) 12%, transparent); }
-.cal-row.is-running.is-expanded .cal-row-main:hover { background: color-mix(in srgb, var(--panel-warning) 16%, transparent); }
+@media (hover: hover) { .cal-row.is-running.is-expanded .cal-row-main:hover { background: color-mix(in srgb, var(--panel-warning) 16%, transparent); } }
 .cal-row.is-running.is-expanded .cal-row-details { background: color-mix(in srgb, var(--panel-warning) 5%, transparent); }
 .cal-row-main { display: grid; grid-template-columns: max-content minmax(0, 1fr) auto; grid-template-areas: "cover cover actions" "status profile profile"; gap: 8px 8px; align-items: center; padding: 12px 14px; }
 .cal-row-toggle { grid-area: cover; justify-content: start; gap: var(--cal-lead-gap, 12px); min-width: 0; padding: 4px; border: 0; background: transparent; text-align: start; font-weight: 400; }
