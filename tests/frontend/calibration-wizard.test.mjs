@@ -2620,3 +2620,14 @@ test("D-36: A-02's notes and warnings hold each number to its unit", async () =>
   assert.match(source, /<small class="muted">\$\{text\.units\(esc\(line\)\)\}<\/small>/);
   assert.match(source, /wiz-radio-warning">\$\{text\.units\(esc\(option\.warning\)\)\}/);
 });
+
+test("N-12: while the motor runs the step's text says what to watch for, not how to start", () => {
+  const t = (key) => translations.en[key] || key;
+  const base = { mode: "geometry", values: { opening_time: 22, closing_time: 21 }, samples: { lift: 4 }, readings: { gap: 3 }, travel_cm: 198, owner: true, sequence: 4 };
+  const at = (view, local = {}) => buildScreen({ t, stage: "session", path: "A", view: { ...base, slats: true, ...view }, local: { ackLift: true, ackAscent: true, ...local }, elapsed: 2, cover: { name: "K" } });
+  assert.match(at({ step: "lift", phase: "briefing" }).body, /^To start the first run/);
+  assert.equal(at({ step: "lift", phase: "opening" }).body, t("wiz_T520"));
+  assert.equal(at({ step: "opening", phase: "opening" }).body, t("wiz_T521"));
+  assert.equal(at({ step: "closing", phase: "closing" }).body, t("wiz_T522"));
+  assert.equal(at({ step: "closing", phase: "closing", slats: false }).body, t("wiz_T523"));
+});

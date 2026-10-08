@@ -354,7 +354,9 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
       return screen;
     }
     const running = ["starting_open", "opening"].includes(phase);
-    Object.assign(screen, { code: p("07"), title: t("wiz_T042"), body: path === "C" ? t("wiz_T202") : t("wiz_T043"),
+    // N-12: while the motor runs the body says what to watch for, no longer how to start it.
+    const moving = /^(starting_)?(open|clos)ing$/.test(phase);
+    Object.assign(screen, { code: p("07"), title: t("wiz_T042"), body: moving ? t("wiz_T520") : path === "C" ? t("wiz_T202") : t("wiz_T043"),
       stopwatch: runWatch(t, n, view, elapsed),
       actions: [{ id: "next", label: t("wiz_T045"), kind: "primary", disabled: phase !== "briefing" },
         { id: "lift", label: t("wiz_T046"), kind: "primary", disabled: phase !== "opening" }, stop] });
@@ -399,7 +401,8 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
         field: { label: t("wiz_T064"), hint: t("wiz_T066"), min: 20, max: 500, kind: "travel", value: view.saved_travel_cm ?? null },
         actions: [{ id: "reading", label: t("wiz_T051"), kind: "primary" }] });
     }
-    Object.assign(screen, { code: p("11"), title: slats ? t("wiz_T055") : t("wiz_T040"), body: t(slats ? "wiz_T056" : "wiz_T499"),
+    Object.assign(screen, { code: p("11"), title: slats ? t("wiz_T055") : t("wiz_T040"),
+      body: t(/^(starting_)?opening$/.test(phase) ? "wiz_T521" : slats ? "wiz_T056" : "wiz_T499"),
       stopwatch: runWatch(t, n, view, elapsed),
       actions: [{ id: "next", label: t("wiz_T045"), kind: "primary", disabled: phase !== "briefing" },
         { id: "endpoint", label: t("wiz_T057"), kind: "primary", disabled: phase !== "opening" }, ...whileRunning(view, stop)] });
@@ -407,7 +410,8 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     return screen;
   }
   if (step === "closing") {
-    Object.assign(screen, { code: p("14"), title: t("wiz_T068"), body: t(slats ? "wiz_T069" : "wiz_T500"), stopwatch: runWatch(t, n, view, elapsed),
+    Object.assign(screen, { code: p("14"), title: t("wiz_T068"),
+      body: t(/^(starting_)?closing$/.test(phase) ? (slats ? "wiz_T522" : "wiz_T523") : slats ? "wiz_T069" : "wiz_T500"), stopwatch: runWatch(t, n, view, elapsed),
       actions: [{ id: "next", label: t("wiz_T045"), kind: "primary", disabled: phase !== "briefing" },
         { id: "endpoint", label: t("wiz_T070"), kind: "primary", disabled: phase !== "closing" }, ...whileRunning(view, stop)] });
     if (phase === "geometry_wait_stop") stopping(view.values?.closing_time);
@@ -511,7 +515,7 @@ function guidedScreen(screen, ctx, tx, n, values, stop) {
   }
   if (phase === "review" || phase === "saving") return summaryScreen(screen, ctx, tx, n, values);
   if (["confirm_closed", "starting_open", "opening"].includes(phase)) {
-    return Object.assign(screen, { code: "C-11", phase: "ascent", title: t("wiz_T040"), body: t("wiz_T477"),
+    return Object.assign(screen, { code: "C-11", phase: "ascent", title: t("wiz_T040"), body: t(phase === "confirm_closed" ? "wiz_T477" : "wiz_T521"),
       stopwatch: runWatch(t, n, view, elapsed),
       actions: [{ id: "run:open", label: t("wiz_T045"), kind: "primary", disabled: phase !== "confirm_closed" },
         { id: "endpoint", label: t("wiz_T057"), kind: "primary", disabled: phase !== "opening" }, ...whileRunning(view, stop)] });
@@ -521,7 +525,7 @@ function guidedScreen(screen, ctx, tx, n, values, stop) {
     return result("C-12", t("wiz_T058"), "wiz_T478", tile("wiz_T040", view.values?.opening_time), "opening", "ack:ascent");
   }
   if (["confirm_open", "starting_close", "closing"].includes(phase)) {
-    return Object.assign(screen, { code: "C-14", phase: "descent", title: t("wiz_T068"), body: t("wiz_T479"),
+    return Object.assign(screen, { code: "C-14", phase: "descent", title: t("wiz_T068"), body: t(phase === "confirm_open" ? "wiz_T479" : "wiz_T522"),
       stopwatch: runWatch(t, n, view, elapsed),
       actions: [{ id: "run:close", label: t("wiz_T045"), kind: "primary", disabled: phase !== "confirm_open" },
         { id: "endpoint", label: t("wiz_T070"), kind: "primary", disabled: phase !== "closing" }, ...whileRunning(view, stop)] });
