@@ -1586,7 +1586,7 @@ dialog.cal-dialog .dialog-head { justify-content: space-between; padding-block: 
   .wiz-main::after { content: ""; flex: none; position: sticky; bottom: calc(-12px - var(--cal-safe-bottom)); height: 40px; margin-top: -40px;
     pointer-events: none; background: linear-gradient(to top, var(--panel-surface), transparent); opacity: 0; transition: opacity var(--panel-ease); }
   .wiz-columns:has(> .wiz-actions.has-more) > .wiz-main::after { opacity: 1; }
-  .wiz-actions > [data-wiz="stop"] { order: -1; }
+  /* Z-3: Stop below the primary, as in every other layout (no longer first). */
   /* R-3: «Passi» as a side panel from the right, full height, square corners. */
   .wiz-sheet { align-items: stretch; justify-content: end; padding: 0; }
   /* D-26: the panel reaches the window's right edge: its title row and steps keep clear of the safe area inside it. */

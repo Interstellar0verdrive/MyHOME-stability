@@ -1567,7 +1567,7 @@ test("a landscape phone has the wizard full screen in two columns, Stop at the t
   assert.match(short, /\.wiz-columns \{[^}]*grid-template-columns: minmax\(0, 1fr\) calc\(clamp\(240px, 35%, 280px\) \+ var\(--cal-safe-right\)\);/);
   assert.match(short, /\.wiz-main \{ min-height: 0; overflow-y: auto;/, "the content scrolls");
   assert.match(short, /\.wiz-actions \{ position: static; min-height: 0; overflow-y: auto;/, "the actions scroll by themselves");
-  assert.match(short, /\.wiz-actions > \[data-wiz="stop"\] \{ order: -1; \}/, "Stop always in view, at the top");
+  assert.doesNotMatch(short, /\[data-wiz="stop"\] \{ order: -1; \}/, "Z-3: Stop below the primary, as in every other layout");
 });
 
 test("the Calibration in progress dialog is 592 px wide when centred, its three buttons on one row", async () => {
