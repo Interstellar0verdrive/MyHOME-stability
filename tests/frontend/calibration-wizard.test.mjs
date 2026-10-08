@@ -2568,3 +2568,9 @@ test("X-4: notes and notices are plain flow text, never flex or grid: an inline 
   assert.ok(notice.classList.contains("notice") && notice.querySelector(".cal-nb"), "the held «10 cm» inside the sentence");
   assert.equal(notice.querySelector("ha-icon"), null, "no icon: so no side-by-side layout applies");
 });
+
+test("N-05: A-21's switch label takes the block's width; only the name field keeps 420 px", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.wiz-profile-block label:not\(\.wiz-switch\) \{ max-width: 420px; \}/);
+  assert.doesNotMatch(css, /\.wiz-profile-block label \{ max-width/);
+});

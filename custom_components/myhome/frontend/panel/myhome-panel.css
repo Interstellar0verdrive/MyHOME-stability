@@ -1282,7 +1282,8 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-code { padding: 10px 12px; border-radius: 8px; background: var(--panel-surface-2); font-size: 12px; overflow-x: auto; }
 .wiz-profile-block { display: grid; gap: 10px; padding: 14px 16px; border-radius: 12px; background: var(--panel-surface-2); border: 1px solid var(--panel-border); }
 .wiz-profile-block p { margin: 0; }
-.wiz-profile-block label { max-width: 420px; }
+/* N-05: the name field keeps its 420 px; the switch's label takes the block's width (no early wrap). */
+.wiz-profile-block label:not(.wiz-switch) { max-width: 420px; }
 .wiz-switch { display: flex !important; align-items: center; gap: 10px; font-size: 14px; color: var(--primary-text-color, #182b37); cursor: pointer; }
 /* Track 36×20, thumb 16 with 2 px all round, in both states: no border from the panel's input style, which pushed the
    thumb 1 px down and right. */
