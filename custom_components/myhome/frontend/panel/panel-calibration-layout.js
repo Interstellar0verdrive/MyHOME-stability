@@ -197,8 +197,20 @@ function fitRow(row) {
   const widths = chips.map((chip) => chip.getBoundingClientRect().width);
   const room = inner - lead.getBoundingClientRect().width - 2 * gap;
   const together = widths.reduce((sum, width) => sum + width, 0) + chipGap * (widths.length - 1);
-  if (room - together >= ROW_NAME_MIN) row.classList.add("is-beside");
-  else if (room - Math.max(...widths) >= ROW_NAME_MIN) row.classList.add("is-beside", "is-stacked");
+  // D-40 (Y): the name's column also keeps its line (room, address) on one line beside the chips, never less than
+  // ROW_NAME_MIN; a line that does not fit even under stacked chips sends the chips under the name.
+  const line = row.querySelector(".cal-row-name .muted");
+  let need = ROW_NAME_MIN;
+  if (line) {
+    const before = line.style.whiteSpace;
+    line.style.whiteSpace = "nowrap";
+    const range = row.ownerDocument.createRange?.();
+    if (range) { range.selectNodeContents(line); need = Math.max(need, Math.ceil(range.getBoundingClientRect?.().width || 0)); }
+    line.style.whiteSpace = before;
+    if (!line.getAttribute("style")) line.removeAttribute("style");
+  }
+  if (room - together >= need) row.classList.add("is-beside");
+  else if (room - Math.max(...widths) >= need) row.classList.add("is-beside", "is-stacked");
 }
 
 /**

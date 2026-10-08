@@ -1506,6 +1506,13 @@ test("D-40: a wizard list's chips sit beside the name while it keeps 200 px, sid
   assert.deepEqual(at(800), ["is-beside"], "150 + 8 + 180 leave the name 266 px");
   assert.deepEqual(at(500), ["is-beside", "is-stacked"], "stacked: 180 leave the name 224 px");
   assert.deepEqual(at(400), [], "under the name");
+  // D-40 (Y): the name's line (room, address) keeps one line beside the chips: a 400 px line needs 400 px.
+  const name = document.createElement("span"); name.className = "cal-row-name"; name.innerHTML = '<span class="muted">Camera matrimoniale · Indirizzo: 32</span>';
+  row.querySelector(".cal-row-name").replaceWith(name);
+  const createRange = document.createRange.bind(document);
+  document.createRange = () => { const range = createRange(); range.getBoundingClientRect = () => rect(400); return range; };
+  try { assert.deepEqual(at(800), ["is-beside", "is-stacked"], "366 px beside the two chips is too little for the line; stacked leaves 524"); }
+  finally { document.createRange = createRange; }
   root.remove();
 });
 
