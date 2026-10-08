@@ -179,11 +179,12 @@ export function buildScreen(ctx) {
     const chosen = ctx.profiles?.find((item) => item.id === local.profileId) || ctx.profiles?.[0];
     // One radio row per profile: "tall_two_leaf · measured on Living room shutter 1", then who follows it by name.
     const about = (item) => fill(t("wiz_T165").split(" · ")[0], { cover: item.measuredOn || "—" });
+    // Y-c: path B runs only as a preview: B-01 says so under its button, as B-02 does.
     Object.assign(screen, { code: "B-01", phase: "intro", title: t("wiz_T161"), body: t("wiz_T162"),
       choice: { name: "profile", kind: "radio", label: t("wiz_T163"), value: chosen?.id ?? "",
         options: (ctx.profiles || []).map((item) => ({ value: item.id, label: `${item.name} · ${lowerFirst(about(item), language)}`, plain: true,
           note: [followedBy(t, item.followerNames || [], language)] })) },
-      actions: [{ id: "profile", label: t("wiz_T006"), kind: "primary", disabled: !chosen }] });
+      actions: [{ id: "profile", label: t("wiz_T006"), kind: "primary", disabled: !chosen, note: t("wiz_T318") }] });
     return finish();
   }
   if (stage === "current") {
