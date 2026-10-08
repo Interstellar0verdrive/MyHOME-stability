@@ -2246,7 +2246,7 @@ test("a value the field refuses says why under it, never a silent red (G3-4)", a
   assert.equal(error().hidden, true);
   await type("25");
   assert.equal(error().hidden, false);
-  assert.equal(error().textContent, "Valore oltre il massimo (20 cm): controlla la misurazione.");
+  assert.equal(error().textContent, "Valore oltre il massimo (20 cm): controlla la lettura.");
   assert.equal(wiz().querySelector('[name="reading_cm"]').getAttribute("aria-invalid"), "true");
   assert.match(wiz().querySelector('[name="reading_cm"]').getAttribute("aria-describedby"), /wiz-field-error/);
   assert.equal(actions().includes("reading"), false, "nothing sent");
@@ -2257,7 +2257,7 @@ test("a value the field refuses says why under it, never a silent red (G3-4)", a
   assert.equal(error().hidden, true, "typing again clears it");
 });
 
-test("A-08b advises repeating: «Repeat the measurement» is the primary, «Ignore and continue» the outlined secondary; its warning is amber on dark themes (G3-5)", async () => {
+test("A-08b advises repeating: «Repeat the run» is the primary, «Ignore and continue» the outlined secondary; its warning is amber on dark themes (G3-5)", async () => {
   const { backend, code, press, type, startFor, wiz } = await mount();
   await startFor("cover.living_one");
   await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
@@ -2265,7 +2265,7 @@ test("A-08b advises repeating: «Repeat the measurement» is the primary, «Igno
   await type("12");
   assert.equal(code(), "A-08");
   assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => [item.dataset.wiz, item.textContent, item.className.replace("wiz-action ", "")]),
-    [["repeat", "Repeat the measurement", "primary"], ["next", "Ignore and continue", "secondary"]]);
+    [["repeat", "Repeat the run", "primary"], ["next", "Ignore and continue", "secondary"]]);
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /\[data-theme="dark"\] \.wiz-notice\[data-tone="warning"\][^{]*\{ color: color-mix\(in srgb, var\(--panel-warning\) 70%/);
 });
@@ -2487,7 +2487,7 @@ test("D-31: an ended session with a measurement out of range is titled as such, 
   const t = (key) => translations.it[key] || key;
   const view = { mode: "geometry", phase: "interrupted", reason: "invalid_measurement", step: "opening", values: {}, samples: {}, readings: {}, owner: true, sequence: 9 };
   const screen = buildScreen({ t, language: "it", stage: "session", path: "A", view, local: {}, cover: { name: "K" } });
-  assert.deepEqual([screen.code, screen.title, screen.body], ["S-04", "La misurazione non è valida", "Il tempo misurato deve essere compreso tra 1 e 600 secondi."]);
+  assert.deepEqual([screen.code, screen.title, screen.body], ["S-04", "La corsa non è valida", "Il tempo misurato deve essere compreso tra 1 e 600 secondi."]);
 });
 
 test("D-32: in the summary a cover without slats reads «No» for the slat time, not «0 s»", async () => {
