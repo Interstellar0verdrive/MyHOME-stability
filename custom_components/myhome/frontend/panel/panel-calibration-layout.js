@@ -268,12 +268,15 @@ export function revealHead(wiz, { always = false } = {}) {
     const box = scroller || wiz.ownerDocument.scrollingElement || wiz.ownerDocument.documentElement;
     return { scroller, covered, top, delta, left: box.scrollHeight - box.clientHeight - box.scrollTop };
   };
+  // L-8b: on opening, room under the wizard for a whole window: a shorter step can never pull the page back up (the
+  // page's end would otherwise clamp its scroll), whatever the steps' heights.
+  const host = wiz.parentElement;
+  if (always && host?.style) host.style.setProperty("--wiz-room", `${Math.ceil(view.innerHeight)}px`);
   let { scroller, covered, top, delta, left } = measure();
   if (!always && top >= covered) return;
   if (Math.abs(delta) < 1) return;
   // A page too short to bring the head up gets the missing room under the wizard (its host's `--wiz-room`); the box
   // that scrolls is looked for again (a container may only start scrolling with that room).
-  const host = wiz.parentElement;
   if (delta > left && host?.style) {
     const room = (parseFloat(host.style.getPropertyValue("--wiz-room")) || 0) + Math.ceil(delta - left);
     host.style.setProperty("--wiz-room", `${room}px`);

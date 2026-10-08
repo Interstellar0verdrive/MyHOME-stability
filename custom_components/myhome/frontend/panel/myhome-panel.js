@@ -428,6 +428,9 @@ class MyHomePanel extends HTMLElement {
     // The calibration view keeps its element, and with it an open wizard, across inventory renders.
     const previousCalibrationHost = root.getElementById("cover-calibration-tab");
     const calibrationFocus = previousCalibrationHost?.contains(root.activeElement) ? root.activeElement : null;
+    // L-8b: while the kept element is out of the page for a moment the page is shorter, and anything that measures it
+    // then clamps the scroll to the top: where the page and its scrolling boxes stood is put back after the swap.
+    const scrolled = previousCalibrationHost ? scrollPositions(previousCalibrationHost) : null;
     replacePreservingFocus(root.getElementById("items"), visibleGroups.map(([who, members]) => `
       <section class="who-group" data-who="${escapeHtml(who)}" aria-labelledby="who-title-${escapeHtml(who)}">
         <div class="who-heading"><h2 id="who-title-${escapeHtml(who)}">${escapeHtml(this._whoLabel(who))}</h2>
@@ -458,6 +461,7 @@ class MyHomePanel extends HTMLElement {
       calibrationHost.replaceWith(previousCalibrationHost);
       calibrationHost = previousCalibrationHost;
       calibrationFocus?.focus({ preventScroll: true });
+      scrolled?.();
     }
     if (calibrationHost) this._calibrationTab.show({ host: calibrationHost, hass: this._hass, gateways: scope.gateways,
       inventory: this._data, filters: this._filters, t: (key) => this._t(key),
@@ -800,3 +804,17 @@ class MyHomePanel extends HTMLElement {
 }
 
 if (!customElements.get("myhome-panel")) customElements.define("myhome-panel", MyHomePanel);
+
+/** L-8b: the scroll of every box holding `node` (and of the window), and the function that puts them back. */
+function scrollPositions(node) {
+  const view = node.ownerDocument?.defaultView, list = [];
+  for (let current = node.parentNode || node.host; current; current = current.parentNode || current.host) {
+    if (current.nodeType === 11) { current = current.host; if (!current) break; }
+    if (current.nodeType === 1 && current.scrollTop) list.push([current, current.scrollTop]);
+  }
+  const y = view?.scrollY || 0;
+  return () => {
+    for (const [box, top] of list) if (box.isConnected && Math.abs(box.scrollTop - top) > 1) box.scrollTop = top;
+    if (view && Math.abs((view.scrollY || 0) - y) > 1) view.scrollTo?.(view.scrollX || 0, y);
+  };
+}

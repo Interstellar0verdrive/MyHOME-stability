@@ -296,12 +296,26 @@ export class CalibrationWizard {
       // L-8: in the page's inline layouts the page is scrolled by `revealHead` (the head at the top on opening, kept in
       // view at every step), never by the focus; full screen, the focus scrolls the wizard's own content.
       if (codeChanged) queueMicrotask(() => {
-        const inline = !layout.fullScreen(), always = this._revealOnOpen;
+        const inline = !layout.fullScreen();
         this._frame?.querySelector(".wiz-title")?.focus({ preventScroll: inline });
-        if (inline) { this._revealOnOpen = false; revealHead(this._root, { always }); }
+        if (inline) this._reveal();
       });
     }
     this._patch(screen);
+  }
+
+  /**
+   * L-8b: after the step has been painted (two frames), the head is placed: at the top of the window on opening (once a
+   * screen with its head is there), kept in view at every other step, never sent to the top of the page.
+   */
+  _reveal() {
+    const root = this._root, frame = globalThis.requestAnimationFrame || ((callback) => setTimeout(callback, 16));
+    frame(() => frame(() => {
+      if (root !== this._root || !root?.isConnected) return;
+      const always = this._revealOnOpen;
+      this._revealOnOpen = false;
+      revealHead(root, { always });
+    }));
   }
 
   _engineHost() { return this._engine; }

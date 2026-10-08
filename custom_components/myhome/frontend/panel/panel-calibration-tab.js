@@ -1174,8 +1174,9 @@ export class CalibrationTab {
     this._context.host.innerHTML = "";
     // L-8: the sequence opens with its head at the top of what can be seen, as the wizard.
     const opened = this._loadBatch(this._batch.entryId);
-    const wiz = this._context.host.querySelector(".cal-batch-wiz");
-    if (wiz) revealHead(wiz, { always: true });
+    // L-8b: placed after its first paint (two frames), as the wizard.
+    const host = this._context.host, frame = globalThis.requestAnimationFrame || ((callback) => setTimeout(callback, 16));
+    frame(() => frame(() => { const wiz = this._mode.kind === "batch" ? host.querySelector(".cal-batch-wiz") : null; if (wiz) revealHead(wiz, { always: true }); }));
     await opened;
   }
 
