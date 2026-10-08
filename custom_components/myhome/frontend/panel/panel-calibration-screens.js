@@ -365,7 +365,8 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     return screen;
   }
   if (step === "reset") {
-    if (phase === "briefing" && view.gap_warning) return Object.assign(screen, { code: p("08"), title: t("wiz_T047"), body: t("wiz_T048"),
+    // Z-4: the reading is already in: the screen is about the choice (repeat the lift-off run or go on), not the reading.
+    if (phase === "briefing" && view.gap_warning) return Object.assign(screen, { code: p("08"), title: t("wiz_T525"), body: t("wiz_T526"), illustration: false,
       results: [liftTile()].filter(Boolean),
       notices: [{ tone: "warning", result: true, text: fill(t("calGapWarning"), view) }],
       // G3-5: repeating is the advised way; going on with a wide gap is the outlined secondary.

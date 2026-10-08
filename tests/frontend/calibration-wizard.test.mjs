@@ -2277,6 +2277,10 @@ test("A-08b advises repeating: «Repeat the run» is the primary, «Ignore and c
   assert.equal(code(), "A-08");
   assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => [item.dataset.wiz, item.textContent, item.className.replace("wiz-action ", "")]),
     [["repeat", "Repeat the run", "primary"], ["next", "Ignore and continue", "secondary"]]);
+  // Z-4: the reading is in: the screen is about the choice, without the reading's drawing.
+  assert.equal(wiz().querySelector(".wiz-title").textContent, "Repeat the lift-off run?");
+  assert.match(wiz().querySelector(".wiz-body").textContent, /^The reading is recorded/);
+  assert.equal(wiz().querySelector(".wiz-illustration"), null, "no drawing of the reading");
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /\[data-theme="dark"\] \.wiz-notice\[data-tone="warning"\][^{]*\{ color: color-mix\(in srgb, var\(--panel-warning\) 70%/);
 });
