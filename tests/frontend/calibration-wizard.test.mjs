@@ -2643,3 +2643,8 @@ test("N-12: while the motor runs the step's text says what to watch for, not how
   assert.equal(at({ step: "closing", phase: "closing" }).body, t("wiz_T522"));
   assert.equal(at({ step: "closing", phase: "closing", slats: false }).body, t("wiz_T523"));
 });
+
+test("Z-9: in landscape a two-line action grows to fit (54 px) instead of squeezing into 44 px", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.wiz-actions \{ grid-auto-rows: max-content; \}\s*\.wiz-actions > \.wiz-action \{ height: auto; flex: none; \}/);
+});

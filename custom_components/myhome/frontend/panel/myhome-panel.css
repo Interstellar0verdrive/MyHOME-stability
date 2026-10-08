@@ -1578,6 +1578,9 @@ dialog.cal-dialog .dialog-head { justify-content: space-between; padding-block: 
   .wiz-actions { position: static; min-height: 0; overflow-y: auto; overscroll-behavior: contain; align-content: start; border-top: 0; border-radius: 0;
     border-inline-start: 1px solid var(--panel-border); background: var(--wiz-side);
     padding: 12px calc(16px + var(--cal-safe-right)) calc(12px + var(--cal-safe-bottom)) 16px; }
+  /* Z-9: a two-line label grows its button (54 px, as at 796/700) instead of squeezing into 44 px. */
+  .wiz-actions { grid-auto-rows: max-content; }
+  .wiz-actions > .wiz-action { height: auto; flex: none; }
   .wiz-actions::before { display: none; }
   /* R-2: the centre column fades into its bottom edge while it has more to scroll. */
   .wiz-main::after { content: ""; flex: none; position: sticky; bottom: calc(-12px - var(--cal-safe-bottom)); height: 40px; margin-top: -40px;
