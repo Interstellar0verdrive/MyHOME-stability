@@ -1677,7 +1677,7 @@ export const translations = {
     calReason_shutdown: "Home Assistant si sta arrestando.",
     calReason_external_command: "Un altro comando Home Assistant ha interrotto la misura.",
     calReason_unexpected_movement: "Un movimento inatteso ha interrotto la misura.",
-    calReason_unexpected_stop: "Il bus ha segnalato uno stop che questo passaggio non prevedeva. Ripeti la misurazione.",
+    calReason_unexpected_stop: "Il bus ha segnalato uno stop che questo passaggio non prevedeva. Ripeti la misura.",
     calReason_invalid_measurement: "Il tempo misurato deve essere compreso tra 1 e 600 secondi.",
     calReason_stopped: "Stop richiesto. Ricomincia per effettuare una nuova misura.",
     calReason_cancelled: "Misurazione annullata.",
