@@ -957,6 +957,53 @@ test("L-6: a rotation redraws the list for its layout: no card left open in plac
   } finally { globalThis.matchMedia = original; }
 });
 
+test("L-8: the wizard opens with its head at the top of the window, under the bars that cover it, and stays in view", async () => {
+  const { revealHead, coveredTop } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-layout.js");
+  const original = globalThis.matchMedia, scrollBy = window.scrollBy, height = window.innerHeight;
+  const calls = [];
+  window.scrollBy = (options) => calls.push(options);
+  Object.defineProperty(window, "innerHeight", { value: 900, configurable: true });
+  const rect = (top, h = 60) => () => ({ top, bottom: top + h, left: 0, right: 800, width: 800, height: h });
+  const make = (headTop, actionsTop = headTop + 120) => {
+    const wiz = document.createElement("section"); wiz.className = "wiz";
+    wiz.innerHTML = '<header class="wiz-head"></header><div class="wiz-columns"><div class="wiz-actions"></div></div>';
+    document.body.append(wiz);
+    wiz.querySelector(".wiz-head").getBoundingClientRect = rect(headTop);
+    wiz.querySelector(".wiz-actions").getBoundingClientRect = rect(actionsTop, 300);
+    return wiz;
+  };
+  try {
+    globalThis.matchMedia = viewport(1300, 900, { reduce: false });
+    revealHead(make(1200), { always: true });
+    assert.deepEqual(calls.pop(), { top: 1192, behavior: "smooth" }, "opening: the head at the top (8 px under it)");
+    revealHead(make(300));
+    assert.equal(calls.length, 0, "a new step with the head in view: no scroll (X-2/X-3)");
+    revealHead(make(-300));
+    assert.deepEqual(calls.pop(), { top: -308, behavior: "smooth" }, "a new step with the head above the window: back to it");
+    revealHead(make(1200, 2100), { always: true });
+    assert.deepEqual(calls.pop(), { top: 2100 - (900 - 96), behavior: "smooth" }, "a short window: the actions column's top stays in view");
+    // A sticky bar at the window's top (Home Assistant's toolbar, the panel's header) is measured and left uncovered.
+    const bar = document.createElement("div"); bar.style.position = "sticky"; bar.getBoundingClientRect = rect(0, 64);
+    document.body.append(bar);
+    const wiz = make(1200);
+    document.elementsFromPoint = (x, y) => (y < 64 ? [bar, document.body] : [document.body]);
+    try {
+      assert.equal(coveredTop(wiz.querySelector(".wiz-head")), 64);
+      revealHead(wiz, { always: true });
+      assert.deepEqual(calls.pop(), { top: 1200 - 64 - 8, behavior: "smooth" });
+    } finally { delete document.elementsFromPoint; }
+    globalThis.matchMedia = viewport(1300, 900);
+    revealHead(make(1200), { always: true });
+    assert.equal(calls.pop().behavior, "auto", "reduced motion: no smooth scroll");
+    globalThis.matchMedia = viewport(390, 844);
+    revealHead(make(1200), { always: true });
+    assert.equal(calls.length, 0, "full screen: the wizard is the window");
+  } finally {
+    globalThis.matchMedia = original; window.scrollBy = scrollBy;
+    Object.defineProperty(window, "innerHeight", { value: height, configurable: true });
+  }
+});
+
 test("the tab's dialogs are centred from 720 × 500 px of window and sheets below, a landscape phone included (responsive map, D14)", async () => {
   const original = globalThis.matchMedia;
   try {

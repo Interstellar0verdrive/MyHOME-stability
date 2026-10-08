@@ -16,7 +16,7 @@ function holdScroll(host) {
 
 /** WHO 2 "Calibration" view: what each timed cover uses, its measurement state and the ways to measure it. */
 const asset = (name) => { const url = new URL(name, import.meta.url); url.search = new URL(import.meta.url).search; return url.href; };
-const [{ escapeHtml: esc }, model, text, { CoverCalibration }, { CalibrationWizard }, { ProfileCatalogueEditor }, { morph }, { layout, SHEETS, PHONE, SHORT, listBand, contentWidth, fitBars, fitRows, dockBar, keepScrollOnPick, focusOnOpen }] = await Promise.all([
+const [{ escapeHtml: esc }, model, text, { CoverCalibration }, { CalibrationWizard }, { ProfileCatalogueEditor }, { morph }, { layout, SHEETS, PHONE, SHORT, listBand, contentWidth, fitBars, fitRows, dockBar, keepScrollOnPick, focusOnOpen, revealHead }] = await Promise.all([
   import(asset("panel-dom.js")), import(asset("panel-model.js")), import(asset("panel-calibration-text.js")),
   import(asset("panel-cover-calibration.js")), import(asset("panel-calibration-wizard.js")), import(asset("panel-profile-catalogue-editor.js")),
   import(asset("panel-calibration-morph.js")), import(asset("panel-calibration-layout.js")),
@@ -83,6 +83,8 @@ export class CalibrationTab {
     // The phone's details page belongs to the list: a wizard, a sequence or a session closes it.
     // The details page it closed comes back when the list does (`_backToList`).
     if (mode?.kind !== "list") { if (this._page) this._pageReturn = this._page; this._page = null; }
+    // L-8: the room the wizard or the sequence added under itself to reach the window's top belongs to them.
+    else this._context?.host.style.removeProperty("--wiz-room");
     this._syncHold();
   }
 
@@ -1170,7 +1172,11 @@ export class CalibrationTab {
     this._mode = { kind: "batch" };
     this._batch = { entryId: gateways[0].entry_id, data: null, order: [], error: "", loading: true };
     this._context.host.innerHTML = "";
-    await this._loadBatch(this._batch.entryId);
+    // L-8: the sequence opens with its head at the top of what can be seen, as the wizard.
+    const opened = this._loadBatch(this._batch.entryId);
+    const wiz = this._context.host.querySelector(".cal-batch-wiz");
+    if (wiz) revealHead(wiz, { always: true });
+    await opened;
   }
 
   async _loadBatch(entryId) {

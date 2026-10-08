@@ -214,6 +214,75 @@ function fitRow(row) {
 }
 
 /**
+ * L-8: the band at the top of the window that fixed or sticky bars cover (Home Assistant's toolbar, the panel's own
+ * header), measured over the element's middle: the elements at that point, in the element's own tree, that are or sit
+ * in a fixed or sticky box not holding the element.
+ */
+export function coveredTop(element) {
+  const root = element?.getRootNode?.(), view = element?.ownerDocument?.defaultView;
+  if (!root?.elementsFromPoint || !view) return 0;
+  const box = element.getBoundingClientRect(), x = Math.max(1, Math.min(view.innerWidth - 1, box.left + box.width / 2));
+  const pinned = (node) => {
+    for (let current = node; current && current !== element; current = current.parentElement || current.getRootNode?.().host) {
+      if (current.contains?.(element)) return null;
+      if (["fixed", "sticky"].includes(view.getComputedStyle(current).position)) return current;
+    }
+    return null;
+  };
+  let covered = 0;
+  for (let guard = 0; guard < 4; guard++) {
+    const bar = root.elementsFromPoint(x, covered + 1).map(pinned).find(Boolean);
+    const bottom = bar ? Math.round(bar.getBoundingClientRect().bottom) : 0;
+    if (bottom <= covered) break;
+    covered = bottom;
+  }
+  return covered;
+}
+
+/**
+ * L-8: the wizard (or the sequence) in the page's inline layouts opens with its head at the top of what can be seen,
+ * under the bars that cover the window's top; Home Assistant scrolls the page on <html>. `always`: on opening; otherwise
+ * (a new step) only when the head went above the visible area. In a window shorter than the wizard the top of its
+ * actions column stays in view. Nothing in the full-screen layouts (the wizard is the window there).
+ */
+export function revealHead(wiz, { always = false } = {}) {
+  const view = wiz?.ownerDocument?.defaultView, head = wiz?.querySelector(".wiz-head");
+  // Without a layout (no size: hidden, or not drawn yet) there is nothing to place.
+  if (!view || !head || !wiz.isConnected || layout.fullScreen() || !head.getBoundingClientRect().height) return;
+  // The box that scrolls the wizard: Home Assistant's page (<html>), or a scrolling ancestor where there is one.
+  const scrollerOf = () => {
+    for (let node = wiz.parentElement || wiz.getRootNode?.().host; node && node !== wiz.ownerDocument.documentElement && node !== wiz.ownerDocument.body;
+      node = node.parentElement || node.getRootNode?.().host) {
+      const overflow = view.getComputedStyle(node).overflowY;
+      if (["auto", "scroll"].includes(overflow) && node.scrollHeight > node.clientHeight + 1) return node;
+    }
+    return null;
+  };
+  const measure = () => {
+    const scroller = scrollerOf(), frame = scroller ? scroller.getBoundingClientRect() : { top: 0, bottom: view.innerHeight };
+    const covered = Math.max(coveredTop(head), frame.top), top = head.getBoundingClientRect().top;
+    let delta = top - covered - 8;
+    const actions = wiz.querySelector(".wiz-columns > .wiz-actions");
+    const room = Math.min(view.innerHeight, frame.bottom) - 96;
+    if (actions && actions.getBoundingClientRect().top - delta > room) delta = actions.getBoundingClientRect().top - room;
+    const box = scroller || wiz.ownerDocument.scrollingElement || wiz.ownerDocument.documentElement;
+    return { scroller, covered, top, delta, left: box.scrollHeight - box.clientHeight - box.scrollTop };
+  };
+  let { scroller, covered, top, delta, left } = measure();
+  if (!always && top >= covered) return;
+  if (Math.abs(delta) < 1) return;
+  // A page too short to bring the head up gets the missing room under the wizard (its host's `--wiz-room`); the box
+  // that scrolls is looked for again (a container may only start scrolling with that room).
+  const host = wiz.parentElement;
+  if (delta > left && host?.style) {
+    const room = (parseFloat(host.style.getPropertyValue("--wiz-room")) || 0) + Math.ceil(delta - left);
+    host.style.setProperty("--wiz-room", `${room}px`);
+    ({ scroller, delta } = measure());
+  }
+  (scroller || view).scrollBy?.({ top: delta, behavior: still() ? "auto" : "smooth" });
+}
+
+/**
  * U-1: in the one-column wizard (content under 700 px, a window of 720 px or more) the actions are a bar held at the
  * bottom of the window. Home Assistant scrolls the page on <html> while the panel grows with its content, so a sticky
  * bar never sticks: the bar is docked instead, `position: fixed` over the wizard's own width, whenever the wizard runs

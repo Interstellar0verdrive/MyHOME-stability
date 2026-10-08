@@ -4,7 +4,7 @@
  * `CalibrationGateway` (live session or local preview); it never builds a WebSocket message itself.
  */
 const asset = (name) => { const url = new URL(name, import.meta.url); url.search = new URL(import.meta.url).search; return url.href; };
-const [{ escapeHtml: esc }, text, screens, gateways, illustration, { morph }, { layout, fitBars, fitRows, dockBar, focusOnOpen }] = await Promise.all([
+const [{ escapeHtml: esc }, text, screens, gateways, illustration, { morph }, { layout, fitBars, fitRows, dockBar, focusOnOpen, revealHead }] = await Promise.all([
   import(asset("panel-dom.js")), import(asset("panel-calibration-text.js")), import(asset("panel-calibration-screens.js")),
   import(asset("panel-calibration-gateway.js")), import(asset("panel-calibration-illustration.js")), import(asset("panel-calibration-morph.js")), import(asset("panel-calibration-layout.js")),
 ]);
@@ -111,6 +111,7 @@ export class CalibrationWizard {
     this._engine.hidden = true;
     this._root.append(this._frame, this._engine);
     host.append(this._root);
+    this._revealOnOpen = true;
     // U-1: the one-column layout docks its action bar to the window's bottom.
     this._undock = dockBar(this._root);
     this._theme();
@@ -292,7 +293,13 @@ export class CalibrationWizard {
       this._pickerHtml = null;
       this._watchMore();
       if (radio) this._frame.querySelector(`.wiz-radios input[name="${radio}"]:checked`)?.focus({ preventScroll: true });
-      if (codeChanged) queueMicrotask(() => this._frame?.querySelector(".wiz-title")?.focus({ preventScroll: false }));
+      // L-8: in the page's inline layouts the page is scrolled by `revealHead` (the head at the top on opening, kept in
+      // view at every step), never by the focus; full screen, the focus scrolls the wizard's own content.
+      if (codeChanged) queueMicrotask(() => {
+        const inline = !layout.fullScreen(), always = this._revealOnOpen;
+        this._frame?.querySelector(".wiz-title")?.focus({ preventScroll: inline });
+        if (inline) { this._revealOnOpen = false; revealHead(this._root, { always }); }
+      });
     }
     this._patch(screen);
   }

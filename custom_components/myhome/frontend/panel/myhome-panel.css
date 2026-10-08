@@ -652,6 +652,8 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
    window leaves the tab ~1130 px). Below 768 px of window the wizard and the details go full screen. */
 #cover-calibration-tab { container: caltab / inline-size; }
 .cal-tab { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+/* L-8: room under an inline wizard or sequence so that its head can reach the window's top (set by revealHead). */
+.cal-tab { padding-bottom: var(--wiz-room, 0px); }
 .cal-tab h3 { margin: 0; font-size: 18px; }
 /* Q-25: the tab's head is its title with «Come funziona ›» under it and, on the same row at the right, «Calibra una
    tapparella» (primary) and «Calibra in sequenza»; 32 px above it and 32 px down to the filter bar (24 on the phone). */
