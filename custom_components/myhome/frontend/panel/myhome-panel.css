@@ -992,6 +992,8 @@ dialog.cal-dialog :is(button, select, input):focus:not(:focus-visible) { outline
 .cal-page .cal-details-grid > section + section { margin-inline: -16px; padding-inline: 16px; border-top: 1px solid var(--panel-border); }
 .cal-page .cal-details-grid h4 { margin: 0 0 12px; padding: 0; border: 0; font-size: 15px; font-weight: 600; color: var(--primary-text-color, #182b37); }
 .cal-page .cal-details-grid .cal-note { max-width: none; }
+.cal-page-session { margin: 0 0 16px; }
+.cal-page-session button { width: 100%; min-height: 48px; justify-content: center; }
 .cal-tab-back { justify-self: start; }
 /* T-04 / T-04b: empty states as a card (no timed cover; nothing matches the filter). */
 .cal-empty { display: grid; justify-items: center; gap: 8px; padding: 32px 24px; border: 1px solid var(--panel-border); border-radius: var(--panel-radius);

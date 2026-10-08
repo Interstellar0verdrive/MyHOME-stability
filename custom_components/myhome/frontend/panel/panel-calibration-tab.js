@@ -676,12 +676,15 @@ export class CalibrationTab {
     const badge = session ? `<span class="badge cal-badge" data-status="running">${esc(t(session.waiting_for_stop ? "calTabRunning_waiting"
       : session.phase === "paused" ? "calTabRunning_paused" : session.owner_present ?? session.attached ? "calTabRunning_present" : "calTabRunning_absent"))}</span>`
       : `<span class="badge cal-badge" data-status="${item.status}">${esc(t(`calTabStatus_${item.status}`))}</span>`;
+    // N-09: a cover with its session open offers «Apri sessione» on its page too, as its row does.
+    const open = session && !(session.waiting_for_stop || session.recoverable === false)
+      ? `<div class="cal-page-session"><button type="button" class="primary" data-action="cal-tab-session" data-id="${esc(item.entry.entry_id)}">${esc(t("calOpenSession"))}</button></div>` : "";
     return `<div class="cal-page${session ? " is-running" : ""}" role="dialog" aria-modal="true" aria-labelledby="cal-page-name" data-entity="${esc(item.cover.entity_id)}">
         <div class="cal-page-head"><div class="cal-page-head-text"><h2 id="cal-page-name">${esc(item.name)}</h2>
           <p class="muted">${this._subline([this._area(item), gateways.length > 1 ? item.entry.title : ""], item.entity)}</p></div>
           <button type="button" class="icon-button cal-page-close" data-action="cal-tab-page-close" aria-label="${esc(t("wiz_T448"))}" title="${esc(t("wiz_T448"))}"><ha-icon icon="mdi:close" aria-hidden="true"></ha-icon></button></div>
         <div class="cal-page-body"><div class="cal-page-title"><h3>${esc(t("wiz_T447"))}</h3>${badge}</div>
-          ${this._details(item, busy, language, addressDetails)}</div></div>`;
+          ${open}${this._details(item, busy, language, addressDetails)}</div></div>`;
   }
 
   /**

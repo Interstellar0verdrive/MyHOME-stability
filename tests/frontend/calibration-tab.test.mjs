@@ -1581,3 +1581,17 @@ test("N-04: a centred dialog with a long list scrolls only its body: title row a
   assert.match(rest, /dialog\.cal-dialog \.cal-dialog-body \{ flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; \}/);
   void outside;
 });
+
+test("N-09: on the phone a cover's page with its session open offers «Apri sessione», as its row does", async () => {
+  const original = globalThis.matchMedia;
+  globalThis.matchMedia = (query) => ({ matches: query.includes("max-width") || query.includes("reduced-motion") });
+  try {
+    const session = { entry_id: "one", entity_id: "cover.bedroom", session_id: "s1", mode: "geometry", phase: "briefing", step: "home", sequence: 2, values: {},
+      recoverable: true, attached: false, owner_present: true };
+    const { tab } = await mount({ session });
+    row(tab, "cover.bedroom").querySelector(".cal-row-toggle").click(); await tick();
+    const button = tab.querySelector('.cal-page .cal-page-session [data-action="cal-tab-session"]');
+    assert.ok(button, "the session's action on the page");
+    assert.equal(button.dataset.id, "one");
+  } finally { globalThis.matchMedia = original; }
+});
