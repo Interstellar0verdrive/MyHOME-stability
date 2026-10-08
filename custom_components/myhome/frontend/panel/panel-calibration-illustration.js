@@ -22,6 +22,14 @@ export const ILLUSTRATIONS = {
   "curtain-partial-tape": { width: 207, height: 200 },
   check: { width: 208, height: 200 },
   "lift-sequence-mobile": { width: 358, height: 228 },
+  // Z-14 (Figma, 9 Oct): the edge at a quarter, half and three quarters with the tape (the ascent's quarter apart), and
+  // the ascent and descent of a cover without slats.
+  "curtain-tape-quarter": { width: 207, height: 200 },
+  "curtain-tape-half": { width: 207, height: 200 },
+  "curtain-tape-three-quarters": { width: 207, height: 200 },
+  "curtain-tape-quarter-ascent": { width: 207, height: 200 },
+  "ascent-sequence-no-slats": { width: 560, height: 142 },
+  "descent-sequence-no-slats": { width: 560, height: 142 },
 };
 
 /** Drawings with a version of their own for phones (under 720 px, A-07 M): only the lift-off sequence. */

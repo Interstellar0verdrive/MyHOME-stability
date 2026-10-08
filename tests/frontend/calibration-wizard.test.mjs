@@ -766,7 +766,7 @@ test("every drawing a screen can pick is a themed inline SVG, and A-09 has none"
     }
   }
   const bytes = statSync(new URL("panel-calibration-illustrations-svg.js", panel)).size;
-  assert.ok(bytes <= 60 * 1024, `${bytes} bytes of drawings`);
+  assert.ok(bytes <= 110 * 1024, `${bytes} bytes of drawings (16 since Z-14)`);
   assert.match(table, /"05": \["window-closed"/);
   assert.doesNotMatch(table, /"09":/, "A-09 has no drawing");
   const t = (key) => translations.en[key] || key;
@@ -875,7 +875,8 @@ test("the drawings' palette follows Home Assistant's dark mode", async () => {
 
 test("the drawing is one inline SVG at its Figma size, placed by its position, and gone where the mockup has none", async () => {
   const { ILLUSTRATIONS } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-illustration.js");
-  assert.deepEqual(Object.keys(ILLUSTRATIONS).sort(), ["ascent-sequence", "check", "curtain-open-tape", "curtain-partial-tape", "descent-sequence",
+  assert.deepEqual(Object.keys(ILLUSTRATIONS).sort(), ["ascent-sequence", "ascent-sequence-no-slats", "check", "curtain-open-tape", "curtain-partial-tape",
+    "curtain-tape-half", "curtain-tape-quarter", "curtain-tape-quarter-ascent", "curtain-tape-three-quarters", "descent-sequence", "descent-sequence-no-slats",
     "lift-sequence", "lift-sequence-mobile", "lift-zoom", "two-runs", "window-closed"]);
   assert.ok(Object.values(ILLUSTRATIONS).every((size) => size.width <= 564), "never wider than the instruction column");
   const { backend, wiz, code, press, startFor } = await mount();
@@ -2661,4 +2662,20 @@ test("Z-7: on a dark theme the passing disabled primary is a faint tint with the
   const rule = css.match(/\[data-theme="dark"\] :is\(\.wiz-action\.primary, button\.primary\)\.is-settling:disabled, [^{]*\{([^}]*)\}/)?.[1] || "";
   assert.match(rule, /background: color-mix\(in srgb, var\(--panel-accent\) 14%, var\(--panel-surface\)\)/);
   assert.match(rule, /color: color-mix\(in srgb, var\(--primary-text-color, #fff\) 45%, transparent\)/);
+});
+
+test("Z-14: each reading shows the drawing nearest its expected height; A-23 its ascent; no slats, the curtains without", () => {
+  const t = (key) => translations.en[key] || key;
+  const id = (screen) => screen.illustration?.id;
+  const live = (view, local = {}) => buildScreen({ t, stage: "session", path: "A", elapsed: 1, local: { ackLift: true, ackAscent: true, ackDescent: true, ackReadings: true, ...local }, cover: { name: "K" },
+    view: { mode: "geometry", values: { opening_time: 22, closing_time: 21 }, samples: { lift: 4 }, readings: { gap: 3 }, travel_cm: 200, owner: true, sequence: 4, slats: true, ...view } });
+  assert.equal(id(live({ step: "opening", phase: "briefing", slats: false })), "ascent-sequence-no-slats", "A-11 without slats");
+  assert.equal(id(live({ step: "closing", phase: "briefing", slats: false })), "descent-sequence-no-slats", "A-14 without slats");
+  assert.equal(id(live({ step: "opening", phase: "briefing" })), "ascent-sequence", "with slats as before");
+  assert.equal(id(live({ step: "half_open", phase: "reading", reading_range: { min_cm: 90, max_cm: 110 } })), "curtain-tape-half", "A-18: half");
+  const preview = (view) => buildScreen({ t, stage: "session", path: "A", elapsed: 1, local: {}, cover: { name: "K" },
+    view: { preview: true, path: "refine", phase: "reading", travel_cm: 200, values: {}, readings: {}, stages: [], ...view } });
+  assert.equal(id(preview({ step: "quarter_open", expected_cm: 50 })), "curtain-tape-quarter-ascent", "A-23: the quarter on the way up");
+  assert.equal(id(preview({ step: "quarter_close", expected_cm: 52 })), "curtain-tape-quarter", "a quarter");
+  assert.equal(id(preview({ step: "three_quarter_close", expected_cm: 150 })), "curtain-tape-three-quarters", "three quarters");
 });

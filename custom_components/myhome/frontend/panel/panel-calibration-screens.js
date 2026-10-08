@@ -895,6 +895,25 @@ const ILLUSTRATION_OF = {
 };
 ILLUSTRATION_OF.C = ILLUSTRATION_OF.A;
 
+/**
+ * Z-14 (Figma, 9 Oct): the drawing that fits the moment. A reading whose expected height is known shows the edge at the
+ * closest of a quarter, half and three quarters of the travel (Y-a: B-06, the readings of fine-tuning and of «solo
+ * letture», A-18/A-20); A-23, the quarter on the way up, its own ascent drawing (Z-12); without slats the full ascent
+ * and descent show a curtain with no slats (N-13).
+ */
+function drawingFor(code, id, view, local) {
+  const slats = view && !view.preview ? view.slats !== false : local?.slats !== false;
+  if (!slats && /^[AC]-11$/.test(code)) return "ascent-sequence-no-slats";
+  if (!slats && /^[AC]-14$/.test(code)) return "descent-sequence-no-slats";
+  if (id !== "curtain-partial-tape") return id;
+  if (/^[AC]-23$/.test(code)) return "curtain-tape-quarter-ascent";
+  const range = view?.reading_range, travel = view?.travel_cm;
+  const expected = view?.expected_cm ?? view?.check?.target_cm ?? (range ? (range.min_cm + range.max_cm) / 2 : null);
+  if (!(expected > 0) || !(travel > 0)) return id;
+  const share = expected / travel;
+  return share < 0.375 ? "curtain-tape-quarter" : share > 0.625 ? "curtain-tape-three-quarters" : "curtain-tape-half";
+}
+
 function illustrationFor(code) {
   const [, letter, number] = /^([ABC])-(\d+)$/.exec(code || "") || [];
   const entry = letter && ILLUSTRATION_OF[letter][number];
@@ -906,6 +925,7 @@ function finalize(screen, ctx) {
   const { t, language = "en", path = "A", scope, view, status = {}, local = {} } = ctx;
   // A screen may opt out (false) where its code is shared with a run the drawing does not show.
   screen.illustration = screen.illustration === false ? null : screen.illustration || illustrationFor(screen.code);
+  if (screen.illustration) screen.illustration = { ...screen.illustration, id: drawingFor(screen.code, screen.illustration.id, view, local) };
   const n = (value, digits = 1) => number(value, language, digits);
   // Under a wait's bar, the time left when its duration is known.
   if (screen.wait) screen.wait.remaining = screen.wait.progress?.remaining != null ? fill(t("wiz_T402"), { seconds: n(screen.wait.progress.remaining, 0) }) : "";
