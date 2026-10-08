@@ -434,6 +434,15 @@ export class CalibrationWizard {
       fieldError.hidden = !message;
       if (message) field?.setAttribute("aria-invalid", "true");
     }
+    // L-9: a reading the field accepts but far from the model: a yellow warning under it, never a refusal.
+    const warning = root.querySelector("#wiz-field-warning");
+    if (warning) {
+      const band = screen.field?.band, input = root.querySelector('[name="reading_cm"]'), value = input ? parseReading(input.value) : NaN;
+      const far = !!band && Number.isFinite(value) && accepted(input) && (value < band.min || value > band.max) && !fieldError?.textContent;
+      const message = far ? band.warning : "";
+      if (warning.textContent !== message) warning.textContent = message;
+      warning.hidden = !far;
+    }
     const block = screen.profileBlock?.name;
     const line = root.querySelector(".wiz-name-line");
     if (line && block && line.textContent !== block.line) line.textContent = block.line;
@@ -535,7 +544,8 @@ export class CalibrationWizard {
   _fieldMarkup(field) {
     const value = field.value == null ? "" : `${field.value}`;
     return `<form class="wiz-field" novalidate autocomplete="off"><label>${esc(field.label)}<span class="input-suffix"><input name="reading_cm" type="text" inputmode="decimal" autocomplete="off" value="${esc(value)}" aria-describedby="wiz-field-hint wiz-field-error" data-kind="${esc(field.kind)}" data-min="${field.min}" data-max="${field.max}"><span>cm</span></span></label>
-      <p id="wiz-field-hint" class="muted">${text.units(esc(field.hint))}</p><p id="wiz-field-error" class="wiz-field-error" role="alert" hidden></p></form>`;
+      <p id="wiz-field-hint" class="muted">${text.units(esc(field.hint))}</p><p id="wiz-field-error" class="wiz-field-error" role="alert" hidden></p>
+      <p id="wiz-field-warning" class="cal-note is-warning wiz-field-warning" role="status" hidden></p></form>`;
   }
 
   _tableMarkup(table) {

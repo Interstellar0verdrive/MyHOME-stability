@@ -302,13 +302,22 @@ test("path A runs the live geometry session from the first close to Save, one me
   assert.equal(code(), "A-17");
   await move(backend, { auto: true, stop: true });
   assert.equal(code(), "A-18");
-  assert.equal(wiz().querySelector("#wiz-field-hint").textContent, "Between 73.6 and 109.1 cm are expected. Enter what the tape says; a comma or a point is fine.");
+  // L-9: the hint names the expected height; only a reading above the travel (+3 cm) is refused.
+  assert.equal(wiz().querySelector("#wiz-field-hint").textContent, "About 91 cm are expected. Enter what the tape says; a comma or a point is fine.");
   const sentBefore = actions().length;
-  await type("120");
-  assert.equal(actions().length, sentBefore, "a reading outside the accepted range is not sent");
+  await type("205");
+  assert.equal(actions().length, sentBefore, "a reading above the travel is not sent");
   assert.equal(wiz().querySelector('[name="reading_cm"]').getAttribute("aria-invalid"), "true");
-  assert.equal(wiz().querySelector(".wiz-notices").textContent,
-    "The reading (120 cm) is outside the accepted range (73.6–109.1 cm). Check the measurement reference and repeat the step. If the timings measured earlier were wrong, cancel and restart the guided measurement.");
+  assert.equal(wiz().querySelector("#wiz-field-error").textContent,
+    "The reading (205 cm) is more than the curtain travel (198 cm): check the tape and the point you measure from.");
+  // Far from the model (outside the band) but physical: a yellow warning, «Done, next» stays on.
+  const field = wiz().querySelector('[name="reading_cm"]');
+  field.value = "40"; field.dispatchEvent(new Event("input", { bubbles: true })); await tick();
+  assert.equal(wiz().querySelector("#wiz-field-warning").hidden, false);
+  assert.equal(wiz().querySelector("#wiz-field-warning").textContent, "The reading is far from the expected one, about 91 cm: check the reference. If it is right, go on.");
+  assert.equal(wiz().querySelector('[data-wiz="reading"]').disabled, false, "never blocked");
+  field.value = "100"; field.dispatchEvent(new Event("input", { bubbles: true })); await tick();
+  assert.equal(wiz().querySelector("#wiz-field-warning").hidden, true, "half the travel plus 1 cm: no warning");
   await type("97");
   assert.equal(wiz().querySelector(".wiz-notices").textContent, "");
   assert.equal(actions().at(-1), "next", "the return to the top starts by itself");
@@ -699,17 +708,28 @@ test("a check run is shown like an intermediate run, without elapsed time, then 
   assert.deepEqual(reading.actions.map((action) => action.id), ["reading", "repeat"]);
 });
 
-test("an intermediate reading names its accepted range in Italian with a decimal comma, and a refusal names the reading", () => {
+test("L-9: an intermediate reading names the expected height in Italian, refuses only more than the travel, and reports the far ones", () => {
   const t = (key) => translations.it[key] || key;
   const view = { mode: "geometry", phase: "reading", step: "half_close", values: { opening_time: 22, closing_time: 21 }, samples: { lift: 4 },
-    readings: { gap: 3 }, geometry: { slat_time_s: 4 }, travel_cm: 110, slats: true, owner: true, sequence: 3, reading_range: { min_cm: 40.83, max_cm: 60.63 } };
+    readings: { gap: 3 }, geometry: { slat_time_s: 4 }, travel_cm: 198, slats: true, owner: true, sequence: 3,
+    reading_range: { min_cm: 0.1, max_cm: 201 }, reading_band: { min_cm: 46.3, max_cm: 118.8, expected_cm: 82.55 } };
   const screen = buildScreen({ t, language: "it", stage: "session", path: "A", view, cover: { name: "Cucina 2" },
-    status: { error: { code: "reading_out_of_range", reading: 70.5 } } });
+    status: { error: { code: "reading_over_travel", reading: 205.5 } } });
   assert.equal(screen.code, "A-20");
-  assert.equal(screen.field.hint, "Sono attesi fra 40,9 e 60,6 cm. Scrivi quello che dice il metro; virgola o punto vanno bene.");
-  assert.match(screen.notices[0].text, /^La lettura \(70,5 cm\) è fuori dall’intervallo ammesso \(40,9–60,6 cm\)/);
+  assert.equal(screen.field.hint, "Sono attesi circa 83 cm. Scrivi quello che dice il metro; virgola o punto vanno bene.");
+  assert.deepEqual([screen.field.min > 0, screen.field.max > 201, screen.field.max < 201.001], [true, true, true], "the physical limits");
+  assert.equal(screen.field.band.warning, "La lettura è lontana da quella attesa, circa 83 cm: ricontrolla il riferimento. Se è giusta, continua.");
+  assert.equal(screen.notices[0].text, "La lettura (205,5 cm) è più della corsa del telo (198 cm): ricontrolla il metro e il punto da cui misuri.");
   assert.equal(screen.stopwatch, null, "no time is shown for a reading");
-  const running = buildScreen({ t, language: "it", stage: "session", path: "A", view: { ...view, phase: "closing", reading_range: null }, elapsed: 3.2,
+  const typed = buildScreen({ t, language: "it", stage: "session", path: "A", view, local: { fieldError: 230 }, cover: { name: "Cucina 2" } });
+  assert.equal(typed.field.error, "La lettura (230 cm) è più della corsa del telo (198 cm): ricontrolla il metro e il punto da cui misuri.");
+  // Kept although far: the summary says so, as the final check does.
+  const review = buildScreen({ t, language: "it", stage: "session", path: "A", cover: { name: "Cucina 2" }, view: { ...view, phase: "review", reading_range: null, reading_band: null,
+    geometry: { slat_time_s: 4, opening_roll: 5, closing_roll: 1.9 }, readings: { gap: 3, half_open: 40, half_close: 97 },
+    reading_discrepancy: { half_open: { reading_cm: 40, expected_cm: 82.55, min_cm: 46.3, max_cm: 118.8 } } } });
+  assert.deepEqual(review.notices.map((notice) => [notice.tone, notice.text]), [["warning",
+    "Metà tempo salita: la lettura (40 cm) era lontana da quella attesa (circa 83 cm). È stata tenuta e il modello si è fermato al suo limite: la verifica finale dirà se le posizioni sono giuste."]]);
+  const running = buildScreen({ t, language: "it", stage: "session", path: "A", view: { ...view, phase: "closing", reading_range: null, reading_band: null }, elapsed: 3.2,
     local: { ackReadings: true }, cover: { name: "Cucina 2" } });
   assert.equal(running.code, "A-19");
   assert.equal(running.stopwatch, null, "an intermediate run shows no elapsed time: Home Assistant stops it");

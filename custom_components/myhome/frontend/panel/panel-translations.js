@@ -452,6 +452,9 @@ export const translations = {
     wiz_T527: "About {cm} cm are expected. Enter what the tape says; a comma or a point is fine.",
     wiz_T528: "Between {min_cm} and {max_cm} cm are expected. Enter what the tape says; a comma or a point is fine.",
     wiz_T529: "Other options",
+    wiz_T530: "The reading is far from the expected one, about {expected} cm: check the reference. If it is right, go on.",
+    wiz_T531: "The reading ({reading} cm) is more than the curtain travel ({travel} cm): check the tape and the point you measure from.",
+    wiz_T532: "{which}: the reading ({reading} cm) was far from the expected one (about {expected} cm). It was kept and the model stopped at its limit: the final check will tell whether the positions are right.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1368,6 +1371,9 @@ export const translations = {
     wiz_T527: "Sono attesi circa {cm} cm. Scrivi quello che dice il metro; virgola o punto vanno bene.",
     wiz_T528: "Sono attesi fra {min_cm} e {max_cm} cm. Scrivi quello che dice il metro; virgola o punto vanno bene.",
     wiz_T529: "Altre opzioni",
+    wiz_T530: "La lettura è lontana da quella attesa, circa {expected} cm: ricontrolla il riferimento. Se è giusta, continua.",
+    wiz_T531: "La lettura ({reading} cm) è più della corsa del telo ({travel} cm): ricontrolla il metro e il punto da cui misuri.",
+    wiz_T532: "{which}: la lettura ({reading} cm) era lontana da quella attesa (circa {expected} cm). È stata tenuta e il modello si è fermato al suo limite: la verifica finale dirà se le posizioni sono giuste.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

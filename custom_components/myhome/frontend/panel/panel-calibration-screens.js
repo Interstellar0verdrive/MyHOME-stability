@@ -507,7 +507,8 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     // A check of the measured model (the wizard does not offer one yet): its run is stopped by Home Assistant like the
     // intermediate runs, so no elapsed time; then the tape reading, from 0.1 cm to the measured travel.
     screen.phase = "readings";
-    if (phase === "reading") return Object.assign(screen, { code: p("31"), title: t("wiz_T138"), body: t("wiz_T139"),
+    // L-9: the final check says which reading was kept far from the model.
+    if (phase === "reading") return Object.assign(screen, { code: p("31"), title: t("wiz_T138"), body: t("wiz_T139"), notices: [...screen.notices, ...discrepancyNotes(ctx, tx, n)],
       field: { label: t("wiz_T064"), hint: view.check?.target_cm != null ? tx("wiz_T527", { cm: n(view.check.target_cm, 0) }) : t("wiz_T491"), min: 0.1, max: view.travel_cm ?? 10000, kind: "height" },
       actions: [{ id: "reading", label: t("wiz_T051"), kind: "primary" }, { id: "repeat", label: t("wiz_T033"), kind: "secondary" }] });
     positioning("30", t("wiz_T086"));
@@ -630,6 +631,7 @@ function summaryScreen(screen, ctx, tx, n, values) {
   const timesOnly = path === "C" && scope === "times_only";
   const follows = !!cover?.profile;
   screen.phase = "summary";
+  if (!view.preview) screen.notices.push(...discrepancyNotes(ctx, tx, n));
   // What would be applied: the session's values, a profile adapted to this travel (B), or the values in use (readings only).
   let after;
   if (profileB) {
@@ -858,10 +860,21 @@ function problemScreen(screen, ctx, reason, step = false) {
  * expectation (T083).
  */
 function halfField(ctx, tx, n) {
-  const { t, view, language = "en" } = ctx, span = view.reading_range;
-  if (!span) return { label: t("wiz_T064"), hint: view.expected_cm != null ? tx("wiz_T527", { cm: n(view.expected_cm, 0) }) : t("wiz_T491"), min: 0.1, max: 10000, kind: "height" };
-  return { label: t("wiz_T064"), hint: fill(t("wiz_T528"), readingRange(span, language)),
-    min: span.min_cm - RANGE_SLACK_CM, max: span.max_cm + RANGE_SLACK_CM, kind: "height", range: true };
+  const { t, view } = ctx, span = view.reading_range, band = view.reading_band;
+  // L-9: the field refuses only what cannot be physical (more than the travel plus the tape's error); a reading far
+  // from the model is accepted with a warning under the field (`band`, drawn by the wizard while typing).
+  const expected = band?.expected_cm ?? view.expected_cm;
+  const hint = expected != null ? tx("wiz_T527", { cm: n(expected, 0) }) : t("wiz_T491");
+  if (!span) return { label: t("wiz_T064"), hint, min: 0.1, max: 10000, kind: "height" };
+  return { label: t("wiz_T064"), hint, min: span.min_cm - RANGE_SLACK_CM, max: span.max_cm + RANGE_SLACK_CM, kind: "height",
+    travel: view.travel_cm, band: band ? { min: band.min_cm, max: band.max_cm, warning: tx("wiz_T530", { expected: n(band.expected_cm, 0) }) } : null };
+}
+
+/** L-9: the intermediate readings kept although far from the model, as notes (summary, final check). */
+function discrepancyNotes(ctx, tx, n) {
+  const { t, view } = ctx, items = view?.reading_discrepancy || {};
+  return ["half_open", "half_close"].filter((step) => items[step]).map((step) => ({ tone: "warning", result: true,
+    text: tx("wiz_T532", { which: t(step === "half_open" ? "wiz_T077" : "wiz_T078"), reading: n(items[step].reading_cm), expected: n(items[step].expected_cm, 0) }) }));
 }
 
 function runWatch(t, n, view, elapsed) {
@@ -1034,8 +1047,10 @@ function finalize(screen, ctx) {
   if (status.notice) screen.notices.push({ tone: "warning", text: t(status.notice) });
   if (status.cancelPending) screen.notices.push({ tone: "error", text: t("calCancelFailed") });
   if (status.error) {
-    const key = `profileError_${status.error.code}`;
-    const values = { ...(view || {}), ...(readingRange(view?.reading_range, language, status.error.reading) || {}) };
+    // L-9: our own refusal of a reading above the travel, in our words.
+    const key = status.error.code === "reading_over_travel" ? "wiz_T531" : `profileError_${status.error.code}`;
+    const values = { ...(view || {}), ...(readingRange(view?.reading_range, language, status.error.reading) || {}),
+      ...(status.error.code === "reading_over_travel" ? { reading: n(status.error.reading), travel: n(view?.travel_cm) } : {}) };
     const text = t(key) === key ? t(view?.preview ? "calReadingNumber" : "calConnectionError") : fill(t(key), values);
     // A refusal whose values are gone (the session moved on) is not shown with empty placeholders.
     if (!/\{\w+\}/.test(text)) screen.notices.push({ tone: "error", text });
@@ -1045,7 +1060,8 @@ function finalize(screen, ctx) {
   // (A reading outside the fit's range keeps its notice with the accepted range.)
   if (local.fieldError != null && screen.field && !(screen.field.range && typeof local.fieldError === "number")) {
     const value = local.fieldError, { min, max } = screen.field;
-    screen.field.error = value === "nan" ? t("wiz_T472") : value > max ? fill(t("wiz_T470"), { max: n(max) })
+    screen.field.error = value === "nan" ? t("wiz_T472") : value > max && screen.field.travel != null ? fill(t("wiz_T531"), { reading: n(value), travel: n(screen.field.travel) })
+      : value > max ? fill(t("wiz_T470"), { max: n(max) })
       : value < min ? fill(t("wiz_T471"), { min: n(min) }) : null;
   }
   if (typeof local.fieldError === "number" && screen.field?.range) {

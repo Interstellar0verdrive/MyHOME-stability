@@ -96,9 +96,12 @@ export function createFakeBackend({ language = "en", inventory = coverInventory(
     session.can_repeat = repeatable();
     session.reading_kind = session.step === "opening" ? "travel" : session.step;
     session.expected_cm = session.travel_cm && session.step?.startsWith("half_") ? session.travel_cm / 2 : null;
-    // As cover_calibration_geometry.py publishes it: the heights a roll from 1 to 5 accepts at this stop.
-    session.reading_range = session.phase === "reading" && session.step?.startsWith("half_") && session.travel_cm
-      ? { min_cm: session.travel_cm * 0.3712345, max_cm: session.travel_cm * 0.5512345 } : null;
+    // As cover_calibration_geometry.py publishes them (L-9): the physical heights accepted at this stop (up to the
+    // travel plus 3 cm), and the band near the model (the heights of rolls 1-5 widened by 10 % of the travel).
+    const half = session.phase === "reading" && session.step?.startsWith("half_") && session.travel_cm;
+    session.reading_range = half ? { min_cm: 0.1, max_cm: session.travel_cm + 3 } : null;
+    session.reading_band = half ? { min_cm: session.travel_cm * 0.2712345, max_cm: session.travel_cm * 0.6512345, expected_cm: session.travel_cm * 0.4612345 } : null;
+    session.reading_discrepancy ??= {};
   };
 
   function geometryAction(message) {
@@ -125,8 +128,14 @@ export function createFakeBackend({ language = "en", inventory = coverInventory(
         session.step = "reset"; session._after_position = session.still_resting ? "lift" : "opening";
       } else if (session.step === "opening") {
         session.travel_cm = number; session.step = "closing";
-      } else if (session.reading_range && (number < session.reading_range.min_cm || number > session.reading_range.max_cm)) {
-        throw Object.assign(new Error("range"), { code: "reading_out_of_range" });
+      } else if (session.reading_range && number > session.reading_range.max_cm) {
+        throw Object.assign(new Error("over"), { code: "reading_over_travel" });
+      } else if ((() => {
+        const band = session.reading_band;
+        if (band && (number < band.min_cm || number > band.max_cm)) session.reading_discrepancy[session.step] = { reading_cm: number, expected_cm: band.expected_cm, min_cm: band.min_cm, max_cm: band.max_cm };
+        return false;
+      })()) {
+        // (never: the band only reports)
       } else if (session.step === "half_open") {
         session.geometry = { slat_time_s: session.slats ? 4.4 : 0, opening_roll: 1.83 };
         session.readings.half_open = number; session.step = "top"; session._after_position = "half_close";
