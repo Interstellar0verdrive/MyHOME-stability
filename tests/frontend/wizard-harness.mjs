@@ -48,6 +48,7 @@ export async function mount(options = {}) {
   const type = async (value) => {
     const input = wiz().querySelector('.wiz-frame [name="reading_cm"]');
     input.value = value;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
     await press("reading");
   };
   const actions = () => backend.calls.filter((message) => message.type === "myhome/cover_calibration/action" && message.action !== "heartbeat").map((message) => message.action);

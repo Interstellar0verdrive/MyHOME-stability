@@ -460,10 +460,12 @@ export class CalibrationWizard {
     for (const action of screen.actions) {
       const button = column.querySelector(`[data-wiz="${action.id}"]`);
       if (!button || action.kind === "status" || action.kind === "state") continue;
-      button.disabled = !!action.disabled || (guarded && action.id !== "stop");
+      // N-06: a reading's «Fatto, avanti» waits for a value in the field: off until the user types one.
+      const empty = action.id === "reading" && !(root.querySelector('[name="reading_cm"]')?.value || "").trim();
+      button.disabled = !!action.disabled || empty || (guarded && action.id !== "stop");
       // D-13 (decided 8 Oct): off only for a moment, enabling by itself (the hold after a change, a request or the motor
       // settling) keeps the light primary look; off until the user acts is the neutral grey.
-      button.classList.toggle("is-settling", button.disabled && (!action.disabled || !!action.settling));
+      button.classList.toggle("is-settling", button.disabled && !empty && (!action.disabled || !!action.settling));
       // Disabled by the step itself (not by the short hold after a change): said to assistive technology too.
       if (action.disabled) button.setAttribute("aria-disabled", "true"); else button.removeAttribute("aria-disabled");
     }
@@ -570,7 +572,9 @@ export class CalibrationWizard {
     if (event.target.name === "profile_name") { this._local.profileName = event.target.value.trim(); this._patch(this._screen()); }
     if (event.target.name === "reading_cm") {
       event.target.removeAttribute("aria-invalid");
-      if (this._local.fieldError != null) { this._local.fieldError = null; this._patch(this._screen()); }
+      if (this._local.fieldError != null) this._local.fieldError = null;
+      // N-06: the button follows the field (typing never redraws the field itself).
+      this._patch(this._screen());
     }
   }
 

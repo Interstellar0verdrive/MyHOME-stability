@@ -2574,3 +2574,16 @@ test("N-05: A-21's switch label takes the block's width; only the name field kee
   assert.match(css, /\.wiz-profile-block label:not\(\.wiz-switch\) \{ max-width: 420px; \}/);
   assert.doesNotMatch(css, /\.wiz-profile-block label \{ max-width/);
 });
+
+test("N-06: a reading's «Fatto, avanti» waits for a value: neutral off with the field empty, on once typed", async () => {
+  const { backend, code, press, startFor, wiz } = await mount();
+  await startFor("cover.living_one");
+  await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  await press("ack:lift"); await press("next"); await move(backend); await press("lift"); backend.stopped(); await tick();
+  assert.equal(code(), "A-08");
+  const button = () => wiz().querySelector('.wiz-actions [data-wiz="reading"]'), field = wiz().querySelector('[name="reading_cm"]');
+  assert.deepEqual([button().disabled, button().classList.contains("is-settling")], [true, false], "off until the user types: neutral");
+  field.value = "3"; field.dispatchEvent(new Event("input", { bubbles: true }));
+  assert.equal(button().disabled, false);
+  assert.equal(wiz().querySelector('[name="reading_cm"]'), field, "typing never redraws the field");
+});
