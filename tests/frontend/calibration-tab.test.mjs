@@ -1414,6 +1414,9 @@ test("D-08: an overview that cannot be read shows its error, not an empty filter
   assert.ok(tab.querySelector('[data-action="cal-tab-refresh"]'), "and a way to read it again");
   assert.equal(tab.querySelector(".cal-tab-filters"), null, "no filter bar with zero counts");
   assert.equal(tab.querySelector(".cal-tab-no-match"), null, "no «nothing matches the filter»");
+  const { readFileSync } = await import("node:fs");
+  const css = readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.cal-tab \[data-action="cal-tab-refresh"\] \{ justify-self: start; width: fit-content; \}/, "N-08: «Aggiorna» at its own width");
 });
 
 test("D-03: from 1016 to 1199 the profile chip keeps clear of the CTA and ⋮ sharing its column", async () => {
