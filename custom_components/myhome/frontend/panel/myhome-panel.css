@@ -862,6 +862,10 @@ dialog.cal-dialog :is(button, select, input):focus:not(:focus-visible) { outline
 .cal-menu { position: absolute; inset-inline-end: 0; top: calc(100% + 4px); z-index: 3; display: grid; min-width: 200px; padding: 6px; border: 1px solid var(--panel-border); border-radius: 12px; background: var(--panel-surface); box-shadow: var(--panel-shadow-hover); }
 .cal-menu button { justify-content: start; border: 0; background: transparent; }
 .cal-menu button:hover, .cal-menu button:focus-visible { background: var(--panel-accent-soft); }
+/* L-10: cancelling the calibration in progress, in the row's menu, in red; its confirmation's two buttons on one row. */
+.cal-menu button.cal-menu-danger { color: var(--panel-error); }
+.cal-menu button.cal-menu-danger:hover, .cal-menu button.cal-menu-danger:focus-visible { background: color-mix(in srgb, var(--panel-error) 8%, transparent); }
+.cal-abort-actions { display: flex; flex-wrap: wrap; justify-content: end; gap: 8px; margin-top: 16px; }
 .cal-badge[data-status="times"], .cal-badge[data-status="rolls"] { --cal-chip: var(--panel-accent); }
 .cal-badge[data-status="verified"] { --cal-chip: var(--panel-success); }
 /* D-19: «In corso · …» on one line like every chip (Q-12), its text the warning colour darkened to read on its light fill

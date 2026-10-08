@@ -421,7 +421,7 @@ test("a session in progress marks its cover, blocks new measurements and opens a
     targets: [{ entity_id: "cover.bedroom", name: "Bedroom" }, { entity_id: "cover.living_one", name: "Living room shutter 1" }],
     next_step: { step: "next_cover", cover_index: 1, entity_id: "cover.living_one" } };
   const { root, tab, subscriptions, calls } = await mount({ session });
-  assert.match(tab.querySelector(".cal-tab-busy").textContent, /finish or cancel it/);
+  assert.match(tab.querySelector(".cal-tab-busy").textContent, /resume it with «Open session», or cancel it from the ⋮ menu of its row/);
   assert.equal(tab.querySelector('[data-action="cal-tab-batch"]').disabled, true);
   for (const id of ["cover.bedroom", "cover.living_one"]) {
     assert.equal(row(tab, id).querySelector(".cal-badge").dataset.status, "running");
@@ -642,7 +642,7 @@ test("a gateway whose session cannot be read but is reserved keeps new measureme
     return undefined;
   } });
   assert.equal(reads, 3, "three covers are tried before giving up for this refresh");
-  assert.match(tab.querySelector(".cal-tab-busy").textContent, /finish or cancel it/);
+  assert.match(tab.querySelector(".cal-tab-busy").textContent, /cannot read: try again in a moment/);
   assert.equal(tab.querySelector('[data-action="cal-tab-measure"]').disabled, true);
   assert.equal(tab.querySelector('[data-action="cal-tab-batch"]').disabled, true);
   assert.ok([...tab.querySelectorAll('[data-action="cal-tab-measure-cover"]')].every((button) => button.disabled));

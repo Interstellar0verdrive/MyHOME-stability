@@ -1384,6 +1384,78 @@ test("L-3: a guided run (times only) stopped before ② is not valid on resume",
   assert.deepEqual([screen.code, screen.title, screen.results[0].invalid, screen.notices[0].text], ["C-12", "Ascent not valid", true, T445]);
 });
 
+// L-10: a session interrupted by a Stop from another tab stays open in Home Assistant (it holds the cover) until cancelled.
+const interrupted = (extra = {}) => resumed({ phase: "interrupted", reason: "stopped", step: "opening", values: {}, ...extra });
+const cancels = (backend) => backend.calls.filter((message) => message.action === "cancel").length;
+const claims = (backend) => backend.subscriptions.filter((message) => message.type === "myhome/cover_calibration/resume" && message.claim).length;
+
+test("L-10: S-01 of an interrupted session cancels it, also from a tab that only reads it", async () => {
+  const { backend, tab, wiz, code, actions } = await mount({ session: interrupted(), owner: false });
+  tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
+  assert.equal(code(), "S-01");
+  const buttons = [...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((button) => [button.dataset.wiz, button.className.replace("wiz-action ", "")]);
+  assert.deepEqual(buttons, [["start-over", "primary"], ["close", "secondary"], ["abort", "link"]], "«Cancel the measurement», in red");
+  assert.equal(wiz().querySelector('[data-wiz="abort"]').textContent, "Cancel the measurement");
+  wiz().querySelector('[data-wiz="abort"]').click(); await tick(12);
+  assert.equal(claims(backend), 1, "control taken first (a reader cannot cancel)");
+  assert.equal(cancels(backend), 1);
+  assert.equal(backend.session.phase, "cancelled", "the cover is free");
+  assert.equal(wiz(), null, "back to the list");
+  assert.equal(tab().querySelector('[data-action="cal-tab-session"]'), null, "no session left in the list");
+  void actions;
+});
+
+test("L-10: Start over and Abandon from S-01 cancel the interrupted session first; the exit of a live one cancels it", async () => {
+  // Start over: the session is cancelled, then the wizard starts again from «Before you begin».
+  const a = await mount({ session: interrupted(), owner: false });
+  a.tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
+  a.wiz().querySelector('[data-wiz="start-over"]').click(); await tick(12);
+  assert.deepEqual([claims(a.backend), cancels(a.backend), a.backend.session.phase], [1, 1, "cancelled"]);
+  assert.ok(a.wiz(), "the wizard stays open to start again");
+  // Abandon (the header's exit) on S-01: cancelled too, not only the view closed.
+  reset();
+  const b = await mount({ session: interrupted(), owner: false });
+  b.tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
+  // (S-01's header has «Close»; «Abandon the calibration» is the same exit, as Escape reaches it.)
+  await b.panel._calibrationTab._wizard._act("exit"); await tick(12);
+  assert.deepEqual([cancels(b.backend), b.backend.session.phase, b.wiz()], [1, "cancelled", null]);
+  // A live session this tab guides: «Exit without saving» cancels it (guided «solo tempi» here; geometry as before).
+  reset();
+  const c = await mount();
+  await c.startFor("cover.kitchen_two", "C");
+  await c.press("current");
+  const radio = c.wiz().querySelector('input[name="case"][value="times_only"]'); radio.checked = true; radio.dispatchEvent(new Event("change", { bubbles: true })); await tick();
+  await c.press("case"); await c.press("begin");
+  assert.equal(c.backend.session.mode, "guided");
+  c.wiz().querySelector('[data-wiz="exit"]').click(); await tick();
+  c.wiz().querySelector('[data-wiz="leave"]').click(); await tick(12);
+  assert.deepEqual([cancels(c.backend), c.backend.session.phase], [1, "cancelled"]);
+});
+
+test("L-10: the row of a session in progress cancels it from its ⋮ menu, after a confirmation, taking control first", async () => {
+  const session = { entry_id: "one", entity_id: "cover.living_one", session_id: "session-1", sequence: 9, revision: 7, mode: "guided", origin: "wizard",
+    phase: "opening", reason: null, values: {}, stop_requested: false, save_modes: ["new"], _started: 0 };
+  const { tab: host, backend, panel } = await mount({ session, owner: false });
+  const tab = host();
+  const row = (root, entity) => root.querySelector(`.cal-row[data-entity="${entity}"]`);
+  const menu = () => row(tab, "cover.living_one").querySelector(".cal-menu");
+  row(tab, "cover.living_one").querySelector('[data-action="cal-tab-menu"]').click(); await tick();
+  const item = menu().querySelector('[data-action="cal-tab-abort"]');
+  assert.ok(item, "«Cancel the calibration in progress» in the menu of the row in progress");
+  assert.equal(item.textContent.trim(), "Cancel the calibration in progress");
+  assert.equal(row(tab, "cover.kitchen_two").querySelector('[data-action="cal-tab-abort"]'), null, "only there");
+  item.click(); await tick();
+  const dialog = panel.shadowRoot.querySelector("dialog.cal-dialog");
+  assert.equal(dialog.querySelector("#cal-dialog-title").textContent, "Cancel the calibration in progress?");
+  assert.match(dialog.textContent, /whichever tab or device is guiding it: nothing measured is saved/);
+  assert.equal(backend.calls.filter((message) => message.action === "cancel").length, 0, "nothing before the confirmation");
+  dialog.querySelector("[data-abort-confirm]").click(); await new Promise((resolve) => setTimeout(resolve, 200)); await tick(8);
+  assert.ok(backend.subscriptions.some((message) => message.type === "myhome/cover_calibration/resume" && message.claim && message.sequence === 9), "control taken");
+  assert.equal(backend.session.phase, "cancelled");
+  assert.equal(panel.shadowRoot.querySelector("dialog.cal-dialog[open]"), null, "the dialog closes");
+  assert.equal(tab.querySelector(".cal-tab-busy"), null, "the cover is free again");
+});
+
 test("A-03 and A-16 have no Cancel of their own: the header's Abandon the calibration does the same", () => {
   const t = (key) => translations.it[key] || key;
   const a03 = buildScreen({ t, language: "it", stage: "before", path: "A", cover: { name: "Cucina 2" } });

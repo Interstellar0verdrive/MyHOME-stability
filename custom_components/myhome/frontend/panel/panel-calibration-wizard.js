@@ -745,6 +745,8 @@ export class CalibrationWizard {
       });
       return;
     }
+    if (id === "abort") { this._abortDead(); return; }
+    if (id === "start-over" && !(await this._abortDead({ stay: true }))) return;
     if (id === "start-over") {
       // Fine-tuning starts again from the values just saved; everything else from "Before you begin".
       if (local.refining && local.base) { this._startRefine(local.base); return this._render(); }
@@ -1164,6 +1166,9 @@ export class CalibrationWizard {
   }
 
   _exit() {
+    // L-10: an interrupted session still open in Home Assistant is cancelled on the way out, not left holding the cover.
+    const view = this._gateway?.view;
+    if (this._gateway && !this._gateway.preview && view?.phase === "interrupted" && view.recoverable) { this._abortDead(); return; }
     if (STAGES_BEFORE_SESSION.includes(this._local.stage) || !this._sessionOpen()) { this._finish(); return; }
     const dialog = this._frame.querySelector(".wiz-dialog"), { t } = this._context;
     dialog.querySelector("#wiz-dialog-body").textContent = t(this._gateway.preview ? "wiz_T497" : "wizExitBodyLive");
@@ -1193,9 +1198,27 @@ export class CalibrationWizard {
     if (!gateway) { this._finish(); return; }
     if (gateway.preview) { this._finish(); return; }
     const discarded = this._discarded(gateway);
-    await gateway.cancel();
-    if (gateway.status.cancelPending) { if (this._gateway === gateway) this._render(); return; }
+    // L-10: also from a tab that only reads the session (it takes control to cancel it).
+    await gateway.abort();
+    if (gateway.status.cancelPending || gateway.status.error) { if (this._gateway === gateway) this._render(); return; }
     discarded();
+  }
+
+  /**
+   * L-10: an interrupted session still open in Home Assistant (it holds the cover) is cancelled, taking control when
+   * this tab only reads it. `stay`: the wizard stays open (Start over); otherwise it closes once cancelled. Returns
+   * whether the session is gone.
+   */
+  async _abortDead({ stay = false } = {}) {
+    const gateway = this._gateway, view = gateway?.view;
+    if (!gateway || gateway.preview || view?.phase !== "interrupted" || !view.recoverable) return true;
+    const discarded = this._discarded(gateway);
+    // Staying: the view's own close after Cancel must not close the wizard (its callbacks belong to this generation).
+    if (stay) this._generation++;
+    await gateway.abort();
+    if (gateway.status.cancelPending || gateway.status.error) { if (this._gateway === gateway) this._render(); return false; }
+    discarded();
+    return true;
   }
 
   /** U-10: once the cancel is confirmed the list shows the gateway free at once (taken before the view closes). */

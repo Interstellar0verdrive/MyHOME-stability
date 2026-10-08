@@ -16,10 +16,10 @@ function holdScroll(host) {
 
 /** WHO 2 "Calibration" view: what each timed cover uses, its measurement state and the ways to measure it. */
 const asset = (name) => { const url = new URL(name, import.meta.url); url.search = new URL(import.meta.url).search; return url.href; };
-const [{ escapeHtml: esc }, model, text, { CoverCalibration }, { CalibrationWizard }, { ProfileCatalogueEditor }, { morph }, { layout, SHEETS, PHONE, SHORT, listBand, contentWidth, fitBars, fitRows, dockBar, keepScrollOnPick, focusOnOpen, revealHead }] = await Promise.all([
+const [{ escapeHtml: esc }, model, text, { CoverCalibration }, { CalibrationWizard }, { ProfileCatalogueEditor }, { morph }, { layout, SHEETS, PHONE, SHORT, listBand, contentWidth, fitBars, fitRows, dockBar, keepScrollOnPick, focusOnOpen, revealHead }, { cancelSession }] = await Promise.all([
   import(asset("panel-dom.js")), import(asset("panel-model.js")), import(asset("panel-calibration-text.js")),
   import(asset("panel-cover-calibration.js")), import(asset("panel-calibration-wizard.js")), import(asset("panel-profile-catalogue-editor.js")),
-  import(asset("panel-calibration-morph.js")), import(asset("panel-calibration-layout.js")),
+  import(asset("panel-calibration-morph.js")), import(asset("panel-calibration-layout.js")), import(asset("panel-calibration-gateway.js")),
 ]);
 const { fill, rich, number, dateText, names, followedBy } = text;
 
@@ -520,7 +520,7 @@ export class CalibrationTab {
           count: this._countLine(counts),
           chips: FILTERS.map((filter) => `<button type="button" class="cal-chip" data-action="cal-tab-filter" data-id="${filter}" aria-pressed="${this._filter === filter}">${esc(t(`calTabFilter_${filter}`))} <span class="count">${counts[filter]}</span></button>`).join("") })}
         ${this._done ? `<p class="notice cal-tab-done" role="status"><ha-icon icon="mdi:check-circle-outline" aria-hidden="true"></ha-icon><span>${esc(this._done)}</span></p>` : ""}
-        ${busy ? `<p class="notice cal-tab-busy" role="status"><ha-icon icon="mdi:information-outline" aria-hidden="true"></ha-icon><span>${esc(t("calTabBusy"))}</span></p>` : ""}
+        ${busy ? `<p class="notice cal-tab-busy" role="status"><ha-icon icon="mdi:information-outline" aria-hidden="true"></ha-icon><span>${esc(t(this._busyText(busy)))}</span></p>` : ""}
         ${this._filter === "to_measure" ? `<p class="cal-note cal-tab-help">${esc(t("calTabToMeasureHelp"))}</p>` : ""}
         ${failed.map((entry) => `<p class="notice error" role="alert">${esc(gateways.length > 1 ? `${entry.title}: ` : "")}${esc(t("calTabError"))}</p>`).join("")}
         ${failed.length ? `<button type="button" data-action="cal-tab-refresh">${esc(t("refresh"))}</button>` : ""}
@@ -713,6 +713,7 @@ export class CalibrationTab {
             ${!session && this._wizard ? `<button type="button" role="menuitem" data-action="cal-tab-measure-cover" data-id="${esc(key)}" ${busy ? "disabled" : ""}><ha-icon icon="${item.status === "to_measure" ? "mdi:ruler" : "mdi:reload"}" aria-hidden="true"></ha-icon>${esc(t(item.status === "to_measure" ? "calTabActionMeasure" : "calTabActionRemeasure"))}</button>` : ""}
             <button type="button" role="menuitem" data-action="cal-tab-assign" data-id="${esc(key)}"><ha-icon icon="mdi:link-variant" aria-hidden="true"></ha-icon>${esc(t(item.profile ? "wiz_T427" : "calTabAssign"))}</button>
             <button type="button" role="menuitem" data-action="cal-tab-toggle" data-id="${esc(key)}"><ha-icon icon="mdi:information-outline" aria-hidden="true"></ha-icon>${esc(t("calTabDetails"))}</button>
+            ${session && !session.waiting_for_stop && session.recoverable !== false ? `<button type="button" role="menuitem" class="cal-menu-danger" data-action="cal-tab-abort" data-id="${esc(item.entry.entry_id)}"><ha-icon icon="mdi:close-octagon-outline" aria-hidden="true"></ha-icon>${esc(t("wiz_T534"))}</button>` : ""}
           </span></span></span>
       </div>
       <div class="cal-row-details" id="${esc(id)}" ${expanded ? "" : "hidden"}>${expanded ? this._details(item, busy, language, addressDetails) : ""}</div>
@@ -943,6 +944,7 @@ export class CalibrationTab {
     } else if (action === "cal-tab-refresh") this.refresh();
     else if (action === "cal-tab-batch") this._selectBatch();
     else if (action === "cal-tab-session") this._openSession(id);
+    else if (action === "cal-tab-abort") this._abortSession(id);
     else if (action === "cal-tab-measure") this._openWizard({ start: "choose" });
     else if (action === "cal-tab-measure-cover") { const item = this._item(id); if (item) this._openWizard({ start: "path", item }); }
     else if (action === "cal-tab-refine") { const item = this._item(id); if (item) this._openWizard({ start: "refine", item }); }
@@ -1126,6 +1128,49 @@ export class CalibrationTab {
    * follows it), one to choose, then the existing `assign` write. Nothing moves; the profile dialog stays the
    * maintainer's.
    */
+  /**
+   * L-10 (4): what the busy notice says is only what the list offers: an open session can be resumed («Apri
+   * sessione») or cancelled (the row's ⋮); one closed and waiting for the stop, or one that cannot be read, frees
+   * the cover by itself.
+   */
+  _busyText(busy) {
+    if (busy.unknown) return "wiz_T540";
+    return busy.waiting_for_stop || busy.recoverable === false ? "wiz_T539" : "wiz_T538";
+  }
+
+  /**
+   * L-10 (3): the row's «Cancel the calibration in progress», after a confirmation: this tab takes control of the
+   * session and cancels it (it may be guided elsewhere, or interrupted with its tab gone); a refusal says why.
+   */
+  _abortSession(entryId) {
+    const row = this._rows.get(entryId), session = row?.session;
+    if (!session || !this._context) return;
+    const { hass, t } = this._context, item = this._covers().find((entry) => entry.entry.entry_id === entryId && entry.cover.entity_id === session.entity_id);
+    const name = item?.name || session.entity_id;
+    const body = this._openDialog({ title: t("wiz_T535"), subtitle: name, icon: "mdi:close-octagon-outline", hosted: true });
+    const dialog = this._dialog, generation = this._generation;
+    body.innerHTML = `<p class="notice error cal-abort-error" role="alert" hidden></p><p>${esc(fill(t("wiz_T536"), { cover: name }))}</p>
+      <div class="actions cal-abort-actions"><button type="button" data-abort-back>${esc(t("wiz_T403"))}</button>
+        <button type="button" class="danger" data-abort-confirm>${esc(t("wiz_T537"))}</button></div>`;
+    body.querySelector("[data-abort-back]").onclick = () => this._dialogDone();
+    const confirm = body.querySelector("[data-abort-confirm]"), box = body.querySelector(".cal-abort-error");
+    confirm.onclick = async () => {
+      if (confirm.disabled) return;
+      confirm.disabled = true;
+      box.hidden = true;
+      try {
+        await cancelSession(hass, session);
+        if (generation === this._generation && this._dialog === dialog) this._dialogDone();
+      } catch (error) {
+        if (generation !== this._generation || this._dialog !== dialog) return;
+        const key = `profileError_${error?.code}`;
+        box.textContent = t(key) === key ? t("calCancelFailed") : t(key);
+        box.hidden = false;
+        confirm.disabled = false;
+      }
+    };
+  }
+
   _assignProfile(item) {
     const { hass, t } = this._context, language = hass.language || "en";
     const data = this._rows.get(item.entry.entry_id)?.data;

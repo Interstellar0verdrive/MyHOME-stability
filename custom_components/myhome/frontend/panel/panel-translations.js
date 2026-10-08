@@ -455,6 +455,14 @@ export const translations = {
     wiz_T530: "The reading is far from the expected one, about {expected} cm: check the reference. If it is right, go on.",
     wiz_T531: "The reading ({reading} cm) is more than the curtain travel ({travel} cm): check the tape and the point you measure from.",
     wiz_T532: "{which}: the reading ({reading} cm) was far from the expected one (about {expected} cm). It was kept and the model stopped at its limit: the final check will tell whether the positions are right.",
+    wiz_T533: "Cancel the measurement",
+    wiz_T534: "Cancel the calibration in progress",
+    wiz_T535: "Cancel the calibration in progress?",
+    wiz_T536: "The calibration in progress on {cover} is cancelled, whichever tab or device is guiding it: nothing measured is saved, and the cover is free again as soon as its motor has stopped.",
+    wiz_T537: "Cancel the calibration",
+    wiz_T538: "A calibration is in progress: resume it with «Open session», or cancel it from the ⋮ menu of its row.",
+    wiz_T539: "The cover is finishing its last movement: it is free again as soon as the motor confirms the stop, within 10 minutes at most.",
+    wiz_T540: "The cover is held by a calibration the panel cannot read: try again in a moment.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1374,6 +1382,14 @@ export const translations = {
     wiz_T530: "La lettura è lontana da quella attesa, circa {expected} cm: ricontrolla il riferimento. Se è giusta, continua.",
     wiz_T531: "La lettura ({reading} cm) è più della corsa del telo ({travel} cm): ricontrolla il metro e il punto da cui misuri.",
     wiz_T532: "{which}: la lettura ({reading} cm) era lontana da quella attesa (circa {expected} cm). È stata tenuta e il modello si è fermato al suo limite: la verifica finale dirà se le posizioni sono giuste.",
+    wiz_T533: "Annulla la misurazione",
+    wiz_T534: "Annulla la calibrazione in corso",
+    wiz_T535: "Annullare la calibrazione in corso?",
+    wiz_T536: "La calibrazione in corso su {cover} viene annullata, da qualunque scheda o dispositivo sia guidata: nulla di misurato viene salvato e la tapparella torna libera appena il motore è fermo.",
+    wiz_T537: "Annulla la calibrazione",
+    wiz_T538: "Una calibrazione è in corso: riprendila con «Apri sessione», oppure annullala dal menu ⋮ della sua riga.",
+    wiz_T539: "La tapparella sta finendo l’ultimo movimento: torna libera appena il motore conferma l’arresto, al più entro 10 minuti.",
+    wiz_T540: "La tapparella è trattenuta da una calibrazione che il pannello non riesce a leggere: riprova tra poco.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

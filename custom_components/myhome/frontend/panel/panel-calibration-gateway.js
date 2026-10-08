@@ -14,7 +14,30 @@
  * `supports(target)` and `close()`. `onChange(kind)` is called with "view", "tick" or "error".
  */
 const asset = (name) => { const url = new URL(name, import.meta.url); url.search = new URL(import.meta.url).search; return url.href; };
-const { CoverCalibration, calibrationClient } = await import(asset("panel-cover-calibration.js"));
+const { CoverCalibration, calibrationClient, checkedCalibrationClient } = await import(asset("panel-cover-calibration.js"));
+
+const RESUME = "myhome/cover_calibration/resume", ACTION = "myhome/cover_calibration/action";
+const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * L-10: cancel the gateway's session from the list (the row's ⋮ menu), whoever guides it: this tab takes control
+ * (a claim against the sequence it read) and cancels; Home Assistant then frees the cover once nothing moves. Rejects
+ * with Home Assistant's error, or `calibration_owned` when the claim did not take (the session moved on meanwhile).
+ */
+export async function cancelSession(hass, session) {
+  const client_id = calibrationClient() || await checkedCalibrationClient();
+  let view = null;
+  const unsubscribe = await hass.connection.subscribeMessage((state) => { view = state; },
+    { type: RESUME, entry_id: session.entry_id, session_id: session.session_id, client_id, claim: true, sequence: session.sequence });
+  try {
+    for (let i = 0; i < 40 && !(view?.owner && !view.read_only); i++) await pause(50);
+    if (!view?.owner || view.read_only) throw { code: "calibration_owned" };
+    return await hass.callWS({ type: ACTION, entry_id: session.entry_id, session_id: session.session_id,
+      ...(view.attachment ? { attachment: view.attachment } : {}), action: "cancel" });
+  } finally {
+    Promise.resolve(unsubscribe?.()).catch(() => {});
+  }
+}
 
 /** The existing engine, with its DOM replaced by notifications to the wizard. */
 class WizardSession extends CoverCalibration {
@@ -148,6 +171,26 @@ export class LiveCalibrationGateway {
   clearError() { this._engine.error = null; }
   stop() { return this._engine._perform("stop"); }
   cancel() { return this._engine._cancel(this._engine._generation); }
+
+  /**
+   * L-10: cancel the session for good, also from a tab that only reads it (a Stop sent from another tab or device
+   * leaves the session interrupted, owned by a tab that may be gone): control is taken first, without the question of
+   * Take control, then Cancel is sent. A claim that does not take leaves the error `calibration_owned`.
+   */
+  async abort() {
+    const engine = this._engine, state = engine._state;
+    if (state?.read_only && state.recoverable) {
+      engine._confirmTake = false;
+      await engine.open({ ...this._base, claim: true, resume: state });
+      for (let i = 0; i < 40 && engine._state?.read_only; i++) await pause(50);
+      if (!engine._state || engine._state.read_only) {
+        engine.error = { code: "calibration_owned" };
+        this._onChange?.("error");
+        return;
+      }
+    }
+    return this.cancel();
+  }
 
   supports(target) {
     const modes = this.view?.save_modes || [];
@@ -334,6 +377,7 @@ export class PreviewCalibrationGateway {
 
   stop() { return this.act("stop"); }
   cancel() { return this.act("cancel"); }
+  abort() { return this.cancel(); }
 
   save({ target, name }) {
     if (this._view?.phase !== "review" || !this.supports(target)) return Promise.resolve();

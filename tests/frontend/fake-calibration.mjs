@@ -51,7 +51,7 @@ export function createFakeBackend({ language = "en", inventory = coverInventory(
       const { _after_stop, _after_position, _started, ...public_ } = session;
       void _after_stop; void _after_position;
       return { ...public_, elapsed: _started == null ? null : Math.round((clock - _started) * 100) / 100,
-        owner, read_only: !owner, attachment: "attachment-1", attached: true, owner_present: ownerPresent, recoverable: !["saved", "cancelled", "interrupted"].includes(session.phase), ...extra };
+        owner, read_only: !owner, attachment: "attachment-1", attached: true, owner_present: ownerPresent, recoverable: !["saved", "cancelled"].includes(session.phase), ...extra };
     },
     emit() { if (session.mode === "geometry") refresh(); session.sequence += 1; listener?.(backend.view()); },
     /** The bus confirms the movement asked by `next`, `open` or `close`. */
@@ -203,6 +203,8 @@ export function createFakeBackend({ language = "en", inventory = coverInventory(
       if (message.type === "myhome/cover_calibration/action") {
         const { action } = message;
         if (action === "heartbeat") return backend.view();
+        // As Home Assistant: every verb but Stop (and the reading ones) belongs to the owner.
+        if (!owner && !["stop", "detach"].includes(action)) throw Object.assign(new Error("owned"), { code: "calibration_owned" });
         if (action === "stop") { if (session.phase !== "review") { session.phase = "interrupted"; session.reason = "stopped"; } session.sequence += 1; return backend.view(); }
         if (action === "cancel") { session.phase = "cancelled"; session.reason = "cancelled"; session.sequence += 1; return backend.view(); }
         if (action === "detach") return backend.view();

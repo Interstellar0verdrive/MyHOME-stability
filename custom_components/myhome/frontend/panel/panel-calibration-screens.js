@@ -848,6 +848,9 @@ function problemScreen(screen, ctx, reason, step = false) {
       : reason === "unexpected_stop" && ctx.view?.step === "lift" ? t("wiz_T443")
         : t(key) === key ? t("calPhase_interrupted") : t(key);
     screen.actions = [{ id: "start-over", label: t("wiz_T261"), kind: "primary" }, { id: "close", label: t("wiz_T158"), kind: "secondary" }];
+    // L-10: a session interrupted (a Stop from another tab, say) stays open in Home Assistant, holding the cover, until
+    // it is cancelled: S-01 says how, in red; «Start over» cancels it too before starting again.
+    if (ctx.view && !ctx.view.preview && ctx.view.phase === "interrupted" && ctx.view.recoverable) screen.actions.push({ id: "abort", label: t("wiz_T533"), kind: "link" });
   }
   // A step's problem keeps the session open: Abandon stays (and asks); an ended session has nothing to abandon.
   screen.discard = step && code !== "S-06";
@@ -1070,7 +1073,7 @@ function finalize(screen, ctx) {
   // D-13 (decided 8 Oct): a button off while the motor starts or the backend settles after a run enables by itself.
   if (view && (/^starting_/.test(view.phase) || view.phase === "geometry_wait_stop")) for (const action of screen.actions) if (action.disabled) action.settling = true;
   // Movement, readings and Save wait for an answer, a connection and ownership; Stop never does (also a passing state).
-  if (status.locked) for (const action of screen.actions) if (!["stop", "reconnect", "close", "start-over"].includes(action.id)) { if (!action.disabled) action.settling = true; action.disabled = true; }
+  if (status.locked) for (const action of screen.actions) if (!["stop", "reconnect", "close", "start-over", "abort"].includes(action.id)) { if (!action.disabled) action.settling = true; action.disabled = true; }
   if (status.locked && screen.field) screen.field = { ...screen.field, disabled: true };
   return screen;
 }
