@@ -1603,3 +1603,13 @@ test("N-09: on the phone a cover's page with its session open offers «Apri sess
     assert.equal(button.dataset.id, "one");
   } finally { globalThis.matchMedia = original; }
 });
+
+test("Z-1: the details' times carry one decimal, as the wizard's", async () => {
+  const data = overview();
+  data.covers[0].effective.opening.value = 22;
+  const { tab } = await mount({ data });
+  const first = row(tab, data.covers[0].entity_id);
+  first.querySelector(".cal-row-toggle").click(); await tick();
+  const facts = Object.fromEntries([...first.querySelectorAll(".cal-facts div")].map((item) => [item.querySelector("dt").textContent, item.querySelector("dd").textContent]));
+  assert.equal(facts["Opening time"], "22.0 s");
+});

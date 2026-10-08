@@ -712,8 +712,9 @@ export class CalibrationTab {
     const value = (key, digits = 1) => number(effective[key]?.value, language, digits);
     const slat = effective.slat_time_s?.value;
     const rows = [
-      [t("wiz_T093"), `${value("opening")} s`], [t("wiz_T094"), `${value("closing")} s`],
-      [t("calTabSlats"), slat == null ? "—" : slat === 0 ? t("calTabSlatsNo") : fill(t("calTabSlatsYes"), { seconds: number(slat, language) })],
+      // Z-1: times always with one decimal.
+      [t("wiz_T093"), `${text.fixed(effective.opening?.value, language, 1)} s`], [t("wiz_T094"), `${text.fixed(effective.closing?.value, language, 1)} s`],
+      [t("calTabSlats"), slat == null ? "—" : slat === 0 ? t("calTabSlatsNo") : fill(t("calTabSlatsYes"), { seconds: text.fixed(slat, language, 1) })],
       [t("wiz_T041"), item.cover.travel_cm == null ? "—" : `${number(item.cover.travel_cm, language)} cm`],
       [t("wiz_T105"), item.rolls ? value("opening_roll", 2) : "—"], [t("wiz_T106"), item.rolls ? value("closing_roll", 2) : "—"],
     ];

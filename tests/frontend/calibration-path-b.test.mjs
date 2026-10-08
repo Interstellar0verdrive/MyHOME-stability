@@ -78,7 +78,7 @@ test("path B runs as a preview from the travel to the check and the summary, wit
   assert.equal(code(), "B-08");
   assert.equal(wiz().querySelector(".wiz-steps-line").textContent, "Summary · 3 of 3");
   const rows = [...wiz().querySelectorAll(".wiz-main > .wiz-table tbody tr")].map((row) => [...row.children].map((cell) => cell.textContent));
-  assert.deepEqual(rows, [["Opening time", "22 s", "22.2 s"], ["Closing time", "21.7 s", "="], ["Slat time", "—", "4.4 s"], ["Curtain travel", "—", "196 cm"]], "no travel saved before: measured now");
+  assert.deepEqual(rows, [["Opening time", "22.0 s", "22.2 s"], ["Closing time", "21.7 s", "="], ["Slat time", "—", "4.4 s"], ["Curtain travel", "—", "196 cm"]], "no travel saved before: measured now");
   assert.equal(wiz().querySelector(".wiz-technical .muted").textContent, "The two roll coefficients, 1.83 and 1.91, come from the profile: they were not measured on this cover.");
   assert.equal(wiz().querySelector(".wiz-profile-block"), null, "B creates and updates no profile");
   assert.equal(wiz().querySelector('[data-wiz="refine"]'), null, "B cannot continue to fine-tuning");

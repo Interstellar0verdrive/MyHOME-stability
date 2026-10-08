@@ -195,7 +195,7 @@ export function buildScreen(ctx) {
         : [tx("wiz_T455", values), ...tx("wiz_T185", { ...values, travel: "" }).split(/\n\s*\n/).slice(1)].join("\n\n"),
       // A bold title and one line per value: the sheet's single line (T188) split at its separators.
       box: { label: t("wiz_T186"), lines: tx("wiz_T188", { profile: cover?.profile?.name ?? "—", travel: n(cover?.travel_cm),
-        opening: n(effective.opening?.value), closing: n(effective.closing?.value), slat: n(effective.slat_time_s?.value) }).split(" · ")
+        opening: n.fixed(effective.opening?.value), closing: n.fixed(effective.closing?.value), slat: n.fixed(effective.slat_time_s?.value) }).split(" · ")
         // D-20: a value not known is «—», without the unit.
         .map((line) => line.replace(/—\s*(s|cm)$/, "—")) },
       actions: [{ id: "current", label: t("wiz_T006"), kind: "primary" }] });
@@ -616,7 +616,9 @@ function summaryScreen(screen, ctx, tx, n, values) {
     slat: effective.slat_time_s?.value ?? null, travel: cover?.travel_cm ?? null,
     opening_roll: effective.opening_roll?.value ?? null, closing_roll: effective.closing_roll?.value ?? null };
   // D-32: a slat time of 0 is a cover without slats: «No», as in the list's details, not «0 s».
-  const format = (key, value, unit, digits) => value == null ? "—" : key === "slat" && value === 0 ? t("calTabSlatsNo") : `${n(value, digits)}${unit}`;
+  // Z-1: times always with one decimal, as the stepper and the tiles.
+  const format = (key, value, unit, digits) => value == null ? "—" : key === "slat" && value === 0 ? t("calTabSlatsNo")
+    : `${unit === " s" ? n.fixed(value, 1) : n(value, digits)}${unit}`;
   const row = (label, key, unit, digits = 1) => {
     const before = format(key, base[key], unit, digits);
     const shown = format(key, after[key], unit, digits);
