@@ -446,6 +446,7 @@ export const translations = {
     wiz_T521: "The cover is rising to the top. **Press button ② the moment the motor stops at the top**: you can tell when its sound stops.",
     wiz_T522: "The cover is descending fully. **Press button ② the moment the motor stops at the bottom**, not when the edge first touches the rest: the slats keep closing for a moment.",
     wiz_T523: "The cover is descending fully. **Press button ② the moment the motor stops at the bottom**: you can tell when its sound stops.",
+    wiz_T524: "The run was stopped from another tab or device: nothing was saved. Start the calibration again.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1356,6 +1357,7 @@ export const translations = {
     wiz_T521: "La tapparella sta salendo fino in cima. **Premi il pulsante ② nell'istante in cui il motore si ferma in alto**: si riconosce dal rumore che cessa.",
     wiz_T522: "La tapparella sta scendendo fino in fondo. **Premi il pulsante ② nell'istante in cui il motore si ferma in basso**, non già quando il bordo tocca l'appoggio: le lamelle si chiudono ancora per un momento.",
     wiz_T523: "La tapparella sta scendendo fino in fondo. **Premi il pulsante ② nell'istante in cui il motore si ferma in basso**: si riconosce dal rumore che cessa.",
+    wiz_T524: "La corsa è stata fermata da un'altra scheda o da un altro dispositivo: non è stato salvato niente. Ricomincia la calibrazione.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

@@ -799,7 +799,10 @@ function problemScreen(screen, ctx, reason, step = false) {
     // D-31: the ended session's reason is about the measured value (an interval out of range…), not two presses: a
     // title that says only that it is not valid.
     if (code === "S-04") screen.title = t("wiz_T512");
+    // N-15: a Stop this tab did not send came from another tab or device: said so (the maintainer's «Stop richiesto.»
+    // does not say where it came from).
     screen.body = reason === "not_stopped" ? t("wiz_T460") : reason === "stopped" && ctx.local?.misbehaved ? t("wiz_T442")
+      : reason === "stopped" && ctx.local && !ctx.local.stopSent ? t("wiz_T524")
       : reason === "unexpected_stop" && ctx.view?.step === "lift" ? t("wiz_T443")
         : t(key) === key ? t("calPhase_interrupted") : t(key);
     screen.actions = [{ id: "start-over", label: t("wiz_T261"), kind: "primary" }, { id: "close", label: t("wiz_T158"), kind: "secondary" }];
@@ -946,6 +949,8 @@ function finalize(screen, ctx) {
   if (view?.read_only && !ENDED.includes(view.phase)) {
     // As S-07: the actions column says who guides it (T262, plain text) above the explanation and Take control;
     // a reader has no reading field to fill.
+    // N-15: the step's own text addresses whoever guides it («premi ②», «se hai premuto…»): a reader has the box below.
+    screen.body = "";
     screen.readOnly = { status: t("wiz_T262"), text: t("wiz_T263"), take: t(status.confirmTake ? "calConfirmTakeControl" : "wiz_T264"),
       consequence: status.confirmTake ? t("wiz_T265") : null, primary: view.owner_present === false };
     // Stop stays available to every reader while something may move (L1: a safety control).

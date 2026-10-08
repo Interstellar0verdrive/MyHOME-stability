@@ -1685,7 +1685,11 @@ test("S-01 says what happened when the panel knows more: It did not do what it s
   const t = (key) => translations.en[key] || key;
   const view = { mode: "geometry", phase: "interrupted", reason: "stopped", step: "home", values: {}, samples: {}, readings: {}, owner: true, sequence: 9 };
   assert.equal(buildScreen({ t, stage: "session", path: "A", view, local: { misbehaved: true }, cover: { name: "K" } }).body, "The cover did not do what it should. Restart the calibration.");
-  assert.equal(buildScreen({ t, stage: "session", path: "A", view, local: {}, cover: { name: "K" } }).body, translations.en.calReason_stopped, "a plain Stop keeps its text");
+  assert.equal(buildScreen({ t, stage: "session", path: "A", view, local: { stopSent: true }, cover: { name: "K" } }).body, translations.en.calReason_stopped, "a plain Stop from here keeps its text");
+  assert.equal(buildScreen({ t, stage: "session", path: "A", view, local: {}, cover: { name: "K" } }).body, translations.en.wiz_T524, "N-15: a Stop not sent from here came from elsewhere");
+  const reader = buildScreen({ t, stage: "session", path: "A", cover: { name: "K" }, local: {},
+    view: { mode: "geometry", phase: "briefing", step: "half_open", values: { closing_time: 21 }, samples: {}, readings: {}, read_only: true, owner: false, sequence: 4 } });
+  assert.equal(reader.body, "", "N-15: a reader is not told to press what it does not have");
   const { backend, wiz, code, press, startFor } = await mount();
   await startFor("cover.living_one");
   await press("begin"); await move(backend);

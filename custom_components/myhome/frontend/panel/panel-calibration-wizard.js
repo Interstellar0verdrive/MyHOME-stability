@@ -664,7 +664,7 @@ export class CalibrationWizard {
     if (id === "repeat") local.invalidRun = null;
     if (["next", "lift", "endpoint", "repeat", "repeat_step", "accept", "repeat_check", "redo_readings", "continue_anyway", "continue", "skip"].includes(id)) return this._send(id);
     // "It did not do what it should" (A-05): today the run is stopped and S-01 offers to start over (L2 will repeat the step).
-    if (id === "stop" || id === "misbehaved") { local.misbehaved = id === "misbehaved"; this._closeDialog(false); return gateway?.stop(); }
+    if (id === "stop" || id === "misbehaved") { local.misbehaved = id === "misbehaved"; local.stopSent = true; this._closeDialog(false); return gateway?.stop(); }
     // Ownership gained by a claim or a reconnection moves nothing until this tab presses something.
     if (id === "take") { local.arm = null; return gateway?.claim(); }
     if (id === "reconnect") { local.arm = null; return gateway?.reconnect(); }
@@ -1146,7 +1146,7 @@ function key(item) { return JSON.stringify([item.entry.entry_id, item.cover.enti
  * Fine-tuning keeps its base on purpose (`_startRefine` passes it again).
  */
 function freshFlags() {
-  return { ackLift: false, ackAscent: false, ackDescent: false, ackReadings: false, arm: null, run: null, fullRun: null, invalidRun: null, discarded: null, misbehaved: false,
+  return { ackLift: false, ackAscent: false, ackDescent: false, ackReadings: false, arm: null, run: null, fullRun: null, invalidRun: null, discarded: null, misbehaved: false, stopSent: false,
     review: null, pendingSave: null, fieldError: null, fieldSequence: undefined, errorPhase: undefined, saveProfile: undefined, saveChoice: undefined,
     profileName: undefined, refining: false, lastGap: null, liftOrigin: null, baseReadings: null, fineReadings: null, pathChoice: null, reachedPhase: null };
 }
