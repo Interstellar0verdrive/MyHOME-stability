@@ -19,7 +19,7 @@ test("bold spans, paragraphs and line breaks are rendered from escaped text only
   assert.ok(Number.isNaN(parseReading("")));
   assert.equal(slug("Tapparella Sala 1"), "tapparella_sala_1");
   assert.deepEqual(phasesFor("A", null, false), ["intro", "prep", "ascent", "descent", "readings", "summary", "finetune"]);
-  assert.deepEqual(phasesFor("A", null, true).length, 8);
+  assert.deepEqual(phasesFor("A", null, true).length, 7, "N-10: fine-tuning's summary is part of its step");
   assert.deepEqual(phasesFor("B"), ["intro", "readings", "summary"]);
 });
 
@@ -587,7 +587,7 @@ test("A-34 offers fine-tuning once the calibration is saved: path C on the same 
   // Straight to the quarter readings (A-22…), in the same wizard: no C-01/C-02 in between.
   assert.match(code(), /^A-2[23]$/, "fine-tuning starts at once (its first positioning may already be over)");
   assert.equal(wiz().querySelector(".wiz-cover").textContent, "Living room shutter 1", "on the same cover");
-  assert.equal(wiz().querySelector(".wiz-steps-line").textContent, "Fine-tuning · 7 of 8", "the stepper goes on at Fine-tuning");
+  assert.equal(wiz().querySelector(".wiz-steps-line").textContent, "Fine-tuning · 7 of 7", "the stepper goes on at Fine-tuning, the count unchanged (N-10)");
   await settle();
   assert.equal(code(), "A-23");
   for (const reading of ["52", "141", "146", "48"]) { await type(reading); await settle(); }

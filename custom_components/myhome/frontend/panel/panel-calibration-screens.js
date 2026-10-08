@@ -17,7 +17,8 @@ export function phasesFor(path, scope, refining) {
   if (path === "B") return ["intro", "readings", "summary"];
   if (path === "C" && scope === "times_only") return ["intro", "prep", "ascent", "descent", "summary"];
   if (path === "C" && scope === "points_only") return ["intro", "prep", "readings", "summary"];
-  return ["intro", "prep", "ascent", "descent", "readings", "summary", "finetune", ...(refining ? ["summary"] : [])];
+  // N-10: fine-tuning's own summary is part of «Perfezionamento» (the last step): the count stays 7, «Riepilogo» once.
+  return ["intro", "prep", "ascent", "descent", "readings", "summary", "finetune"];
 }
 
 const MEASURED_RUN = (view) => view && ((view.mode === "geometry" && ["opening", "closing"].includes(view.phase) && ["lift", "opening", "closing"].includes(view.step))
