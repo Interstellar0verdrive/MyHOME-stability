@@ -10,7 +10,6 @@ from aiohttp.resolver import ThreadedResolver
 from pytest_socket import socket_enabled  # noqa: F401
 
 from custom_components.myhome import cover_calibration_geometry
-from custom_components.myhome.cover_calibration_geometry import READING_TOLERANCE_CM
 from custom_components.myhome.cover_calibration import (
     WS_START,
     CalibrationSession,
@@ -23,11 +22,12 @@ from custom_components.myhome.cover_calibration_fit import (
     height_at,
     opening_fit,
     opening_range,
-    opening_rolls,
     opening_roll_fit,
     opening_roll_range,
+    opening_rolls,
     winding,
 )
+from custom_components.myhome.cover_calibration_geometry import READING_TOLERANCE_CM
 from custom_components.myhome.cover_profiles import ProfileError, get_store, read_profile
 from tests.test_cover_profiles import plant as plant_fixture
 from tests.test_panel_cover_calibration import act, bus
