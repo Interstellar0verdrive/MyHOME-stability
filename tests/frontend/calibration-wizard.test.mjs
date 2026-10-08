@@ -2653,3 +2653,10 @@ test("Z-9: in landscape a two-line action grows to fit (54 px) instead of squeez
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /\.wiz-actions \{ grid-auto-rows: max-content; \}\s*\.wiz-actions > \.wiz-action \{ height: auto; flex: none; \}/);
 });
+
+test("Z-7: on a dark theme the passing disabled primary is a faint tint with the neutral disabled label", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  const rule = css.match(/\[data-theme="dark"\] :is\(\.wiz-action\.primary, button\.primary\)\.is-settling:disabled, [^{]*\{([^}]*)\}/)?.[1] || "";
+  assert.match(rule, /background: color-mix\(in srgb, var\(--panel-accent\) 14%, var\(--panel-surface\)\)/);
+  assert.match(rule, /color: color-mix\(in srgb, var\(--primary-text-color, #fff\) 45%, transparent\)/);
+});

@@ -1338,6 +1338,10 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 :is(.wiz-action.primary, button.primary).is-settling:disabled, :is(.wiz-action.primary, button.primary).is-settling:disabled:hover {
   background: color-mix(in srgb, var(--panel-accent) 38%, var(--panel-surface)); border-color: transparent;
   color: color-mix(in srgb, var(--panel-accent) 40%, var(--primary-text-color, #182b37)); box-shadow: none; opacity: 1; cursor: wait; }
+/* Z-7: on a dark theme the passing state read as an enabled tonal button: there it is a faint accent tint with the
+   neutral disabled label, clearly off beside an enabled primary and close to the neutral one. */
+[data-theme="dark"] :is(.wiz-action.primary, button.primary).is-settling:disabled, [data-theme="dark"] :is(.wiz-action.primary, button.primary).is-settling:disabled:hover {
+  background: color-mix(in srgb, var(--panel-accent) 14%, var(--panel-surface)); color: color-mix(in srgb, var(--primary-text-color, #fff) 45%, transparent); }
 .wiz-action.secondary { border-color: var(--panel-accent); color: var(--panel-accent); background: transparent; }
 .wiz-action.stop, .wiz-action.link { min-height: 44px; border: 0; background: transparent; box-shadow: none; }
 .wiz-action.stop { color: var(--panel-error); }
