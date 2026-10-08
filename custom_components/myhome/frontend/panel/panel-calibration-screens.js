@@ -286,9 +286,10 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
   };
   const closingTime = toRun(timeInUse(ctx.cover?.effective?.closing), true);
   // What was just measured, as tiles above the text: a small label, a big value, its unit smaller.
-  const liftTile = () => view.samples?.lift == null ? null : { label: t("wiz_T039"), value: n(view.samples.lift), unit: "s",
+  // D-33: a time always carries one decimal, in the tiles too («23,0 s», «1,0 s»).
+  const liftTile = () => view.samples?.lift == null ? null : { label: t("wiz_T039"), value: n.fixed(view.samples.lift), unit: "s",
     extra: view.readings?.gap == null ? "" : `${n(view.readings.gap)} cm` };
-  const timeTile = (key, seconds) => seconds == null ? null : { label: t(key), value: n(seconds), unit: "s" };
+  const timeTile = (key, seconds) => seconds == null ? null : { label: t(key), value: n.fixed(seconds), unit: "s" };
   const topTime = toRun(view.values?.opening_time, false);
   // A run to an end stop stays a positioning until the motor stops by itself or its full time has passed; only then
   // does the screen ask to confirm the end stop.
@@ -492,7 +493,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
 function guidedScreen(screen, ctx, tx, n, values, stop) {
   const { t, view, elapsed, local = {} } = ctx;
   const phase = view.phase;
-  const tile = (key, seconds) => seconds == null ? null : { label: t(key), value: n(seconds), unit: "s" };
+  const tile = (key, seconds) => seconds == null ? null : { label: t(key), value: n.fixed(seconds), unit: "s" };
   const bad = (key) => local.invalidRun?.step === key ? { tone: "error", result: true, text: t(local.invalidRun.reason === "timer" ? "wiz_T445" : "wiz_T444") } : null;
   const result = (code, title, body, time, key, ack) => {
     const notice = bad(key);

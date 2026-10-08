@@ -2607,3 +2607,10 @@ test("V-1: A-19 asks to confirm the top only on its first leg, and each leg says
   assert.equal(second.code, "A-19");
   assert.equal(second.actions.some((action) => action.id === "endpoint"), false, "never on the way down to half");
 });
+
+test("D-33: the result tiles show times with one decimal too", () => {
+  const t = (key) => translations.en[key] || key;
+  const view = { mode: "geometry", phase: "reading", step: "opening", values: { opening_time: 23 }, samples: { lift: 5 }, readings: { gap: 3 }, slats: true, owner: true, sequence: 4 };
+  const screen = buildScreen({ t, stage: "session", path: "A", view, local: {}, cover: { name: "K" } });
+  assert.deepEqual(screen.results.map((tile) => tile.value), ["5.0", "23.0"]);
+});
