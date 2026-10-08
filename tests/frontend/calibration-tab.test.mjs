@@ -957,6 +957,19 @@ test("L-6: a rotation redraws the list for its layout: no card left open in plac
   } finally { globalThis.matchMedia = original; }
 });
 
+test("L-7b: after a rotation has settled the list is laid out afresh: nothing measured before stays inline", async () => {
+  const { tab } = await mount({ language: "it" });
+  const card = row(tab, "cover.living_one"), chips = card.querySelector(".cal-row-main > .cal-row-chips");
+  chips.style.flex = "0 0 180px"; chips.style.minWidth = "0";
+  card.style.setProperty("--cal-col2", "300px"); card.classList.add("is-aligned");
+  window.dispatchEvent(new Event("orientationchange"));
+  await new Promise((resolve) => setTimeout(resolve, 600)); await tick();
+  assert.equal(chips.getAttribute("style"), null, "the chips' measured width from the other layout is gone");
+  assert.deepEqual([card.getAttribute("style"), card.classList.contains("is-aligned")], [null, false], "and the card's Q-14 edge");
+  assert.equal(tab.getAttribute("style"), null, "the containers are back to the stylesheet's (switched off and on)");
+  assert.equal(tab.querySelector(".cal-list").getAttribute("style"), null, "the list's own layer is gone after one frame");
+});
+
 test("L-8: the wizard opens with its head at the top of the window, under the bars that cover it, and stays in view", async () => {
   const { revealHead, coveredTop } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-layout.js");
   const original = globalThis.matchMedia, scrollBy = window.scrollBy, height = window.innerHeight;

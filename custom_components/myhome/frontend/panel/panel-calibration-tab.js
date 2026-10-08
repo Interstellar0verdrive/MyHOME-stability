@@ -186,7 +186,16 @@ export class CalibrationTab {
         const list = typeof view?.matchMedia === "function" ? view.matchMedia(query) : null;
         list?.addEventListener?.("change", () => frame(relayout));
       }
-      view?.addEventListener?.("orientationchange", () => { frame(relayout); setTimeout(relayout, 300); });
+      // L-7b: after a rotation WebKit may keep the cards' previous geometry (container queries and measured rules not
+      // evaluated again) until a touch changes a state on them. Once the rotation has settled (two frames and 150 ms,
+      // again at 400 ms), the list is laid out afresh: see `_settleLayout`.
+      let settle = 0;
+      const settled = () => {
+        clearTimeout(settle);
+        frame(() => frame(() => { settle = setTimeout(() => { this._settleLayout(); setTimeout(() => this._settleLayout(), 250); }, 150); }));
+      };
+      view?.addEventListener?.("orientationchange", () => { frame(relayout); settled(); });
+      view?.visualViewport?.addEventListener?.("resize", settled);
       // D-39: the measured card layouts (chips, Q-14 edge) are measured again once the fonts have loaded.
       const fonts = context.host.ownerDocument?.fonts;
       fonts?.addEventListener?.("loadingdone", () => this._alignCards());
@@ -546,7 +555,55 @@ export class CalibrationTab {
     const host = this._context?.host, width = contentWidth(host);
     if (!host || !width) return;
     const band = listBand(width);
-    if (host.dataset.band !== band) host.dataset.band = band;
+    if (host.dataset.band === band) return;
+    host.dataset.band = band;
+    // L-7b: nothing measured in the previous band survives into the new one.
+    this._clearMeasured(host);
+  }
+
+  /** L-7b: the sizes the measured rules (Q-14, D-39) left inline on the cards, removed. */
+  _clearMeasured(host) {
+    for (const chips of host.querySelectorAll(".cal-row-main > .cal-row-chips")) {
+      chips.style.removeProperty("flex");
+      chips.style.removeProperty("min-width");
+      if (!chips.getAttribute("style")) chips.removeAttribute("style");
+    }
+    for (const card of host.querySelectorAll(".cal-row.is-aligned, .cal-row[style]")) {
+      card.classList.remove("is-aligned");
+      card.style.removeProperty("--cal-col2");
+      if (!card.getAttribute("style")) card.removeAttribute("style");
+    }
+  }
+
+  /**
+   * L-7b: after a rotation, the list laid out afresh. WebKit (iOS) evaluates the container queries of the tab
+   * (`caltab`, `calblock`) again only for elements whose style is invalidated; a rotation that changes the tab's width
+   * without touching those elements can leave the cards with the previous band's rules (the empty spaces) until a touch
+   * (:hover/:active) invalidates the touched card. Here, in list mode: the inline sizes measured before are removed, the
+   * containers are switched off and on (each change read back, so the style of every card is computed again against
+   * the new width), the list is painted once on its own layer, and the band, the cards (Q-14/D-39), the filter bar
+   * (Q-24) and the wizard's lists (D-40) are measured again.
+   */
+  _settleLayout() {
+    const host = this._context?.host;
+    if (!host?.isConnected || this._mode.kind !== "list") return;
+    if (layout.phone() !== this._wasPhone) { this._render(); return; }
+    this._clearMeasured(host);
+    const containers = [host, ...host.querySelectorAll(".cal-details-grid > section")];
+    for (const box of containers) box.style.setProperty("container-type", "normal");
+    void host.offsetHeight;
+    for (const box of containers) { box.style.removeProperty("container-type"); if (!box.getAttribute("style")) box.removeAttribute("style"); }
+    void host.offsetHeight;
+    const list = host.querySelector(".cal-list");
+    if (list) {
+      list.style.transform = "translateZ(0)";
+      void list.offsetHeight;
+      (globalThis.requestAnimationFrame || ((callback) => setTimeout(callback, 16)))(() => { list.style.removeProperty("transform"); if (!list.getAttribute("style")) list.removeAttribute("style"); });
+    }
+    this._band();
+    this._alignCards();
+    fitBars(host);
+    fitRows(host);
   }
 
   /**
