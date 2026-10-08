@@ -899,7 +899,9 @@ function finalize(screen, ctx) {
   const phases = unknownCase ? ["intro"] : phasesFor(screen.stepPath || path, screen.stepScope ?? scope, refining);
   let current = phases.indexOf(screen.phase);
   if (refining && screen.phase === "summary") current = phases.length - 1;
-  if (screen.phase === "done") current = phases.length;
+  // Y-d: the end of a preview saved nothing: its summary step stays the current one, not ticked as done.
+  const previewEnd = screen.phase === "done" && screen.preview;
+  if (screen.phase === "done") current = previewEnd ? phases.indexOf("summary") : phases.length;
   const source = view && !view.preview ? view : null;
   const base = local.base || {};
   const values = source?.values || {}, samples = source?.samples || {}, readings = { ...(local.baseReadings || {}), ...(source?.readings || {}) };
@@ -925,7 +927,7 @@ function finalize(screen, ctx) {
   const finetuneLabel = refining ? t("wiz_T114") : t("wiz_T013");
   screen.stepper = {
     interrupted: !!screen.interrupted,
-    line: screen.phase === "done" ? t("wiz_T153") : unknownCase ? t(PHASES.intro) : fill(t(screen.interrupted ? "wiz_T461" : "wizPhaseLine"), { phase: screen.phase === "finetune" ? t("wiz_T114") : t(PHASES[screen.phase] || "wiz_T007"),
+    line: previewEnd ? t("wiz_T517") : screen.phase === "done" ? t("wiz_T153") : unknownCase ? t(PHASES.intro) : fill(t(screen.interrupted ? "wiz_T461" : "wizPhaseLine"), { phase: screen.phase === "finetune" ? t("wiz_T114") : t(PHASES[screen.phase] || "wiz_T007"),
       n: current + 1, total: phases.length }),
     phases: phases.map((key, index) => ({ key, label: key === "finetune" ? finetuneLabel : t(PHASES[key]),
       // A-34 after a real save: fine-tuning (optional) is still ahead, so it is not ticked.

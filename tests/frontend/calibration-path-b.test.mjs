@@ -86,6 +86,9 @@ test("path B runs as a preview from the travel to the check and the summary, wit
   await press("save");
   assert.equal(code(), "B-09");
   assert.equal(wiz().querySelector(".wiz-title").textContent, "Preview of the summary", "a preview never says it saved");
+  assert.equal(wiz().querySelector(".wiz-steps-line").textContent, "Result", "Y-d: «Result» alone");
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-steps > ol > li")].map((item) => item.dataset.stepState), ["done", "done", "current"],
+    "Y-d: the summary is not ticked: nothing was saved");
   assert.equal(wiz().querySelector(".wiz-body").textContent, "End of the preview: nothing has been saved and Living room shutter 1 keeps the values it used before.");
   assert.deepEqual([...wiz().querySelectorAll(".wiz-action")].map((button) => button.textContent), ["Close"]);
   assert.deepEqual([...wiz().querySelectorAll(".wiz-steps ul li")].map((item) => item.textContent), ['Like "tall_two_leaf"', "Curtain travel: 196 cm", "Check: 1 cm"], "the steps keep what was read");

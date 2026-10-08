@@ -439,6 +439,7 @@ export const translations = {
     wiz_T514: "No cover matches the search",
     wiz_T515: "No cover matches the filter and the search",
     wiz_T516: "The measurement stopped because no tab was following it; what was measured so far is kept. To resume it, take control here: then \"Continue\" starts {step}. If nobody resumes it, the session ends and what was measured is discarded (deadline: {expires}).",
+    wiz_T517: "Result",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1342,6 +1343,7 @@ export const translations = {
     wiz_T514: "Nessuna tapparella corrisponde alla ricerca",
     wiz_T515: "Nessuna tapparella corrisponde al filtro e alla ricerca",
     wiz_T516: "La misurazione si è fermata perché nessuna scheda la stava seguendo; quanto già misurato resta. Per riprenderla, prendi il controllo da qui: poi «Continua» farà partire {step}. Se nessuno la riprende, la sessione termina e quanto misurato viene scartato (scadenza: {expires}).",
+    wiz_T517: "Esito",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",
