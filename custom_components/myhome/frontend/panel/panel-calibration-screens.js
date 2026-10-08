@@ -456,8 +456,10 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     const first = step === "top";
     Object.assign(screen, { code: p("19"), title: t("wiz_T027"),
       wait: { text: t("wiz_T086"), stages: [
-        { text: tx("wiz_T084", { seconds: n(view.values?.opening_time, 0) }), state: first ? "current" : "done" },
-        { text: tx("wiz_T085", { seconds: n(down, 0) }), state: first ? "future" : "current" }],
+        // V-1: each leg says the time its bar counts down from (the run to the top from where the cover is), whole
+        // seconds rounded up as the time left is, so «circa 23 s» never shows «circa 24 s» left.
+        { text: tx("wiz_T084", { seconds: n(Math.ceil((topTime ?? view.values?.opening_time ?? 0) - 0.001), 0) }), state: first ? "current" : "done" },
+        { text: tx("wiz_T085", { seconds: n(Math.ceil(down - 0.001), 0) }), state: first ? "future" : "current" }],
       progress: waitBar(view, elapsed, first ? topTime : down) }, actions: phase === "geometry_wait_stop" ? [{ id: "stopping", label: t("wiz_T459"), kind: "status" }] : [stop] });
     // The return to the top is a positioning run: Home Assistant needs its end stop confirmed.
     if (first && ["starting_open", "opening"].includes(phase)) screen.actions = toEndStop("wiz_T432", "opening");

@@ -2592,3 +2592,18 @@ test("N-06: a reading's «Fatto, avanti» waits for a value: neutral off with th
   assert.equal(button().disabled, false);
   assert.equal(wiz().querySelector('[name="reading_cm"]'), field, "typing never redraws the field");
 });
+
+test("V-1: A-19 asks to confirm the top only on its first leg, and each leg says the time its bar counts", () => {
+  const t = (key) => translations.en[key] || key;
+  const base = { mode: "geometry", values: { opening_time: 23.3, closing_time: 22.2 }, samples: { lift: 4 }, readings: { gap: 3, half_open: 97 },
+    geometry: { slat_time_s: 4.4 }, travel_cm: 198, slats: true, owner: true, sequence: 7 };
+  const at = (view, elapsed = 1) => buildScreen({ t, stage: "session", path: "A", view: { ...base, ...view }, elapsed, local: { ackReadings: true }, cover: { name: "K" } });
+  const first = at({ step: "top", phase: "opening" });
+  assert.equal(first.code, "A-19");
+  assert.ok(first.actions.some((action) => action.id === "endpoint"), "the top is confirmed on the first leg");
+  assert.match(first.wait.stages[0].text, /about 24 s/, "23.3 s rounded up, as the time left");
+  assert.equal(first.wait.remaining, "About 23 s remaining", "1 s run of 23.3");
+  const second = at({ step: "half_close", phase: "closing" });
+  assert.equal(second.code, "A-19");
+  assert.equal(second.actions.some((action) => action.id === "endpoint"), false, "never on the way down to half");
+});
