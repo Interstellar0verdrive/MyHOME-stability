@@ -451,6 +451,7 @@ export const translations = {
     wiz_T526: "The reading is recorded. Choose whether to repeat the lift-off run for a more precise slat time, or to go on with this value.",
     wiz_T527: "About {cm} cm are expected. Enter what the tape says; a comma or a point is fine.",
     wiz_T528: "Between {min_cm} and {max_cm} cm are expected. Enter what the tape says; a comma or a point is fine.",
+    wiz_T529: "Other options",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1366,6 +1367,7 @@ export const translations = {
     wiz_T526: "La lettura è registrata. Scegli se ripetere la corsa di distacco, per un tempo lamelle più preciso, o proseguire con questo valore.",
     wiz_T527: "Sono attesi circa {cm} cm. Scrivi quello che dice il metro; virgola o punto vanno bene.",
     wiz_T528: "Sono attesi fra {min_cm} e {max_cm} cm. Scrivi quello che dice il metro; virgola o punto vanno bene.",
+    wiz_T529: "Altre opzioni",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

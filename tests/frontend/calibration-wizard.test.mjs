@@ -570,8 +570,17 @@ test("A-34 offers fine-tuning once the calibration is saved: path C on the same 
   assert.equal(code(), "A-34");
   const kinds = [...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => [item.dataset.wiz, item.className.replace("wiz-action ", "")]);
   assert.deepEqual(kinds, [["refine", "primary"], ["assign-profile", "secondary"]], "fine-tuning is the next step; the new profile can go to other covers");
-  // Z-8: the other ways on are text links under the text, so the bar keeps two actions.
-  assert.deepEqual([...wiz().querySelectorAll(".wiz-main .wiz-links .wiz-link")].map((item) => item.dataset.wiz), ["another", "open-cover", "close"]);
+  // L-1: the other ways on are never in the text: text buttons under the two actions, behind «Other options» in the
+  // phone's bar (CSS), so the bar keeps two actions.
+  assert.equal(wiz().querySelector(".wiz-main .wiz-link"), null, "nothing in the text column");
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-more .wiz-more-list .wiz-link")].map((item) => item.dataset.wiz), ["another", "open-cover", "close"]);
+  const toggle = wiz().querySelector(".wiz-actions .wiz-more-toggle");
+  assert.deepEqual([toggle.textContent.trim(), toggle.getAttribute("aria-expanded")], ["Other options", "false"]);
+  toggle.click(); await tick();
+  assert.deepEqual([wiz().querySelector(".wiz-more").classList.contains("is-open"), wiz().querySelector(".wiz-more-toggle").getAttribute("aria-expanded")], [true, "true"]);
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.equal((css.match(/\.wiz-more:not\(\.is-open\) > \.wiz-more-list \{ display: none; \}/g) || []).length, 2, "hidden behind the toggle in both bars");
+  assert.match(css, /\.wiz-more-toggle \{ display: none; \}\n\.wiz-more-list \{ display: grid;/, "stacked and always shown in the columns");
   assert.equal(wiz().querySelector('[data-wiz="refine"]').textContent, "Continue with fine-tuning");
   assert.equal(wiz().querySelector("#wiz-note-refine"), null, "no note under the button");
   assert.equal(wiz().querySelector('[data-wiz="refine"]').hasAttribute("aria-describedby"), false);

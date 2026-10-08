@@ -221,7 +221,7 @@ export class CalibrationWizard {
     const signature = JSON.stringify([screen.code, screen.title, screen.body, screen.choice && { ...screen.choice, value: undefined },
       screen.field && { ...screen.field, disabled: undefined, error: undefined }, screen.box, screen.table, screen.technical, screen.precision,
       screen.profileBlock && { ...screen.profileBlock, name: screen.profileBlock.name && { label: screen.profileBlock.name.label, hint: screen.profileBlock.name.hint } },
-      screen.saveInfo, screen.status, screen.preview, screen.illustration, screen.wait && screen.wait.text, screen.discard, screen.back, !!screen.picker, screen.results, screen.note, screen.help, screen.links]);
+      screen.saveInfo, screen.status, screen.preview, screen.illustration, screen.wait && screen.wait.text, screen.discard, screen.back, !!screen.picker, screen.results, screen.note, screen.help]);
     if (signature !== this._signature) {
       const codeChanged = this._renderedCode !== screen.code;
       // "What happens when I save?" opens with the summary; a reader's choice is kept while it stays on screen.
@@ -259,7 +259,6 @@ export class CalibrationWizard {
               <span class="wiz-result-value"><span class="wiz-result-number">${esc(tile.value)}</span><small> ${esc(tile.unit)}</small>${tile.extra ? `<span class="wiz-result-extra"> · ${esc(tile.extra)}</span>` : ""}</span></div>`).join("")}</div>${resultNotices}` : ""}
             ${screen.body ? `<div class="wiz-body">${rich(screen.body)}</div>` : ""}
             ${screen.help && !screen.choice ? this._helpMarkup(screen.help) : ""}
-            ${screen.links?.length ? `<p class="wiz-links">${screen.links.map((link) => `<button type="button" class="wiz-link" data-wiz="${esc(link.id)}">${esc(link.label)}</button>`).join("")}</p>` : ""}
             ${screen.note ? `<p class="cal-note${screen.note.tone === "warning" ? " is-warning" : ""} wiz-note">${esc(screen.note.text)}</p>` : ""}
             ${screen.status.length ? `<div class="wiz-status">${screen.status.map((line) => `<p>${esc(line)}</p>`).join("")}</div>` : ""}
             ${drawing("after-body")}
@@ -435,7 +434,7 @@ export class CalibrationWizard {
     // Why the name cannot be saved, under the field (Save stays disabled meanwhile).
     const nameError = root.querySelector(".wiz-name-error");
     if (nameError) { nameError.textContent = block?.error || ""; nameError.hidden = !block?.error; }
-    const actions = JSON.stringify([screen.actions.map((action) => [action.id, action.label, action.kind, action.note]), screen.readOnly]);
+    const actions = JSON.stringify([screen.actions.map((action) => [action.id, action.label, action.kind, action.note]), screen.readOnly, screen.links]);
     const column = root.querySelector(".wiz-actions");
     if (actions !== this._actionsSignature) {
       // The hold protects a tap from landing on a button that just appeared or changed. A button that only goes away
@@ -453,9 +452,14 @@ export class CalibrationWizard {
         ${screen.actions.map((action) => action.kind === "status" || action.kind === "state"
           ? `<p class="wiz-action status${action.kind === "state" ? " is-still" : ""}" data-wiz="${esc(action.id)}" role="status">${action.kind === "status" ? '<span class="wiz-spinner" aria-hidden="true"></span>' : ""}${esc(action.label)}</p>`
           : `<button type="button" class="wiz-action ${action.kind}" data-wiz="${esc(action.id)}"${action.note ? ` aria-describedby="wiz-note-${esc(action.id.replace(/\W/g, "-"))}"` : ""}>${esc(action.label)}</button>${action.note
-          ? `<p class="wiz-action-note muted" id="wiz-note-${esc(action.id.replace(/\W/g, "-"))}">${esc(action.note)}</p>` : ""}`).join("")}`;
+          ? `<p class="wiz-action-note muted" id="wiz-note-${esc(action.id.replace(/\W/g, "-"))}">${esc(action.note)}</p>` : ""}`).join("")}
+        ${screen.links?.length ? `<div class="wiz-more"><button type="button" class="wiz-more-toggle" data-wiz="more" aria-expanded="false" aria-controls="wiz-more-list">${esc(t("wiz_T529"))}<ha-icon icon="mdi:chevron-down" aria-hidden="true"></ha-icon></button>
+          <div class="wiz-more-list" id="wiz-more-list">${screen.links.map((link) => `<button type="button" class="wiz-link" data-wiz="${esc(link.id)}">${esc(link.label)}</button>`).join("")}</div></div>` : ""}`;
       if (focused) column.querySelector(`[data-wiz="${focused}"]`)?.focus({ preventScroll: true });
     }
+    // L-1: the other ways on stack under the actions; in the phone's bar they wait behind «Altre opzioni».
+    const more = column.querySelector(".wiz-more");
+    if (more) { more.classList.toggle("is-open", !!this._local.moreOpen); more.querySelector(".wiz-more-toggle").setAttribute("aria-expanded", String(!!this._local.moreOpen)); }
     const guarded = this._guarded();
     for (const action of screen.actions) {
       const button = column.querySelector(`[data-wiz="${action.id}"]`);
@@ -617,6 +621,7 @@ export class CalibrationWizard {
   async _act(id) {
     const local = this._local, gateway = this._gateway;
     if (id === "steps") { const sheet = this._frame.querySelector(".wiz-sheet"); sheet.hidden = false; focusOnOpen(sheet.querySelector(".wiz-sheet-card"), sheet.querySelector("button")); return; }
+    if (id === "more") { local.moreOpen = !local.moreOpen; return this._render(); }
     if (id === "steps-close") { this._slideAway(this._frame.querySelector(".wiz-sheet")); this._frame.querySelector('[data-wiz="steps"]').focus(); return; }
     if (id === "exit") { this._exit(); return; }
     if (id === "back") { this._back(); return; }
@@ -1189,7 +1194,7 @@ function accepted(input) {
  * Fine-tuning keeps its base on purpose (`_startRefine` passes it again).
  */
 function freshFlags() {
-  return { ackLift: false, ackAscent: false, ackDescent: false, ackReadings: false, arm: null, run: null, fullRun: null, invalidRun: null, repeatQueued: false, discarded: null, misbehaved: false, stopSent: false,
+  return { ackLift: false, ackAscent: false, ackDescent: false, ackReadings: false, arm: null, run: null, fullRun: null, invalidRun: null, repeatQueued: false, moreOpen: false, discarded: null, misbehaved: false, stopSent: false,
     review: null, pendingSave: null, fieldError: null, fieldSequence: undefined, errorPhase: undefined, saveProfile: undefined, saveChoice: undefined,
     profileName: undefined, refining: false, lastGap: null, liftOrigin: null, baseReadings: null, fineReadings: null, pathChoice: null, reachedPhase: null };
 }
