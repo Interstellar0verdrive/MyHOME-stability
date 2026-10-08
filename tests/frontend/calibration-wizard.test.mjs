@@ -2614,3 +2614,9 @@ test("D-33: the result tiles show times with one decimal too", () => {
   const screen = buildScreen({ t, stage: "session", path: "A", view, local: {}, cover: { name: "K" } });
   assert.deepEqual(screen.results.map((tile) => tile.value), ["5.0", "23.0"]);
 });
+
+test("D-36: A-02's notes and warnings hold each number to its unit", async () => {
+  const source = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/panel-calibration-wizard.js", import.meta.url), "utf8");
+  assert.match(source, /<small class="muted">\$\{text\.units\(esc\(line\)\)\}<\/small>/);
+  assert.match(source, /wiz-radio-warning">\$\{text\.units\(esc\(option\.warning\)\)\}/);
+});

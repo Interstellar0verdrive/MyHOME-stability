@@ -515,8 +515,8 @@ export class CalibrationWizard {
     };
     return `<fieldset class="wiz-choice wiz-radios"><legend${choice.legendHidden ? ' class="visually-hidden"' : ""}>${esc(choice.label)}</legend>${choice.help ? this._helpMarkup(choice.help) : ""}${choice.options.map((option) =>
       `<label class="wiz-radio${option.disabled ? " is-disabled" : ""}"><input type="radio" name="${esc(choice.name)}" value="${esc(option.value)}" ${option.value === choice.value ? "checked" : ""} ${option.disabled ? "disabled" : ""}><span class="wiz-radio-text"><span class="wiz-radio-label">${parts(option)[0]}${option.badge
-        ? ` <span class="badge wiz-recommended">${esc(option.badge)}</span>` : ""}</span>${parts(option)[1]}${[].concat(option.note || []).map((line) => `<small class="muted">${esc(line)}</small>`).join("")}${option.warning
-        ? `<span class="cal-note is-warning wiz-radio-warning">${esc(option.warning)}</span>` : ""}</span></label>`).join("")}</fieldset>`;
+        ? ` <span class="badge wiz-recommended">${esc(option.badge)}</span>` : ""}</span>${parts(option)[1]}${[].concat(option.note || []).map((line) => `<small class="muted">${text.units(esc(line))}</small>`).join("")}${option.warning
+        ? `<span class="cal-note is-warning wiz-radio-warning">${text.units(esc(option.warning))}</span>` : ""}</span></label>`).join("")}</fieldset>`;
   }
 
   _fieldMarkup(field) {
