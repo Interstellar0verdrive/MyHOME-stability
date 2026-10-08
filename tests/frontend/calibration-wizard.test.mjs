@@ -2389,6 +2389,7 @@ test("a gated primary stays a primary, disabled: A-01's Continue before a choice
   assert.match(rule, /box-shadow: none/);
   const settling = css.match(/:is\(\.wiz-action\.primary, button\.primary\)\.is-settling:disabled, [^{]*\{([^}]*)\}/)?.[1] || "";
   assert.match(settling, /background: color-mix\(in srgb, var\(--panel-accent\) 38%, var\(--panel-surface\)\)/, "Q-29's look, for a moment only");
+  assert.match(settling, /color: color-mix\(in srgb, var\(--panel-accent\) 40%, var\(--primary-text-color, #182b37\)\)/, "a label readable on it (not white on light blue)");
   assert.doesNotMatch(css, /\[data-theme="dark"\] :is\(\.wiz-action\.primary, button\.primary\):disabled/, "one rule for both themes");
   const { wiz, tab, button } = await mount({ guardMs: 700 });
   tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();

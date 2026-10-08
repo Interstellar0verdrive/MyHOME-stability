@@ -1336,7 +1336,7 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
   color: color-mix(in srgb, var(--primary-text-color, #182b37) 45%, transparent); box-shadow: none; opacity: 1; cursor: not-allowed; }
 :is(.wiz-action.primary, button.primary).is-settling:disabled, :is(.wiz-action.primary, button.primary).is-settling:disabled:hover {
   background: color-mix(in srgb, var(--panel-accent) 38%, var(--panel-surface)); border-color: transparent;
-  color: color-mix(in srgb, var(--text-primary-color, #fff) 60%, transparent); box-shadow: none; opacity: 1; cursor: wait; }
+  color: color-mix(in srgb, var(--panel-accent) 40%, var(--primary-text-color, #182b37)); box-shadow: none; opacity: 1; cursor: wait; }
 .wiz-action.secondary { border-color: var(--panel-accent); color: var(--panel-accent); background: transparent; }
 .wiz-action.stop, .wiz-action.link { min-height: 44px; border: 0; background: transparent; box-shadow: none; }
 .wiz-action.stop { color: var(--panel-error); }
