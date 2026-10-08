@@ -569,8 +569,9 @@ test("A-34 offers fine-tuning once the calibration is saved: path C on the same 
   await press("save");
   assert.equal(code(), "A-34");
   const kinds = [...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => [item.dataset.wiz, item.className.replace("wiz-action ", "")]);
-  assert.deepEqual(kinds, [["refine", "primary"], ["assign-profile", "secondary"], ["another", "secondary"], ["open-cover", "secondary"], ["close", "link"]],
-    "fine-tuning is the next step; the new profile can go to other covers");
+  assert.deepEqual(kinds, [["refine", "primary"], ["assign-profile", "secondary"]], "fine-tuning is the next step; the new profile can go to other covers");
+  // Z-8: the other ways on are text links under the text, so the bar keeps two actions.
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-main .wiz-links .wiz-link")].map((item) => item.dataset.wiz), ["another", "open-cover", "close"]);
   assert.equal(wiz().querySelector('[data-wiz="refine"]').textContent, "Continue with fine-tuning");
   assert.equal(wiz().querySelector("#wiz-note-refine"), null, "no note under the button");
   assert.equal(wiz().querySelector('[data-wiz="refine"]').hasAttribute("aria-describedby"), false);
@@ -1108,7 +1109,7 @@ test("the screen behind an open Discard dialog is not rebuilt until the dialog c
 
 test("Close keeps each mockup's style: B-09 red filled, A-34 red text, C-34 and S-06 red outlined", () => {
   const t = (key) => translations.it[key] || key;
-  const close = (screen) => [screen.code, screen.actions.find((action) => action.id === "close").kind];
+  const close = (screen) => [screen.code, screen.actions.find((action) => action.id === "close")?.kind ?? (screen.links.some((link) => link.id === "close") ? "link" : null)];
   const saved = (path, preview = false) => buildScreen({ t, language: "it", stage: "saved", path, scope: path === "C" ? "times_only" : null,
     cover: { name: "Cucina 2", followProfile: "alta" }, local: { saved: { target: path === "B" ? "follow_profile" : "cover_only", preview } } });
   assert.deepEqual(close(saved("B")), ["B-09", "danger"]);
@@ -1755,7 +1756,8 @@ test("the preview is announced before it starts and its end never says that some
   assert.equal(real.actions.find((action) => action.id === "refine").note, undefined, "no note under the button");
   assert.equal(real.body, `${translations.it.wiz_T155.replace("{name}", "cucina_2")}\n\n**Vuoi perfezionare la calibrazione?** Quattro letture col metro a un quarto e a tre quarti della corsa, più una verifica finale, renderanno la stima della posizione più precisa lungo tutta la corsa. Qualche minuto; la tapparella si muoverà.`,
     "T319 is the body's second paragraph");
-  assert.deepEqual(real.actions.map((action) => [action.id, action.kind]), [["refine", "primary"], ["assign-profile", "secondary"], ["another", "secondary"], ["open-cover", "secondary"], ["close", "link"]]);
+  assert.deepEqual(real.actions.map((action) => [action.id, action.kind]), [["refine", "primary"], ["assign-profile", "secondary"]]);
+  assert.deepEqual(real.links.map((link) => link.id), ["another", "open-cover", "close"], "Z-8");
   const coverOnly = buildScreen({ t, language: "it", stage: "saved", path: "A", cover: { name: "Cucina 2" }, local: { saved: { target: "cover_only" } } });
   assert.equal(coverOnly.actions.some((action) => action.id === "assign-profile"), false, "no profile written, nothing to assign");
   assert.deepEqual(real.stepper.phases.map((phase) => [phase.key, phase.state]).slice(-2), [["summary", "done"], ["finetune", "future"]]);

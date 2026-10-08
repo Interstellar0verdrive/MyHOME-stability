@@ -1233,6 +1233,11 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-box { display: grid; gap: 4px; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--panel-border);
   background: color-mix(in srgb, var(--primary-text-color, #182b37) 6%, var(--panel-surface)); }
 .wiz-box p { margin: 0; }
+/* Z-8: the other ways on after a save, as text links under the text (the bar keeps two actions). */
+.wiz-links { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0; }
+.wiz-link { min-height: 44px; padding: 0; border: 0; background: transparent; box-shadow: none; color: var(--panel-accent); font-size: 14px; font-weight: 500;
+  -webkit-tap-highlight-color: transparent; }
+.wiz-link:hover { background: transparent; text-decoration: underline; }
 .wiz-choice { max-width: 420px; }
 .wiz-choice-hint { font-weight: 400; }
 .wiz-radios { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; max-width: none; }

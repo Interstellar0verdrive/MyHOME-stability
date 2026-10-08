@@ -101,7 +101,7 @@ export function buildScreen(ctx) {
   const screen = {
     code: "", header: { title: name || t("wiz_T001"), subtitle: cover?.address || "", units: cover?.units || null }, discard: true, preview,
     title: "", subline: "", body: "", help: null, note: null, results: null, stopwatch: null, wait: null, illustration: null, choice: null, picker: null, field: null, box: null, table: null,
-    technical: null, profileBlock: null, saveInfo: null, precision: null, status: [], notices: [], actions: [], readOnly: null, phase: "intro",
+    technical: null, profileBlock: null, saveInfo: null, precision: null, status: [], notices: [], actions: [], links: [], readOnly: null, phase: "intro",
     caption: caption(t, path, stepScope, cover), stepScope,
     // Before any session the header offers a way back to the previous choice (kept as it was).
     back: ["choose", "path", "profile", "current", "case", "before"].includes(stage),
@@ -760,9 +760,11 @@ function savedScreen(screen, ctx, tx, values) {
   const assign = ["profile_new", "profile_update"].includes(saved.target) ? [{ id: "assign-profile", label: t("wiz_T426"), kind: "secondary" }] : [];
   // A new profile left the previous one without covers: it can be deleted from the Profiles tab (never by itself).
   if (saved.target === "profile_new" && saved.orphan) screen.note = { tone: "info", text: fill(t("wiz_T431"), { old: saved.orphan, tab: t("profileListTitle") }) };
+  // Z-8: the bar holds the primary and one secondary (assigning the profile just saved, or another cover); the other
+  // ways on are text links under the text, so a docked bar never covers the screen.
   if (path !== "C") return Object.assign(screen, { code: "A-34", title: t("wiz_T154"), body: `${body}\n\n${t("wiz_T319")}`,
-    actions: [{ id: "refine", label: t("wiz_T103"), kind: "primary" }, ...assign, { id: "another", label: t("wiz_T156"), kind: "secondary" },
-      { id: "open-cover", label: t("wiz_T157"), kind: "secondary" }, close(path)] });
+    actions: [{ id: "refine", label: t("wiz_T103"), kind: "primary" }, ...(assign.length ? assign : [{ id: "another", label: t("wiz_T156"), kind: "secondary" }])],
+    links: [...(assign.length ? [{ id: "another", label: t("wiz_T156") }] : []), { id: "open-cover", label: t("wiz_T157") }, { id: "close", label: t("wiz_T158") }] });
   return Object.assign(screen, { code: "C-34", title: t("wiz_T154"), body,
     actions: [{ id: "another", label: t("wiz_T156"), kind: "primary" }, { id: "open-cover", label: t("wiz_T157"), kind: "secondary" }, close(path)] });
 }

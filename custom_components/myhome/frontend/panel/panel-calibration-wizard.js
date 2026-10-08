@@ -222,7 +222,7 @@ export class CalibrationWizard {
     const signature = JSON.stringify([screen.code, screen.title, screen.body, screen.choice && { ...screen.choice, value: undefined },
       screen.field && { ...screen.field, disabled: undefined, error: undefined }, screen.box, screen.table, screen.technical, screen.precision,
       screen.profileBlock && { ...screen.profileBlock, name: screen.profileBlock.name && { label: screen.profileBlock.name.label, hint: screen.profileBlock.name.hint } },
-      screen.saveInfo, screen.status, screen.preview, screen.illustration, screen.wait && screen.wait.text, screen.discard, screen.back, !!screen.picker, screen.results, screen.note, screen.help]);
+      screen.saveInfo, screen.status, screen.preview, screen.illustration, screen.wait && screen.wait.text, screen.discard, screen.back, !!screen.picker, screen.results, screen.note, screen.help, screen.links]);
     if (signature !== this._signature) {
       const codeChanged = this._renderedCode !== screen.code;
       // "What happens when I save?" opens with the summary; a reader's choice is kept while it stays on screen.
@@ -260,6 +260,7 @@ export class CalibrationWizard {
               <span class="wiz-result-value"><span class="wiz-result-number">${esc(tile.value)}</span><small> ${esc(tile.unit)}</small>${tile.extra ? `<span class="wiz-result-extra"> · ${esc(tile.extra)}</span>` : ""}</span></div>`).join("")}</div>${resultNotices}` : ""}
             ${screen.body ? `<div class="wiz-body">${rich(screen.body)}</div>` : ""}
             ${screen.help && !screen.choice ? this._helpMarkup(screen.help) : ""}
+            ${screen.links?.length ? `<p class="wiz-links">${screen.links.map((link) => `<button type="button" class="wiz-link" data-wiz="${esc(link.id)}">${esc(link.label)}</button>`).join("")}</p>` : ""}
             ${screen.note ? `<p class="cal-note${screen.note.tone === "warning" ? " is-warning" : ""} wiz-note">${esc(screen.note.text)}</p>` : ""}
             ${screen.status.length ? `<div class="wiz-status">${screen.status.map((line) => `<p>${esc(line)}</p>`).join("")}</div>` : ""}
             ${drawing("after-body")}
