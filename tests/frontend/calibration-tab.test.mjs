@@ -1396,8 +1396,12 @@ test("D-01: in a landscape sheet the maintainer's view keeps its body: compact b
   const short = css.slice(css.indexOf("@media (max-height: 499px) and (orientation: landscape) {\n  dialog.cal-dialog { max-height"));
   const block = short.slice(0, short.indexOf("\n}\n"));
   assert.match(css, /dialog\.cal-dialog \.cal-resume-entity \{ display: none; \}/, "D-18");
-  assert.match(block, /dialog\.cal-dialog \.calibration-safety-actions \{ bottom: -4px; padding-block: 8px; \}/, "flush with the sheet's bottom");
-  assert.match(block, /dialog\.cal-dialog :is\(\.calibration-safety-actions, \.cal-actions\) button \{ min-height: 40px;/);
+  assert.match(css, /dialog\.cal-dialog \.calibration-safety-actions \{ bottom: -4px; padding-block: 8px; \}/, "flush with the sheet's bottom");
+  assert.match(css, /dialog\.cal-dialog :is\(\.calibration-safety-actions, \.cal-actions\) button \{ min-height: 40px;/);
+  // D-17/N-03: in every sheet the main action is held above the bar, in view without scrolling.
+  assert.match(css, /dialog\.cal-dialog :is\(#cal-take-control, #cal-reconnect, \.cal-actions\) \{ position: sticky; bottom: 61px; z-index: 1;/);
+  const sheets = css.slice(css.indexOf("@media (max-width: 719px), (max-height: 499px) {"));
+  assert.ok(sheets.indexOf("#cal-take-control, #cal-reconnect") < sheets.indexOf("\n}\n"), "a rule of every sheet, portrait included");
 });
 
 test("D-08: an overview that cannot be read shows its error, not an empty filter with zero counts", async () => {

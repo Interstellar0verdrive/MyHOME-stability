@@ -1019,6 +1019,15 @@ dialog.cal-dialog :is(button, select, input):focus:not(:focus-visible) { outline
   dialog.cal-dialog .dialog-head, dialog.cal-dialog .dialog-foot { flex: none; }
   dialog.cal-dialog .cal-dialog-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
   dialog.cal-dialog .dialog-foot { position: relative; padding-block: 12px; background: var(--panel-surface); }
+  /* D-17/N-03: the maintainer's view in a sheet (an opened session, the sequence's run): its Stop/Cancel bar is compact
+     (57 px) and sits flush with the sheet's bottom, and its main action («Prendi il controllo», «Continua», «Conferma
+     e avvia…», «Riprendi») is held just above the bar while its place is further down, on the surface (a spread
+     shadow covers what scrolls behind it), so it is in view without scrolling and the bar never hides it. */
+  dialog.cal-dialog .calibration-safety-actions { bottom: -4px; padding-block: 8px; }
+  dialog.cal-dialog :is(.calibration-safety-actions, .cal-actions) button { min-height: 40px; padding-block: 6px; }
+  dialog.cal-dialog :is(#cal-take-control, #cal-reconnect, .cal-actions) { position: sticky; bottom: 61px; z-index: 1;
+    box-shadow: 0 0 0 8px var(--panel-surface); }
+  dialog.cal-dialog .cal-actions { background: var(--panel-surface); }
   /* X-7: the same fade as the wizard's action bars (40 px, the surface to transparent), its bottom 1 px into the band
      (which has no border, unlike the wizard's bar) so no pixel row is left between them at any sub-pixel position. */
   dialog.cal-dialog .dialog-foot::before { content: ""; position: absolute; inset-inline: 0; bottom: calc(100% - 1px); height: 40px; pointer-events: none;
@@ -1505,8 +1514,6 @@ dialog.cal-dialog .dialog-head { justify-content: space-between; padding-block: 
   /* D-01: the maintainer's view in a landscape sheet keeps its body: its Stop/Cancel bar and buttons are compact and
      the title row is tighter (the sheet's own «Chiudi» is already left out, D-18). */
   dialog.cal-dialog:has(.calibration-safety-actions) .dialog-head { padding-block: 8px; }
-  dialog.cal-dialog .calibration-safety-actions { bottom: -4px; padding-block: 8px; }
-  dialog.cal-dialog :is(.calibration-safety-actions, .cal-actions) button { min-height: 40px; padding-block: 6px; }
   .wiz-dialog { justify-content: center; }
   .wiz-dialog .wiz-dialog-card { width: min(100%, 560px); padding: 24px 20px calc(16px + var(--cal-safe-bottom)); }
   /* The 560 px sheet is centred, clear of the side safe areas: its own 20 px inside. */
