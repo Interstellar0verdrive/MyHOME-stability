@@ -703,7 +703,10 @@ function withSupport(screen, ctx, target) {
   const supported = ctx.supports ? ctx.supports(target) : true;
   if (!supported) {
     // D-16: said at the top of the screen (seen on a phone too), and no help explaining what Save would do.
-    screen.notices.push({ tone: "warning", result: true, text: ctx.t("wizSaveUnavailable") });
+    // N-11: the notice names the way of saving that is not available and what to do instead.
+    const text = target === "cover_only" ? fill(ctx.t("wiz_T518"), { switch: ctx.t(ctx.cover?.profile ? "wiz_T439" : "wiz_T096") })
+      : target === "profile_update" ? fill(ctx.t("wiz_T519"), { profile: ctx.cover?.profile?.name ?? "", choice: ctx.t("wiz_T111") }) : ctx.t("wizSaveUnavailable");
+    screen.notices.push({ tone: "warning", result: true, text });
     screen.saveInfo = null;
     for (const action of screen.actions) if (action.id === "save") action.disabled = true;
   }
