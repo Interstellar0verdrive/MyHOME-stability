@@ -31,6 +31,18 @@ const MEASURED_RUN = (view) => view && ((view.mode === "geometry" && ["opening",
  * the run's time at that frame. Without the field the run counts as moving.
  */
 const MOTOR_STOPPED = (view) => view?.motor_stopped === true;
+/** A stop frame between these times is an actuator's timer (about 60 s), never the real end of the run. */
+export const TIMER_STOP_SECONDS = [59, 65];
+/** Why a full run is not valid: stopped at the actuator's timer, or by anything else before ② (L-3). */
+export const stopVerdict = (seconds) => seconds >= TIMER_STOP_SECONDS[0] && seconds <= TIMER_STOP_SECONDS[1] ? "timer" : "late";
+/**
+ * L-3: ② exists only while the motor runs. A full run whose motor stopped before ② was pressed in this tab (the
+ * actuator's timer, a wall switch, any stop) is not valid at once, in the live view and on a resumed one: its result
+ * is struck through and only «Ripeti la corsa» goes on. A press of ② made before the stop reached the tab is in flight
+ * and decides by itself (`local.fullRun.pressed`).
+ */
+const STOPPED_BEFORE_PRESS = (view, local) => MOTOR_STOPPED(view) && view.stopped_elapsed != null && !local?.fullRun?.pressed;
+const invalidNotice = (t, reason) => ({ tone: "error", result: true, text: t(reason === "timer" ? "wiz_T445" : "wiz_T444") });
 /** Stop is offered while the motor runs; once it has stopped by itself only the confirmation is left. */
 const whileRunning = (view, stop) => MOTOR_STOPPED(view) ? [] : [stop];
 
@@ -385,13 +397,21 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     if (resting || view.still_resting) screen.notices.push(liftRepeated());
     return screen;
   }
-  // A full run the bus ended without a timely press of ②: its result is shown but not valid; only a repeat goes on.
+  // A full run that stopped before ② (L-3): its result is shown but not valid; only a repeat goes on.
   // D-11: not valid is drawn as such: its own title, the tiles struck through, the notice as an error, and Continue
   // shown but disabled beside Repeat.
-  const invalid = (key) => local.invalidRun?.step === key ? { tone: "error", result: true, text: t(local.invalidRun.reason === "timer" ? "wiz_T445" : "wiz_T444") } : null;
+  const invalid = (key) => local.invalidRun?.step === key ? invalidNotice(t, local.invalidRun.reason) : null;
+  // L-3: still in the run, stopped before ②: the run's result is shown not valid at once, ② is gone; so it stays
+  // while its end is being confirmed.
+  const stoppedRun = (key) => phase === key && STOPPED_BEFORE_PRESS(view, local)
+    ? invalidNotice(t, local.invalidRun?.step === key ? local.invalidRun.reason : stopVerdict(view.stopped_elapsed))
+    : phase === "geometry_wait_stop" && local.invalidRun?.step === key ? invalidNotice(t, local.invalidRun.reason) : null;
+  const stoppedTime = (key) => view.stopped_elapsed ?? view.values?.[`${key}_time`];
   const repeatOnly = (code, title, results, note) => Object.assign(screen, { code, title, results: results.filter(Boolean),
     notices: [note], actions: [{ id: "repeat", label: t("wiz_T061"), kind: "primary" }, { id: "invalid-next", label: t("wiz_T060"), kind: "secondary", disabled: true }] });
   if (step === "opening") {
+    const stopped = stoppedRun("opening");
+    if (stopped) return repeatOnly(p("12"), t("wiz_T502"), [slats ? liftTile() : null, { ...timeTile("wiz_T040", stoppedTime("opening")), invalid: true }], stopped);
     if (phase === "reading") {
       const bad = invalid("opening");
       if (bad) return repeatOnly(p("12"), t("wiz_T502"), [slats ? liftTile() : null, { ...timeTile("wiz_T040", view.values?.opening_time), invalid: true }], bad);
@@ -407,15 +427,21 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
       body: t(/^(starting_)?opening$/.test(phase) ? "wiz_T521" : slats ? "wiz_T056" : "wiz_T499"),
       stopwatch: runWatch(t, n, view, elapsed),
       actions: [{ id: "next", label: t("wiz_T045"), kind: "primary", disabled: phase !== "briefing" },
-        { id: "endpoint", label: t("wiz_T057"), kind: "primary", disabled: phase !== "opening" }, ...whileRunning(view, stop)] });
+        { id: "endpoint", label: t("wiz_T057"), kind: "primary", disabled: phase !== "opening" || MOTOR_STOPPED(view) }, ...whileRunning(view, stop)] });
     if (phase === "geometry_wait_stop") stopping(view.values?.opening_time);
     return screen;
   }
   if (step === "closing") {
+    const stopped = stoppedRun("closing");
+    if (stopped) {
+      repeatOnly(p("15"), t("wiz_T503"), [{ ...timeTile("wiz_T068", stoppedTime("closing")), invalid: true }], stopped);
+      screen.phase = "descent";
+      return screen;
+    }
     Object.assign(screen, { code: p("14"), title: t("wiz_T068"),
       body: t(/^(starting_)?closing$/.test(phase) ? (slats ? "wiz_T522" : "wiz_T523") : slats ? "wiz_T069" : "wiz_T500"), stopwatch: runWatch(t, n, view, elapsed),
       actions: [{ id: "next", label: t("wiz_T045"), kind: "primary", disabled: phase !== "briefing" },
-        { id: "endpoint", label: t("wiz_T070"), kind: "primary", disabled: phase !== "closing" }, ...whileRunning(view, stop)] });
+        { id: "endpoint", label: t("wiz_T070"), kind: "primary", disabled: phase !== "closing" || MOTOR_STOPPED(view) }, ...whileRunning(view, stop)] });
     if (phase === "geometry_wait_stop") stopping(view.values?.closing_time);
     return screen;
   }
@@ -503,9 +529,9 @@ function guidedScreen(screen, ctx, tx, n, values, stop) {
   const { t, view, elapsed, local = {} } = ctx;
   const phase = view.phase;
   const tile = (key, seconds) => seconds == null ? null : { label: t(key), value: n.fixed(seconds), unit: "s" };
-  const bad = (key) => local.invalidRun?.step === key ? { tone: "error", result: true, text: t(local.invalidRun.reason === "timer" ? "wiz_T445" : "wiz_T444") } : null;
-  const result = (code, title, body, time, key, ack) => {
-    const notice = bad(key);
+  const bad = (key) => local.invalidRun?.step === key ? invalidNotice(t, local.invalidRun.reason) : null;
+  const result = (code, title, body, time, key, ack, stopped = null) => {
+    const notice = stopped || bad(key);
     // D-11: as on A-12/A-15, a result that is not valid looks it.
     return Object.assign(screen, { code, title: notice ? t(key === "opening" ? "wiz_T502" : "wiz_T503") : title, body: notice ? "" : t(body),
       results: [time].filter(Boolean).map((tile) => notice ? { ...tile, invalid: true } : tile), notices: notice ? [notice] : [],
@@ -517,11 +543,18 @@ function guidedScreen(screen, ctx, tx, n, values, stop) {
     return result("C-15", t("wiz_T071"), "wiz_T480", tile("wiz_T068", view.values?.closing_time), "closing", "ack:descent");
   }
   if (phase === "review" || phase === "saving") return summaryScreen(screen, ctx, tx, n, values);
+  // L-3: still in the run, stopped before ②: its result, not valid, at once; ② is gone.
+  if (["opening", "closing"].includes(phase) && STOPPED_BEFORE_PRESS(view, local)) {
+    const key = phase, notice = invalidNotice(t, local.invalidRun?.step === key ? local.invalidRun.reason : stopVerdict(view.stopped_elapsed));
+    screen.phase = key === "opening" ? "ascent" : "descent";
+    return key === "opening" ? result("C-12", t("wiz_T058"), "wiz_T478", tile("wiz_T040", view.stopped_elapsed), "opening", "ack:ascent", notice)
+      : result("C-15", t("wiz_T071"), "wiz_T480", tile("wiz_T068", view.stopped_elapsed), "closing", "ack:descent", notice);
+  }
   if (["confirm_closed", "starting_open", "opening"].includes(phase)) {
     return Object.assign(screen, { code: "C-11", phase: "ascent", title: t("wiz_T040"), body: t(phase === "confirm_closed" ? "wiz_T477" : "wiz_T521"),
       stopwatch: runWatch(t, n, view, elapsed),
       actions: [{ id: "run:open", label: t("wiz_T045"), kind: "primary", disabled: phase !== "confirm_closed" },
-        { id: "endpoint", label: t("wiz_T057"), kind: "primary", disabled: phase !== "opening" }, ...whileRunning(view, stop)] });
+        { id: "endpoint", label: t("wiz_T057"), kind: "primary", disabled: phase !== "opening" || MOTOR_STOPPED(view) }, ...whileRunning(view, stop)] });
   }
   if (phase === "confirm_open" && !local.ackAscent) {
     screen.phase = "ascent";
@@ -531,7 +564,7 @@ function guidedScreen(screen, ctx, tx, n, values, stop) {
     return Object.assign(screen, { code: "C-14", phase: "descent", title: t("wiz_T068"), body: t(phase === "confirm_open" ? "wiz_T479" : "wiz_T522"),
       stopwatch: runWatch(t, n, view, elapsed),
       actions: [{ id: "run:close", label: t("wiz_T045"), kind: "primary", disabled: phase !== "confirm_open" },
-        { id: "endpoint", label: t("wiz_T070"), kind: "primary", disabled: phase !== "closing" }, ...whileRunning(view, stop)] });
+        { id: "endpoint", label: t("wiz_T070"), kind: "primary", disabled: phase !== "closing" || MOTOR_STOPPED(view) }, ...whileRunning(view, stop)] });
   }
   return Object.assign(screen, { code: "unknown", title: t("wiz_T027"), actions: [stop] });
 }

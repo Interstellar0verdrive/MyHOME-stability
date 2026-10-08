@@ -110,7 +110,9 @@ export function createFakeBackend({ language = "en", inventory = coverInventory(
       session.samples.lift = clock - session._started;
       session.phase = "geometry_wait_stop"; session._after_stop = "reading";
     } else if (action === "endpoint" && ["opening", "closing"].includes(session.phase) && ["home", "reset", "opening", "closing", "top"].includes(session.step)) {
-      if (["opening", "closing"].includes(session.step)) session.values[`${session.step}_time`] = clock - session._started;
+      // As v2-endpoint: confirmed after the bus reported the stop, the stop frame's time is the run's.
+      if (["opening", "closing"].includes(session.step)) session.values[`${session.step}_time`] = session.motor_stopped ? session.stopped_elapsed : clock - session._started;
+      delete session.motor_stopped; delete session.stopped_elapsed;
       session._after_stop = session.step === "opening" ? "reading" : "briefing";
       session.phase = "geometry_wait_stop";
     } else if (action === "reading" && session.phase === "reading") {
@@ -147,7 +149,8 @@ export function createFakeBackend({ language = "en", inventory = coverInventory(
     if (action === "open" && session.phase === "confirm_closed") session.phase = "starting_open";
     else if (action === "close" && session.phase === "confirm_open") session.phase = "starting_close";
     else if (action === "endpoint" && ["opening", "closing"].includes(session.phase)) {
-      session.values[`${session.phase}_time`] = clock - session._started;
+      session.values[`${session.phase}_time`] = session.motor_stopped ? session.stopped_elapsed : clock - session._started;
+      delete session.motor_stopped; delete session.stopped_elapsed;
       session._started = null;
       session.phase = session.phase === "opening" ? "confirm_open" : "review";
     } else throw Object.assign(new Error("step"), { code: "calibration_step" });

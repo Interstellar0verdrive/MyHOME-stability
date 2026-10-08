@@ -9,7 +9,7 @@ const [{ escapeHtml: esc }, text, screens, gateways, illustration, { morph }, { 
   import(asset("panel-calibration-gateway.js")), import(asset("panel-calibration-illustration.js")), import(asset("panel-calibration-morph.js")), import(asset("panel-calibration-layout.js")),
 ]);
 const { rich, inline, names } = text;
-const { buildScreen, slug } = screens;
+const { buildScreen, slug, stopVerdict } = screens;
 const { LiveCalibrationGateway, PreviewCalibrationGateway } = gateways;
 const { illustrationMarkup, ILLUSTRATIONS } = illustration;
 
@@ -45,10 +45,8 @@ const SHEET_MS = 220;
 const IDLE_LEASE_SECONDS = 1800;
 /** A return of the tape readings confirms itself this long after the measured time of its direction (~2 s + settling). */
 export const AUTO_ENDPOINT_MARGIN_SECONDS = 3;
-/** A full run ended by the bus: a press of ② within this long after the stop frame confirms the frame's time. */
-export const FULL_RUN_PRESS_WINDOW_SECONDS = 2;
 /** A stop frame between these times is an actuator's timer (about 60 s), never the real end of the run. */
-export const TIMER_STOP_SECONDS = [59, 65];
+export const TIMER_STOP_SECONDS = screens.TIMER_STOP_SECONDS;
 // Phases a press goes through before the cover stops again: the press that started them still counts.
 const TRANSIT = ["starting_open", "starting_close", "opening", "closing", "geometry_wait_stop"];
 
@@ -654,10 +652,28 @@ export class CalibrationWizard {
     if (id === "resting") { this._local.lastGap = 0; this._local.liftOrigin = "button"; this._local.fieldError = null; return this._send("reading", { reading_cm: 0 }); }
     // The guided protocol's own movements ("open", "close") are named apart from closing the wizard.
     if (id.startsWith("run:")) return this._send(id.slice(4));
-    if (id === "endpoint" && local.fullRun && !local.fullRun.decided) {
-      // ② on a full run after the motor stopped by itself: valid within 2 s of the frame (not at a timer's 60 s).
-      const verdict = this._judgeFullRun(gateway?.view, true);
-      if (verdict) { local.fullRun.decided = true; local.invalidRun = verdict === "valid" ? null : { step: local.fullRun.step, reason: verdict }; }
+    if (id === "endpoint" && local.fullRun) {
+      // L-3: ② exists only while the motor runs. A click that races the stop's view is not a confirmation: the run is
+      // not valid, as if ② had never been there; otherwise the press decides the run, even across a stop in flight.
+      if (gateway?.view?.motor_stopped === true && !local.fullRun.pressed) { this._closeFullRun(gateway.view); return this._render(); }
+      const run = local.fullRun;
+      run.pressed = true;
+      // A refused ② confirmed nothing: the run is judged again as if it had not been pressed.
+      return Promise.resolve(this._send("endpoint")).then(() => {
+        if (local.fullRun !== run || !this._gateway?.status.error) return;
+        Object.assign(run, { pressed: false, decided: false });
+        this._closeFullRun(this._gateway.view);
+        this._render();
+      });
+    }
+    const open = gateway?.view;
+    if (id === "repeat" && local.invalidRun && open && !open.preview && open.mode === "geometry" && ["opening", "closing"].includes(open.step)
+      && ["opening", "closing", "geometry_wait_stop"].includes(open.phase)) {
+      // L-3: the backend is still in the stopped run or confirming its end: the end is confirmed first (nothing moves),
+      // the repeat follows on the result it reaches.
+      local.repeatQueued = true;
+      if (local.fullRun) this._closeFullRun(open);
+      return this._render();
     }
     // D-11: the time of a run judged not valid stays out of the stepper until a new run replaces it.
     if (id === "repeat" && local.invalidRun) {
@@ -883,6 +899,7 @@ export class CalibrationWizard {
     this._trackFullRun(view);
     this._autoEndpoint(view);
     this._closeFullRun(view);
+    this._queuedRepeat(view);
     this._autoNext(view);
     this._unloadGuard(this._liveOpen());
     this._render();
@@ -914,40 +931,56 @@ export class CalibrationWizard {
       && ((step === "opening" && ["starting_open", "opening"].includes(view.phase)) || (step === "closing" && ["starting_close", "closing"].includes(view.phase)));
     if (!full) { local.fullRun = null; return; }
     if (local.fullRun?.step === step) return;
-    local.fullRun = { step, attachment: view.attachment ?? null, owned: !!view.owner && !view.read_only, decided: false };
+    // `pressed`: ② was pressed in this tab while the motor ran; `sent`: the end of a run not valid was confirmed.
+    local.fullRun = { step, pressed: false, decided: false, sent: false };
     local.invalidRun = null;
   }
 
   /**
-   * How a full run ended by the bus is judged (R8-7): a press before the stop frame gives the press time; a press within
-   * 2 s after it gives the frame's time; no press within 2 s, or a frame at an actuator's timer (59-65 s) without a press
-   * before it, makes the result not valid. Time since the frame = the run's elapsed minus `stopped_elapsed`, so a
-   * replayed subscription cannot stretch the window.
+   * How a full run ended by the bus is judged (R8-7, L-3): ② exists only while the motor runs. A press before the stop
+   * reached this tab gives the run's time (the backend takes the frame's time for a press that crossed it); a stop
+   * before any press (a wall switch, any stop) or at an actuator's timer (59-65 s) makes the result not valid at once.
+   * Only the view decides, so a tab that opened, resumed or claimed the session after the stop judges it the same way.
    */
-  _judgeFullRun(view, pressed) {
-    const local = this._local, run = local.fullRun;
+  _judgeFullRun(view) {
+    const run = this._local.fullRun;
     if (!run || run.decided || view?.motor_stopped !== true || view.stopped_elapsed == null) return null;
-    const since = (this._gateway.elapsed() ?? view.elapsed ?? view.stopped_elapsed) - view.stopped_elapsed;
-    const timer = view.stopped_elapsed >= TIMER_STOP_SECONDS[0] && view.stopped_elapsed <= TIMER_STOP_SECONDS[1];
-    if (pressed && since <= FULL_RUN_PRESS_WINDOW_SECONDS) return timer ? "timer" : "valid";
-    if (!pressed && since <= FULL_RUN_PRESS_WINDOW_SECONDS) return null;
-    return timer ? "timer" : "late";
+    const verdict = stopVerdict(view.stopped_elapsed);
+    return verdict === "timer" ? "timer" : run.pressed ? "valid" : verdict;
   }
 
   /**
-   * No press within 2 s of the stop frame: the run goes on by itself to its result, marked not valid. The panel confirms
-   * the end stop (Home Assistant records the frame's time) so the result screen can offer only "Repeat the measurement".
-   * As every automatic step: only for the owner, on the subscription the run started on, never after a lost
-   * connection, an error or a pending request, once per run.
+   * A run judged not valid is shown as such by every tab, a reader's too. Its end stop is then confirmed by whichever
+   * tab owns the session now (Home Assistant records the frame's time; nothing moves, the motor has already stopped),
+   * so the result screen can offer only «Ripeti la corsa». Never after a lost connection, an error or with a request
+   * pending; once per run.
    */
   _closeFullRun(view) {
     const local = this._local, run = local.fullRun, status = this._gateway?.status || {};
-    const verdict = this._judgeFullRun(view, false);
-    if (!verdict) return;
-    run.decided = true;
-    if (!run.owned || !view.owner || view.read_only || status.lost || status.error || status.busy || (view.attachment ?? null) !== run.attachment) return;
-    local.invalidRun = { step: run.step, reason: verdict };
-    queueMicrotask(() => { if (this._gateway?.view === view && !this._gateway.status.busy) this._send("endpoint"); });
+    if (!run) return;
+    const verdict = this._judgeFullRun(view);
+    if (verdict) { run.decided = true; local.invalidRun = verdict === "valid" ? null : { step: run.step, reason: verdict }; }
+    if (!local.invalidRun || run.pressed || run.sent || view?.motor_stopped !== true) return;
+    if (!view.owner || view.read_only || status.lost || status.error || status.busy) return;
+    run.sent = true;
+    queueMicrotask(() => {
+      if (this._gateway?.view === view && !this._gateway.status.busy) this._send("endpoint"); else run.sent = false;
+    });
+  }
+
+  /** «Ripeti la corsa» pressed while the stopped run was still open: sent on the result its confirmed end reaches. */
+  _queuedRepeat(view) {
+    const local = this._local, status = this._gateway?.status || {};
+    if (!local.repeatQueued || !view) return;
+    const result = view.mode === "geometry" && ((view.step === "opening" && view.phase === "reading") || (view.step === "half_open" && view.phase === "briefing"));
+    const guided = view.mode === "guided" && ["confirm_open", "review"].includes(view.phase);
+    if (!result && !guided) {
+      if (!["opening", "closing", "geometry_wait_stop"].includes(view.phase)) local.repeatQueued = false;
+      return;
+    }
+    local.repeatQueued = false;
+    if (!view.owner || view.read_only || status.lost || status.error) return;
+    queueMicrotask(() => { if (this._gateway?.view === view && !this._gateway.status.busy) this._act(guided ? "restart" : "repeat"); });
   }
 
   /**
@@ -1155,7 +1188,7 @@ function accepted(input) {
  * Fine-tuning keeps its base on purpose (`_startRefine` passes it again).
  */
 function freshFlags() {
-  return { ackLift: false, ackAscent: false, ackDescent: false, ackReadings: false, arm: null, run: null, fullRun: null, invalidRun: null, discarded: null, misbehaved: false, stopSent: false,
+  return { ackLift: false, ackAscent: false, ackDescent: false, ackReadings: false, arm: null, run: null, fullRun: null, invalidRun: null, repeatQueued: false, discarded: null, misbehaved: false, stopSent: false,
     review: null, pendingSave: null, fieldError: null, fieldSequence: undefined, errorPhase: undefined, saveProfile: undefined, saveChoice: undefined,
     profileName: undefined, refining: false, lastGap: null, liftOrigin: null, baseReadings: null, fineReadings: null, pathChoice: null, reachedPhase: null };
 }

@@ -1123,7 +1123,7 @@ test("Close keeps each mockup's style: B-09 red filled, A-34 red text, C-34 and 
   assert.deepEqual(close(expired), ["S-06", "danger-outline"]);
 });
 
-test("full runs and the return to the top: once the motor stopped by itself the stopwatch freezes, Stop goes, the bar is full", async () => {
+test("full runs and the return to the top: once the motor stopped the stopwatch freezes, Stop goes, the bar is full; ② only while it runs (L-3)", async () => {
   const t = (key) => translations.en[key] || key;
   const base = { mode: "geometry", values: { opening_time: 22, closing_time: 21 }, samples: { lift: 4 }, readings: { gap: 3 },
     geometry: { slat_time_s: 4 }, travel_cm: 110, slats: true, owner: true, sequence: 7 };
@@ -1136,12 +1136,20 @@ test("full runs and the return to the top: once the motor stopped by itself the 
     assert.deepEqual(ids(running), ["next", "endpoint", "stop"], `${code} running: Stop`);
     assert.deepEqual(running.stopwatch, { label: "Motor", value: "moving for 12.3 s" });
     assert.equal(screen({ ...view }, local, 12).stopwatch.value, "moving for 12.0 s", "one decimal always: the value keeps its length");
-    const stopped = screen({ ...view, motor_stopped: true, stopped_elapsed: 21.37 }, local, 25.8);
+    // ② pressed while it ran, the stop crossed it: the press decides; nothing more to press, no Stop.
+    const pressed = { fullRun: { step: view.step, pressed: true } };
+    const stopped = screen({ ...view, motor_stopped: true, stopped_elapsed: 21.37 }, pressed, 25.8);
     assert.deepEqual(ids(stopped), ["next", "endpoint"], `${code} stopped: no Stop`);
-    assert.equal(stopped.actions.find((action) => action.id === "endpoint").kind, "primary");
-    assert.equal(stopped.actions.find((action) => action.id === "endpoint").disabled, false, "the end stop is confirmed as before");
+    assert.equal(stopped.actions.find((action) => action.id === "endpoint").disabled, true, "L-3: ② only while the motor runs");
     assert.deepEqual(stopped.stopwatch, { label: "Stopwatch", value: "stopped at 21.4 s" }, `${code} freezes at the stop frame`);
-    assert.equal(screen({ ...view, motor_stopped: true, stopped_elapsed: 21 }, local).stopwatch.value, "stopped at 21.0 s");
+    assert.equal(screen({ ...view, motor_stopped: true, stopped_elapsed: 21 }, pressed).stopwatch.value, "stopped at 21.0 s");
+    // L-3: stopped before ② (any tab, a resumed one too): not valid at once, its time struck through, only Repeat.
+    const unpressed = screen({ ...view, motor_stopped: true, stopped_elapsed: 21.37 }, {}, 25.8);
+    assert.deepEqual([unpressed.code, unpressed.title, ids(unpressed)], [code === "A-11" ? "A-12" : "A-15",
+      code === "A-11" ? "Ascent not valid" : "Descent not valid", ["repeat", "invalid-next"]]);
+    assert.deepEqual([unpressed.results.at(-1).value, unpressed.results.at(-1).invalid, unpressed.notices[0].tone], ["21.4", true, "error"]);
+    assert.match(unpressed.notices[0].text, /stopped before you pressed ②/);
+    assert.match(screen({ ...view, motor_stopped: true, stopped_elapsed: 60.1 }).notices[0].text, /actuator's timer/, "59-65 s: the timer's notice");
   }
   // The return to the top (A-19 first leg): the bar is complete once the motor stopped, before the expected time.
   const top = screen({ step: "top", phase: "opening", motor_stopped: false, stopped_elapsed: null }, { ackReadings: true }, 5);
@@ -1155,8 +1163,11 @@ test("full runs and the return to the top: once the motor stopped by itself the 
   // The lift-off run is unchanged: a stop there still ends the session, so it keeps Stop.
   assert.deepEqual(ids(screen({ step: "lift", phase: "opening" }, { ackLift: true })), ["next", "lift", "stop"]);
   // The guided runs of path C (times only).
-  const guided = screen({ phase: "closing", values: { opening_time: 12.6 }, motor_stopped: true, stopped_elapsed: 12.24 }, {}, 14, "guided");
+  const guided = screen({ phase: "closing", values: { opening_time: 12.6 }, motor_stopped: true, stopped_elapsed: 12.24 }, { fullRun: { step: "closing", pressed: true } }, 14, "guided");
   assert.deepEqual([guided.code, ids(guided), guided.stopwatch.value], ["C-14", ["run:close", "endpoint"], "stopped at 12.2 s"]);
+  const guidedStopped = screen({ phase: "opening", motor_stopped: true, stopped_elapsed: 60.1 }, {}, 61, "guided");
+  assert.deepEqual([guidedStopped.code, guidedStopped.title, ids(guidedStopped), guidedStopped.results[0].invalid],
+    ["C-12", "Ascent not valid", ["restart", "invalid-next"], true], "L-3: the guided runs too");
   assert.deepEqual(ids(screen({ phase: "opening", motor_stopped: false }, {}, 3, "guided")), ["run:open", "endpoint", "stop"]);
 
   // On screen: the stopwatch stops counting and the Stop link leaves.
@@ -1169,15 +1180,14 @@ test("full runs and the return to the top: once the motor stopped by itself the 
   assert.equal(code(), "A-11");
   assert.ok(wiz().querySelector('.wiz-actions [data-wiz="stop"]'));
   Object.assign(backend.session, { motor_stopped: true, stopped_elapsed: 22.24 }); backend.session.sequence += 1; backend.emit(); await settle();
-  assert.equal(wiz().querySelector(".wiz-stopwatch-value").textContent, "stopped at 22.2 s");
-  assert.equal(wiz().querySelector(".wiz-stopwatch-label").textContent, "Stopwatch");
+  // L-3: stopped before ②: not valid at once, ② and Stop gone, the time it stopped at struck through.
+  assert.equal(wiz().querySelector(".wiz-title").textContent, "Ascent not valid");
   assert.equal(wiz().querySelector('.wiz-actions [data-wiz="stop"]'), null, "no Stop once the motor stopped");
-  assert.equal(wiz().querySelector('[data-wiz="endpoint"]').classList.contains("primary"), true);
-  await settle();
-  assert.equal(wiz().querySelector(".wiz-stopwatch-value").textContent, "stopped at 22.2 s", "it does not count on");
+  assert.equal(wiz().querySelector('[data-wiz="endpoint"]'), null, "no ② once the motor stopped");
+  assert.match(wiz().querySelector(".wiz-result.is-invalid").textContent, /22\.2/);
 });
 
-test("a full run ended by the bus: valid with a press before or within 2 s of the frame, otherwise its result asks to repeat", async () => {
+test("a full run ended by the bus: valid with a press while the motor ran, otherwise not valid at once and only Repeat (R8-7, L-3)", async () => {
   const toAscent = async (context) => {
     const { backend, press, type, startFor, code } = context;
     await startFor("cover.living_one");
@@ -1200,22 +1210,24 @@ test("a full run ended by the bus: valid with a press before or within 2 s of th
   a.backend.tick(22); a.backend.emit(); await tick();
   await a.press("endpoint"); a.backend.stopped(); await tick();
   assert.deepEqual([a.code(), !!a.wiz().querySelector('[data-wiz="ack:ascent"]'), notice(a.wiz)], ["A-12", true, ""]);
-  // (b) ② within 2 s after the frame: the frame's time, valid.
+  // (b) L-3: ② exists only while the motor runs: a click racing the stop's view (the button still drawn) confirms
+  // nothing valid; the run is not valid and its end is confirmed once.
   const b = await mount();
   await toAscent(b);
-  frame(b.backend, 22); await tick();
-  b.backend.tick(1); b.backend.emit(); await tick();
-  await b.press("endpoint"); b.backend.stopped(); await tick();
-  assert.deepEqual([b.code(), !!b.wiz().querySelector('[data-wiz="ack:ascent"]'), notice(b.wiz)], ["A-12", true, ""]);
-  // (c) no ② within 2 s: the run goes on by itself to its result, not valid, with only Repeat.
+  const racing = b.button("endpoint");
+  frame(b.backend, 22);
+  racing.click(); await tick(6);
+  b.backend.stopped(); await tick();
+  assert.deepEqual([b.code(), b.title(), b.wiz().querySelector('[data-wiz="ack:ascent"]')], ["A-12", "Ascent not valid", null]);
+  assert.equal(endpoints(b.backend), 3, "home, reset and this run's end: one endpoint each");
+  // (c) a stop before ②: not valid at once; the panel confirms the end stop itself, the result offers only Repeat.
   const c = await mount();
   await toAscent(c);
-  frame(c.backend, 22); await tick();
   const before = endpoints(c.backend);
-  c.backend.tick(1.5); c.backend.emit(); await tick();
-  assert.equal(endpoints(c.backend), before, "1.5 s after the frame: still waiting for ②");
-  c.backend.tick(1); c.backend.emit(); await tick(6);
-  assert.equal(endpoints(c.backend), before + 1, "2.5 s: the panel confirms the end stop itself");
+  frame(c.backend, 22); await tick(6);
+  assert.equal(endpoints(c.backend), before + 1, "no 2 s wait: the end stop is confirmed at once");
+  c.backend.tick(3); c.backend.emit(); await tick(6);
+  assert.equal(endpoints(c.backend), before + 1, "once");
   c.backend.stopped(); await tick();
   assert.equal(c.code(), "A-12");
   assert.equal(notice(c.wiz), "The cover stopped before you pressed ②: the time may not be the real one. Repeat the run and press ② as soon as the motor really stops.");
@@ -1230,11 +1242,12 @@ test("a full run ended by the bus: valid with a press before or within 2 s of th
   await c.press("repeat");
   assert.ok(c.actions().slice(-2).includes("repeat"), "Repeat sends repeat (the return to the bottom then starts by itself)");
   assert.match(ascent(), /—/, "D-11: nor while the repeat returns to the bottom (A-09)");
-  // (d) a frame at the actuator's timer (59-65 s), even with ② within 2 s: not valid.
+  // (d) a frame at the actuator's timer (59-65 s): not valid, its own notice.
   const d = await mount();
   await toAscent(d);
-  frame(d.backend, 60.2); await tick();
-  await d.press("endpoint"); d.backend.stopped(); await tick();
+  frame(d.backend, 60.2); await tick(6);
+  assert.equal(d.button("endpoint"), null, "L-3: no ② after the timer stopped the motor");
+  d.backend.stopped(); await tick();
   assert.equal(d.code(), "A-12");
   assert.equal(notice(d.wiz), "The cover stopped when the actuator's timer ran out (about 60 s): the time is not valid. Repeat the run and press ② as soon as the motor really stops.");
   assert.equal(d.wiz().querySelector('[data-wiz="ack:ascent"]'), null);
@@ -1256,13 +1269,90 @@ test("the full descent follows the same rule, and the lift-off run is not affect
   await press("next"); await move(backend, { seconds: 22.2 }); await press("endpoint"); backend.stopped(); await tick();
   await press("ack:ascent"); await type("198");
   assert.equal(code(), "A-14");
-  await press("next"); backend.started(); backend.tick(21); Object.assign(backend.session, { motor_stopped: true, stopped_elapsed: backend.view().elapsed }); backend.emit(); await tick();
-  backend.tick(3); backend.emit(); await tick(6);
+  await press("next"); backend.started(); backend.tick(21); Object.assign(backend.session, { motor_stopped: true, stopped_elapsed: backend.view().elapsed }); backend.emit(); await tick(6);
+  assert.equal(wiz().querySelector(".wiz-title").textContent, "Descent not valid", "L-3: at once, before its end is confirmed");
   backend.stopped(); await tick();
   assert.equal(code(), "A-15");
   assert.match(wiz().querySelector(".wiz-result-notices").textContent, /stopped before you pressed ②/);
   assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => item.dataset.wiz), ["repeat", "invalid-next"]);
   assert.equal(wiz().querySelector(".wiz-title").textContent, "Descent not valid");
+});
+
+const T445 = "The cover stopped when the actuator's timer ran out (about 60 s): the time is not valid. Repeat the run and press ② as soon as the motor really stops.";
+
+for (const slats of [false, true]) {
+  test(`L-3: a full ascent the actuator's timer stopped while no tab was attached is not valid on resume, as a reader and after Take control (${slats ? "slats" : "no slats"})`, async () => {
+    const session = resumed({ phase: "opening", step: "opening", slats, values: {}, samples: slats ? { lift: 4 } : {}, readings: slats ? { gap: 3 } : {},
+      travel_cm: null, can_repeat: false, reading_kind: "travel", expected_cm: null, motor_stopped: true, stopped_elapsed: 60.1, _started: 0, _after_stop: "reading" });
+    const { backend, tab, wiz, code, title, press, actions } = await mount({ session, owner: false });
+    backend.tick(75);
+    tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
+    const shown = () => [code(), title(), wiz().querySelector(".wiz-result.is-invalid")?.textContent.includes("60.1"),
+      wiz().querySelector(".wiz-result-notices").textContent, wiz().querySelector('[data-wiz="endpoint"]')];
+    assert.deepEqual(shown(), ["A-12", "Ascent not valid", true, T445, null], "the reader sees it at once, struck through, with no ②");
+    assert.deepEqual(actions(), [], "a reader sends nothing");
+    wiz().querySelector('[data-wiz="take"]').click(); await tick();
+    wiz().querySelector('[data-wiz="take"]').click(); await tick(8);
+    assert.equal(wiz().querySelector(".wiz-readonly"), null);
+    assert.deepEqual(shown(), ["A-12", "Ascent not valid", true, T445, null], "after Take control: still not valid, ② never offered");
+    assert.deepEqual(actions(), ["endpoint"], "its end stop is confirmed once (nothing moves), so the result can be repeated");
+    backend.stopped(); await tick();
+    assert.deepEqual(shown(), ["A-12", "Ascent not valid", true, T445, null]);
+    assert.equal(wiz().querySelector('[data-wiz="ack:ascent"]'), null);
+    assert.notEqual(title(), translations.en.wiz_T062, "never the travel reading");
+    const sent = actions().length;
+    await press("repeat");
+    assert.equal(actions()[sent], "repeat");
+  });
+
+  test(`L-3: ② cannot turn a run the timer stopped into a valid time in the live tab (${slats ? "slats" : "no slats"})`, async () => {
+    const { backend, wiz, code, title, press, type, startFor, actions, panel } = await mount();
+    await startFor("cover.living_one");
+    if (!slats) { const no = wiz().querySelector('input[name="slats"][value="no"]'); no.checked = true; no.dispatchEvent(new Event("change", { bubbles: true })); }
+    await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+    if (slats) {
+      await press("ack:lift"); await press("next"); await move(backend, { seconds: 4.4 }); await press("lift"); backend.stopped(); await tick();
+      await type("3"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+    }
+    assert.equal(code(), "A-11");
+    await press("next"); backend.started(); await tick();
+    // The timer's stop frame arrives while a click on ② is on its way (the button was still drawn).
+    const racing = wiz().querySelector('[data-wiz="endpoint"]');
+    backend.tick(60.1);
+    Object.assign(backend.session, { motor_stopped: true, stopped_elapsed: 60.1 });
+    backend.emit();
+    racing.click();
+    panel._calibrationTab._wizard._act("endpoint");
+    await tick(6);
+    assert.equal(actions().filter((action) => action === "endpoint").length, slats ? 3 : 2, "one end stop for this run, sent as not valid");
+    backend.stopped(); await tick();
+    assert.deepEqual([code(), title(), wiz().querySelector(".wiz-result-notices").textContent], ["A-12", "Ascent not valid", T445]);
+    assert.equal(backend.session.phase, "reading", "the backend waits for a reading the panel does not ask for");
+  });
+}
+
+test("L-3: Repeat pressed before the end of a stopped run is confirmed is sent on the result it reaches", async () => {
+  const { backend, wiz, code, press, type, startFor, actions } = await mount();
+  await startFor("cover.living_one");
+  await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  await press("ack:lift"); await press("next"); await move(backend, { seconds: 4.4 }); await press("lift"); backend.stopped(); await tick();
+  await type("3"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  await press("next"); backend.started(); backend.tick(22);
+  Object.assign(backend.session, { motor_stopped: true, stopped_elapsed: 22 });
+  backend.emit();
+  wiz().querySelector('[data-wiz="repeat"]').click(); await tick(6);
+  assert.equal(actions().at(-1), "endpoint", "the end stop first");
+  const sent = actions().length;
+  backend.stopped(); await tick(6);
+  assert.equal(actions()[sent], "repeat", "then the repeat, by itself (the return to the bottom follows as after any repeat)");
+  assert.equal(code(), "A-09");
+});
+
+test("L-3: a guided run (times only) stopped before ② is not valid on resume", () => {
+  const t = (key) => translations.en[key] || key;
+  const screen = buildScreen({ t, stage: "session", path: "C", scope: "times_only", cover: { name: "Kitchen shutter 2" }, local: {}, elapsed: 61,
+    view: { mode: "guided", phase: "opening", values: {}, motor_stopped: true, stopped_elapsed: 60.1, owner: false, read_only: true, sequence: 4 } });
+  assert.deepEqual([screen.code, screen.title, screen.results[0].invalid, screen.notices[0].text], ["C-12", "Ascent not valid", true, T445]);
 });
 
 test("A-03 and A-16 have no Cancel of their own: the header's Abandon the calibration does the same", () => {
