@@ -1228,7 +1228,10 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-result.is-invalid { background: color-mix(in srgb, var(--panel-error) 8%, var(--panel-surface)); }
 .wiz-result.is-invalid .wiz-result-value { color: var(--panel-text-2); }
 .wiz-result.is-invalid .wiz-result-number { text-decoration: line-through; text-decoration-thickness: 2px; }
-.wiz-box { display: grid; gap: 4px; padding: 12px 14px; border-radius: 10px; background: var(--panel-surface-2); }
+/* N-14: on a dark theme the secondary background is almost the page's: the box is the text colour at 6 % on the
+   surface, with a hairline, seen in both themes. */
+.wiz-box { display: grid; gap: 4px; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--panel-border);
+  background: color-mix(in srgb, var(--primary-text-color, #182b37) 6%, var(--panel-surface)); }
 .wiz-box p { margin: 0; }
 .wiz-choice { max-width: 420px; }
 .wiz-choice-hint { font-weight: 400; }

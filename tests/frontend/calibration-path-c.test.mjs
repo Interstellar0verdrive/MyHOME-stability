@@ -206,3 +206,8 @@ test("D-21: before a case or path is confirmed the stepper follows the one chose
   assert.equal(at("case").stepper.phases[0].substeps[0].value, t("wiz_T236"), "its caption too");
   assert.deepEqual(keys(at("case", "times_only")), ["intro", "prep", "ascent", "descent", "summary"], "the case just ticked");
 });
+
+test("N-14: C-01's «Currently in use» box stands out from the page in both themes", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.wiz-box \{ display: grid; gap: 4px; padding: 12px 14px; border-radius: 10px; border: 1px solid var\(--panel-border\);\s*background: color-mix\(in srgb, var\(--primary-text-color, #182b37\) 6%, var\(--panel-surface\)\); \}/);
+});
