@@ -302,7 +302,7 @@ test("path A runs the live geometry session from the first close to Save, one me
   assert.equal(code(), "A-17");
   await move(backend, { auto: true, stop: true });
   assert.equal(code(), "A-18");
-  assert.equal(wiz().querySelector("#wiz-field-hint").textContent, "For this cover the reading should be between 73.6 and 109.1 cm. Enter what the tape says.");
+  assert.equal(wiz().querySelector("#wiz-field-hint").textContent, "Between 73.6 and 109.1 cm are expected. Enter what the tape says; a comma or a point is fine.");
   const sentBefore = actions().length;
   await type("120");
   assert.equal(actions().length, sentBefore, "a reading outside the accepted range is not sent");
@@ -686,7 +686,7 @@ test("a check run is shown like an intermediate run, without elapsed time, then 
   assert.equal(reading.code, "A-31");
   assert.equal(reading.title, "Check the cover");
   assert.deepEqual([reading.field.min, reading.field.max], [0.1, 110]);
-  assert.match(reading.field.hint, /^About 83 cm expected/);
+  assert.match(reading.field.hint, /^About 83 cm are expected\. Enter what the tape says/);
   assert.deepEqual(reading.actions.map((action) => action.id), ["reading", "repeat"]);
 });
 
@@ -697,7 +697,7 @@ test("an intermediate reading names its accepted range in Italian with a decimal
   const screen = buildScreen({ t, language: "it", stage: "session", path: "A", view, cover: { name: "Cucina 2" },
     status: { error: { code: "reading_out_of_range", reading: 70.5 } } });
   assert.equal(screen.code, "A-20");
-  assert.equal(screen.field.hint, "Per questa tapparella la lettura attesa è fra 40,9 e 60,6 cm. Scrivi quello che dice il metro.");
+  assert.equal(screen.field.hint, "Sono attesi fra 40,9 e 60,6 cm. Scrivi quello che dice il metro; virgola o punto vanno bene.");
   assert.match(screen.notices[0].text, /^La lettura \(70,5 cm\) è fuori dall’intervallo ammesso \(40,9–60,6 cm\)/);
   assert.equal(screen.stopwatch, null, "no time is shown for a reading");
   const running = buildScreen({ t, language: "it", stage: "session", path: "A", view: { ...view, phase: "closing", reading_range: null }, elapsed: 3.2,

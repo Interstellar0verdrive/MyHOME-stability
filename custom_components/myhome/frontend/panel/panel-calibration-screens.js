@@ -399,7 +399,8 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
         results: [liftTile(), timeTile("wiz_T040", view.values?.opening_time)].filter(Boolean),
         actions: [{ id: "ack:ascent", label: t("wiz_T060"), kind: "primary" }, { id: "repeat", label: t("wiz_T061"), kind: "secondary" }] });
       return Object.assign(screen, { code: p("13"), title: t("wiz_T062"), body: t("wiz_T063"),
-        field: { label: t("wiz_T064"), hint: t("wiz_T066"), min: 20, max: 500, kind: "travel", value: view.saved_travel_cm ?? null },
+        // Z-11: one pattern for every reading's hint: the expected value when known, the field's limits otherwise.
+        field: { label: t("wiz_T064"), hint: view.saved_travel_cm != null ? tx("wiz_T527", { cm: n(view.saved_travel_cm, 0) }) : t("wiz_T066"), min: 20, max: 500, kind: "travel", value: view.saved_travel_cm ?? null },
         actions: [{ id: "reading", label: t("wiz_T051"), kind: "primary" }] });
     }
     Object.assign(screen, { code: p("11"), title: slats ? t("wiz_T055") : t("wiz_T040"),
@@ -481,7 +482,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     // intermediate runs, so no elapsed time; then the tape reading, from 0.1 cm to the measured travel.
     screen.phase = "readings";
     if (phase === "reading") return Object.assign(screen, { code: p("31"), title: t("wiz_T138"), body: t("wiz_T139"),
-      field: { label: t("wiz_T064"), hint: view.check?.target_cm != null ? tx("wiz_T123", { cm: n(view.check.target_cm, 0) }) : t("wiz_T491"), min: 0.1, max: view.travel_cm ?? 10000, kind: "height" },
+      field: { label: t("wiz_T064"), hint: view.check?.target_cm != null ? tx("wiz_T527", { cm: n(view.check.target_cm, 0) }) : t("wiz_T491"), min: 0.1, max: view.travel_cm ?? 10000, kind: "height" },
       actions: [{ id: "reading", label: t("wiz_T051"), kind: "primary" }, { id: "repeat", label: t("wiz_T033"), kind: "secondary" }] });
     positioning("30", t("wiz_T086"));
     if (phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
@@ -564,11 +565,11 @@ function previewScreen(screen, ctx, tx, n, values, stop) {
       actions: [{ id: "reading", label: t("wiz_T051"), kind: "primary" }] });
     if (profile) return Object.assign(screen, { code: "B-06", title: t("wiz_T138"),
       body: tx("wiz_T509", { expected: n(view.expected_cm, 0), travel: n(view.travel_cm, 0) }),
-      field: { label: t("wiz_T064"), hint: view.expected_cm != null ? tx("wiz_T123", { cm: n(view.expected_cm, 0) }) : t("wiz_T491"), min: 0, max: 10000, kind: "height" },
+      field: { label: t("wiz_T064"), hint: view.expected_cm != null ? tx("wiz_T527", { cm: n(view.expected_cm, 0) }) : t("wiz_T491"), min: 0, max: 10000, kind: "height" },
       actions: [{ id: "reading", label: t("wiz_T051"), kind: "primary" }, { id: "repeat", label: t("wiz_T033"), kind: "secondary" }] });
     const [, number, title] = readingCodes[view.step];
     return Object.assign(screen, { code: p(number), title: t(title), body: view.step === "check" ? t("wiz_T139") : t("wiz_T082"),
-      field: { label: t("wiz_T064"), hint: view.expected_cm != null ? tx("wiz_T123", { cm: n(view.expected_cm, 0) }) : t("wiz_T491"), min: 0, max: 10000, kind: "height" },
+      field: { label: t("wiz_T064"), hint: view.expected_cm != null ? tx("wiz_T527", { cm: n(view.expected_cm, 0) }) : t("wiz_T491"), min: 0, max: 10000, kind: "height" },
       actions: [{ id: "reading", label: t("wiz_T051"), kind: "primary" }, { id: "repeat", label: t("wiz_T033"), kind: "secondary" }] });
   }
   if (view.phase === "check_result") {
@@ -825,8 +826,8 @@ function problemScreen(screen, ctx, reason, step = false) {
  */
 function halfField(ctx, tx, n) {
   const { t, view, language = "en" } = ctx, span = view.reading_range;
-  if (!span) return { label: t("wiz_T064"), hint: view.expected_cm != null ? tx("wiz_T083", { cm: n(view.expected_cm, 0) }) : t("wiz_T491"), min: 0.1, max: 10000, kind: "height" };
-  return { label: t("wiz_T064"), hint: fill(t("calReadingRange"), readingRange(span, language)),
+  if (!span) return { label: t("wiz_T064"), hint: view.expected_cm != null ? tx("wiz_T527", { cm: n(view.expected_cm, 0) }) : t("wiz_T491"), min: 0.1, max: 10000, kind: "height" };
+  return { label: t("wiz_T064"), hint: fill(t("wiz_T528"), readingRange(span, language)),
     min: span.min_cm - RANGE_SLACK_CM, max: span.max_cm + RANGE_SLACK_CM, kind: "height", range: true };
 }
 
