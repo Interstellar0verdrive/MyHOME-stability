@@ -229,6 +229,7 @@ export class PreviewCalibrationGateway {
   /** A positioning in one or two stages, then the reading of `step`. */
   _position({ step, stages }, reading) {
     this._clear();
+    this._pendingReading = reading;
     this._emit({ phase: "positioning", step, stages, stage_index: 0, expected_cm: null, check_result: null });
     const advance = (index) => {
       if (index < stages.length - 1) { this._emit({ stage_index: index + 1 }); this._later(() => advance(index + 1)); return; }
@@ -273,6 +274,12 @@ export class PreviewCalibrationGateway {
     const view = this._view;
     this._error = null;
     if (!view) return Promise.resolve();
+    // Y-b: nothing moves in a preview, so its positioning can be passed at once («Continua»).
+    if (action === "skip" && view.phase === "positioning") {
+      this._clear();
+      this._emit({ phase: "reading", step: this._pendingReading, stages: [], stage_index: null, expected_cm: this._expected(this._pendingReading) });
+      return Promise.resolve();
+    }
     if (action === "reading" && view.phase === "reading") {
       const value = Number(extra.reading_cm);
       const limit = view.step === "travel" ? 500 : (view.travel_cm || 500) + 50;

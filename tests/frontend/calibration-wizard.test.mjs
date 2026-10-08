@@ -1044,7 +1044,7 @@ test("a half run that did not start by itself can be started from its screen, an
   // D-46: a preview moves nothing, so it has no Stop: the state says so, under «Here the cover would position itself».
   assert.equal(wiz().querySelector('[data-wiz="stop"]'), null);
   assert.equal(wiz().querySelector(".wiz-title").textContent, "Here the cover would position itself");
-  assert.equal(wiz().querySelector(".wiz-actions .status.is-still").textContent.trim(), "Preview: no cover moves");
+  assert.ok(wiz().querySelector('.wiz-actions [data-wiz="skip"].primary'), "Y-b: «Continue» to the reading, nothing to wait for");
   assert.equal(wiz().querySelector(".wiz-wait-meter").hidden, true, "no countdown");
   assert.ok(wiz().querySelector(".wiz-preview"));
   assert.equal(backend.calls.filter((message) => message.action === "save").length, 1, "only the base calibration was saved");

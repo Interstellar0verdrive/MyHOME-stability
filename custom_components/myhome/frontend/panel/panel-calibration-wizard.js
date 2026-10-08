@@ -662,7 +662,7 @@ export class CalibrationWizard {
       local.discarded = { step: local.invalidRun.step, value: gateway?.view?.values?.[key] ?? null };
     }
     if (id === "repeat") local.invalidRun = null;
-    if (["next", "lift", "endpoint", "repeat", "repeat_step", "accept", "repeat_check", "redo_readings", "continue_anyway", "continue"].includes(id)) return this._send(id);
+    if (["next", "lift", "endpoint", "repeat", "repeat_step", "accept", "repeat_check", "redo_readings", "continue_anyway", "continue", "skip"].includes(id)) return this._send(id);
     // "It did not do what it should" (A-05): today the run is stopped and S-01 offers to start over (L2 will repeat the step).
     if (id === "stop" || id === "misbehaved") { local.misbehaved = id === "misbehaved"; this._closeDialog(false); return gateway?.stop(); }
     // Ownership gained by a claim or a reconnection moves nothing until this tab presses something.

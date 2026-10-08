@@ -541,7 +541,8 @@ function previewScreen(screen, ctx, tx, n, values, stop) {
     quarter_close: "wiz_T129", three_quarter_close: "wiz_T133", check: "wiz_T137", bottom: "wiz_T171", half_travel: "wiz_T172" };
   // D-46: a preview's box says nothing moves (path B, fine-tuning, tape readings only), so its positionings are not
   // drawn as such: what would happen live, the stages it would run, no countdown, and the state in place of Stop.
-  const still = [{ id: "preview-still", label: t("wiz_T508"), kind: "state" }];
+  // Y-b: the preview box already says nothing moves: no state line, but «Continua» to the reading at once.
+  const still = [{ id: "skip", label: t("wiz_T006"), kind: "primary" }];
   if (view.phase === "positioning") {
     if (profile && view.step === "open_full") return Object.assign(screen, { code: "B-03", title: t("wiz_T505"),
       wait: { text: tx("wiz_T506", values), stages: [], progress: false }, actions: still });

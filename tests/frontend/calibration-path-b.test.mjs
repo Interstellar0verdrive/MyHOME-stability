@@ -41,12 +41,14 @@ test("path B runs as a preview from the travel to the check and the summary, wit
   await press("begin");
   assert.equal(wiz().querySelector(".wiz-preview").textContent, translations.en.wizPreview);
   assert.equal(code(), "B-03");
-  assert.equal(wiz().querySelector(".wiz-wait p").textContent, "Live, Living room shutter 1 would open fully and the curtain travel would be measured from there. In the preview nothing moves.");
+  assert.equal(wiz().querySelector(".wiz-wait p").textContent, "Live, Living room shutter 1 would open fully and the curtain travel would be measured from there.");
   // D-46: nothing moves in a preview: no «positioning», no countdown, no Stop.
   assert.equal(title(), "Here the cover would position itself");
   assert.equal(wiz().querySelector(".wiz-wait-meter").hidden, true);
   assert.equal(wiz().querySelector('[data-wiz="stop"]'), null);
-  assert.equal(wiz().querySelector(".wiz-actions .status.is-still").textContent.trim(), "Preview: no cover moves");
+  // Y-b: the preview box says nothing moves (once); the step offers «Continue» to the reading at once.
+  assert.equal(wiz().querySelector(".wiz-actions .status.is-still"), null);
+  assert.equal(wiz().querySelector('.wiz-actions [data-wiz="skip"]').textContent, "Continue");
   await waitFor(() => code() === "B-04", "B-04");
   await type("196");
   assert.equal(code(), "B-05");
@@ -167,3 +169,14 @@ test("a preview reading beyond the travel + 50 cm shows why it is refused, in th
   assert.ok(wiz().textContent.includes(translations.en.profileError_invalid_reading), "the refusal is shown");
 });
 
+
+test("Y-b: a preview's positioning is passed with «Continue», nothing to wait for", async () => {
+  const overview = sampleOverview();
+  overview.covers.find((cover) => cover.entity_id === "cover.living_one").travel_cm = null;
+  const { code, press, startFor } = await mount({ stageMs: 60000, overview });
+  await startFor("cover.living_one", "B");
+  await press("profile"); await press("begin");
+  assert.equal(code(), "B-03");
+  await press("skip");
+  assert.equal(code(), "B-04", "straight to the reading");
+});
