@@ -181,6 +181,30 @@ test("times only: a repeat starts the times again from the briefing, and a run t
   assert.equal(wizard._local.fullRun.step, "opening");
 });
 
+test("L-4: a «solo tempi» session the wizard started opens in the wizard's reader view from a second tab; one from Devices keeps the maintainer's dialog", async () => {
+  // The wizard marks its own start.
+  const first = await mount();
+  await toCase(first, "times_only");
+  await first.press("begin");
+  assert.equal(first.backend.subscriptions.find((message) => message.type === "myhome/cover_calibration/start").origin, "wizard");
+  reset();
+  const guided = (extra) => ({ entry_id: "one", entity_id: "cover.living_one", session_id: "session-1", sequence: 5, revision: 7, mode: "guided",
+    phase: "opening", reason: null, values: {}, stop_requested: false, save_modes: ["new", "cover", "shared"], _started: 0, ...extra });
+  const second = await mount({ session: guided({ origin: "wizard" }), owner: false });
+  second.backend.tick(8);
+  second.tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(8);
+  assert.equal(second.root.querySelector("#dialog-host dialog.cal-dialog"), null, "not the maintainer's dialog");
+  assert.equal(second.code(), "C-11");
+  assert.ok(second.wiz().querySelector(".wiz-readonly"), "the reader view");
+  assert.deepEqual([...second.wiz().querySelectorAll(".wiz-actions .wiz-action")].map((button) => button.dataset.wiz), ["stop"], "with its Stop");
+  assert.deepEqual(second.wiz().querySelector(".wiz-steps") && [...second.wiz().querySelectorAll(".wiz-steps > ol > li")].length, 5, "the «solo tempi» steps");
+  reset();
+  const devices = await mount({ session: guided({}), owner: false });
+  devices.tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(8);
+  assert.ok(devices.root.querySelector("#dialog-host dialog.cal-dialog"), "started from Devices: the maintainer's dialog");
+  assert.equal(devices.wiz(), null);
+});
+
 test("D-20: in C-01 a value not known is «—» without its unit", async () => {
   const { buildScreen } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-screens.js");
   const { translations } = await import("../../custom_components/myhome/frontend/panel/panel-translations.js");

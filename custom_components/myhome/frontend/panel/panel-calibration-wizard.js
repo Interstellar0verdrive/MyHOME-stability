@@ -57,7 +57,8 @@ export class CalibrationWizard {
    * Sessions the wizard draws itself when opened from the list: slat and roll measurement. A guided
    * session (times only) opens in the existing view, which offers every save mode it was started with.
    */
-  handles(session) { return session?.mode === "geometry" && !session.batch; }
+  /** L-4: its own sessions, geometry and guided («solo tempi», marked `origin: "wizard"`); the rest is the maintainer's. */
+  handles(session) { return !!session && !session.batch && (session.mode === "geometry" || (session.mode === "guided" && session.origin === "wizard" && !session.direction)); }
 
   updateHass(hass) { if (this._context) { this._context.hass = hass; this._theme(); } }
 
@@ -840,9 +841,9 @@ export class CalibrationWizard {
     if (item) local.coverKey = key(item);
     // The view has no path: a slat and roll measurement of a cover that already follows a profile is the
     // correction "remeasure everything" (C), of any other cover the first of its type (A).
-    const correction = session.mode === "geometry" && !!item?.profile;
-    Object.assign(local, freshFlags(), { stage: "session", path: correction ? "C" : "A", scope: correction ? "times_and_rolls" : null,
-      slats: session.slats !== false });
+    const correction = session.mode === "geometry" && !!item?.profile, timesOnly = session.mode === "guided";
+    Object.assign(local, freshFlags(), { stage: "session", path: correction || timesOnly ? "C" : "A",
+      scope: timesOnly ? "times_only" : correction ? "times_and_rolls" : null, slats: session.slats !== false });
     this._newGateway("live").resume({ ...this._liveContext(), session });
   }
 

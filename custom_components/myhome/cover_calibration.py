@@ -114,6 +114,8 @@ class CalibrationSession:
         self.listener = True
         self.closed = False
         self.client_id = client_id
+        # Which client started it ("wizard": the Calibration tab's wizard): a second tab opens it in the same view.
+        self.origin: str | None = None
         self.attachment = uuid4().hex
         # Used only when the client identifies itself (client_id).
         self.owner = client_id
@@ -162,6 +164,7 @@ class CalibrationSession:
                     "idle_expires_at": None if self.closed or self.lease_expires_at is None
                     else self.lease_expires_at.isoformat()} if self.client_id else {}),
                 "save_modes": ["new", "cover", "shared"] if self.store.profile(self.cover.unique_id) else ["new", "cover"],
+                **({"origin": self.origin} if self.origin else {}),
                 **({"direction": self.direction} if self.direction else {})}
 
     def present(self) -> bool:
@@ -657,6 +660,7 @@ async def begin(hass: Any, connection: Any, msg: dict[str, Any]) -> Any:
         elif "slats" in msg:
             raise ProfileError("invalid_profile")
         session = session_type(hass, store, entry, cover, connection, msg["id"], client_id=msg.get("client_id"), **options)
+        session.origin = msg.get("origin")
         store.calibration = cover._calibration = session
         session.subscribe()
         return session
@@ -670,6 +674,7 @@ async def begin(hass: Any, connection: Any, msg: dict[str, Any]) -> Any:
     vol.Optional("slats"): bool,
     vol.Optional("client_id"): vol.All(str, vol.Length(min=1, max=64)),
     vol.Optional("session_id"): vol.All(str, vol.Length(min=1, max=64)),
+    vol.Optional("origin"): vol.In(["wizard"]),
 }))
 @require_admin
 @async_response

@@ -52,6 +52,20 @@ class WizardSession extends CoverCalibration {
   }
 }
 
+/**
+ * L-4: a session the wizard starts says so (`origin: "wizard"` in its view), so a second tab opens it in the wizard's
+ * reader view, guided «solo tempi» included; sessions started from Devices keep the maintainer's dialog. Only the
+ * start message is marked: the maintainer's engine builds it, so the wizard hands it a Home Assistant that adds the field.
+ */
+const START = "myhome/cover_calibration/start";
+export function wizardHass(hass) {
+  const bound = (target, key) => { const value = Reflect.get(target, key); return typeof value === "function" ? value.bind(target) : value; };
+  const connection = new Proxy(hass.connection, { get: (target, key) => key === "subscribeMessage"
+    ? (callback, message, ...rest) => target.subscribeMessage(callback, message?.type === START ? { ...message, origin: "wizard" } : message, ...rest)
+    : bound(target, key) });
+  return new Proxy(hass, { get: (target, key) => key === "connection" ? connection : bound(target, key) });
+}
+
 export const SAVE_TARGETS = ["profile_new", "profile_update", "cover_only"];
 // Path B only: the cover follows a profile with its own travel, nothing measured is written.
 const PREVIEW_TARGETS = [...SAVE_TARGETS, "follow_profile"];
@@ -106,7 +120,7 @@ export class LiveCalibrationGateway {
 
   /** `mode` is "geometry" (paths A and C, times and rolls) or "guided" (path C, times only). */
   start({ host, hass, t, entity, revision, mode, slats, onSaved, onCancel }) {
-    this._base = { host, hass, t, entity, revision, onSaved, onCancel };
+    this._base = { host, hass: wizardHass(hass), t, entity, revision, onSaved, onCancel };
     return this._engine.open({ ...this._base, mode, ...(mode === "geometry" ? { slats } : {}) });
   }
 

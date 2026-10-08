@@ -166,6 +166,7 @@ export function createFakeBackend({ language = "en", inventory = coverInventory(
         if (message.type === "myhome/cover_calibration/start") {
           // As in Home Assistant, a start without `mode` is the guided measurement.
           session = message.mode === "geometry" ? startGeometry(message) : startGuided(message);
+          if (message.origin) session.origin = message.origin;
           refresh();
         } else if (message.type === "myhome/cover_calibration/batch_start") {
           // A sequence: the automatic cycle of each cover in turn (`cover_index`), confirmed with `run`.
