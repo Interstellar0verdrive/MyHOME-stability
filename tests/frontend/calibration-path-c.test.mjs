@@ -254,6 +254,29 @@ test("a cover shown closed at an unknown position is positioned for real: its ol
   assert.equal(code(), "C-11");
 });
 
+test("N-3: a cover with no known closing time that never moves is positioned for two minutes at most", async () => {
+  const context = await mount();
+  const { backend, code, press, panel } = context;
+  await toCase(context, "times_only");
+  const item = panel._calibrationTab._covers().find((entry) => entry.cover.entity_id === "cover.kitchen_two");
+  item.cover.effective.closing.value = null;
+  backend.hass.states["cover.kitchen_two"] = { state: "closed", attributes: { current_position: null } };
+  await press("begin");
+  assert.equal(code(), "C-04");
+  const wizard = panel._calibrationTab._wizard, homing = wizard._local.homing;
+  assert.equal(homing.seconds, null, "no closing time to wait for");
+  const started = () => backend.subscriptions.some((message) => message.type === "myhome/cover_calibration/start");
+  // Home Assistant never reports it moving (it was already down): «closed» alone does not end the positioning…
+  homing.started = Date.now() - 119000;
+  wizard.updateHass(backend.hass); await tick(4);
+  assert.equal(started(), false, "still positioning before two minutes");
+  // …two minutes do: the session starts on «check that it is fully closed».
+  homing.started = Date.now() - 121000;
+  wizard.updateHass(backend.hass); await tick(6);
+  assert.equal(started(), true);
+  assert.equal(code(), "C-11");
+});
+
 test("L-38: times only first closes an open cover, as path A does, then starts on «check that it is fully closed»", async () => {
   const context = await mount();
   const { backend, wiz, code, press, panel } = context;

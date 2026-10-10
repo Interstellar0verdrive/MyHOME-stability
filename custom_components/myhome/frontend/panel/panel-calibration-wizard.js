@@ -44,6 +44,8 @@ const SHARED_FLAGS = ["ackLift", "ackAscent", "ackDescent", "ackReadings", "inva
 const SHEET_MS = 220;
 /** Home Assistant keeps a session open this long for its owner at rest (IDLE_LEASE_SECONDS) when the view does not say. */
 const IDLE_LEASE_SECONDS = 1800;
+/** N-3: the positioning of a cover with no known closing time waits this long at most (seconds). */
+const HOME_FALLBACK_S = 120;
 /** A stop frame between these times is an actuator's timer (about 60 s), never the real end of the run. */
 export const TIMER_STOP_SECONDS = screens.TIMER_STOP_SECONDS;
 // Phases a press goes through before the cover stops again: the press that started them still counts.
@@ -1015,7 +1017,10 @@ export class CalibrationWizard {
     // Review nit: a cover already shown «closed» (at an unknown position) is still «closed» before its run starts:
     // that «closed» counts only once Home Assistant has reported the close under way; otherwise the run's time decides.
     if (state && ["closing", "opening"].includes(state.state)) homing.moved = true;
-    const done = (still && state.state === "closed" && homing.moved) || (homing.seconds != null && elapsed >= homing.seconds + Math.max(2, homing.seconds * 0.15) && still);
+    // N-3: no closing time to wait for (none known): two minutes, then the session starts on «check that it is fully
+    // closed», where the user confirms it, rather than a positioning that never ends for a cover that never moves.
+    const limit = homing.seconds != null ? homing.seconds + Math.max(2, homing.seconds * 0.15) : HOME_FALLBACK_S;
+    const done = (still && state.state === "closed" && homing.moved) || (elapsed >= limit && still);
     if (!done) { this._patch(this._screen()); return; }
     clearInterval(this._homeTimer); this._homeTimer = null;
     local.homing = null;
