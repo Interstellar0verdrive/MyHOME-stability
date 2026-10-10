@@ -735,6 +735,16 @@ function summaryScreen(screen, ctx, tx, n, values) {
   const precision = view.check && !liveCheck ? tx(Number(checkGap(view.check)) < 1 ? "wiz_T513" : "wiz_T151", { gap: checkGap(view.check), seconds: n(view.check.check_seconds) }) : null;
   const saveInfo = (key) => ({ title: t("wiz_T280"), body: counted(t, key, cover?.followers?.length ?? 0, values) });
   const save = { id: "save", label: t("wiz_T102"), kind: "primary" };
+  // L-46: a preview's summary (path B, tape readings only, fine-tuning) saves nothing in this version: no Save, no
+  // profile switch, no «what happens when I save?»: one notice, then «Chiudi» (or another cover).
+  if (view.preview) {
+    const code = profileB ? "B-08" : points ? "C-38" : path === "C" ? "C-33" : (follows ? "A-33c" : "A-33");
+    if (points || refine) { screen.table.mutedBefore = points; if (points) screen.table.rows = [...screen.table.rows, ...rolls]; }
+    Object.assign(screen, { code, title: t(profileB ? "wiz_T179" : "wiz_T149"), body: "", precision, profileBlock: null, saveInfo: null,
+      actions: [{ id: "close", label: t("wiz_T158"), kind: "primary" }, { id: "another", label: t("wiz_T156"), kind: "secondary" }] });
+    screen.notices.push({ tone: "info", result: true, text: tx("wiz_T565", values) });
+    return screen;
+  }
   if (profileB) {
     const followed = ctx.cover?.followProfile ?? "";
     Object.assign(screen, { code: "B-08", title: t("wiz_T179"), body: tx("wiz_T180", { ...values, profile: followed, travel: n(view.travel_cm, 0) }),
@@ -764,8 +774,11 @@ function summaryScreen(screen, ctx, tx, n, values) {
     body: c ? (follows ? tx(refine ? "wiz_T226" : "wiz_T210", values) : t(refine ? "wiz_T150" : "wiz_T092"))
       : t(refine ? (follows ? "wiz_T152" : "wiz_T150") : (follows ? "wiz_T107" : "wiz_T092")),
     precision, profileBlock: block,
-    saveInfo: c ? (follows ? saveInfo(refine ? "wiz_T286" : "wiz_T285") : saveInfo("wizSaveCoverOnly"))
-      : saveInfo(refine ? (follows ? "wiz_T283" : "wiz_T282") : (follows ? "wiz_T281" : "wiz_T289")),
+    // L-46: the box says exactly what Save does with the choice made: a new profile the cover follows, the profile it
+    // follows updated, or (once available) this cover only.
+    saveInfo: target === "profile_new" ? { title: t("wiz_T280"), body: tx("wiz_T566", { ...values, name: block.name?.value ?? "" }) }
+      : target === "profile_update" ? { title: t("wiz_T280"), body: tx("wiz_T567", { ...values, profile: cover?.profile?.name ?? "" }) }
+      : saveInfo("wizSaveCoverOnly"),
     // Fine-tuning is offered once this is saved (A-34), not here. L-45: above the threshold the check can be repeated.
     actions: [{ ...save, target }, ...(liveCheck && !liveCheck.passed ? [{ id: "check-start", label: t("wiz_T143"), kind: "secondary" }] : [])] });
   withSupport(screen, ctx, target);

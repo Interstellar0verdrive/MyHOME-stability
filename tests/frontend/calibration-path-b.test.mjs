@@ -82,15 +82,10 @@ test("path B runs as a preview from the travel to the check and the summary, wit
   assert.equal(wiz().querySelector(".wiz-technical .muted").textContent, "The two roll coefficients, 1.83 and 1.91, come from the profile: they were not measured on this cover.");
   assert.equal(wiz().querySelector(".wiz-profile-block"), null, "B creates and updates no profile");
   assert.equal(wiz().querySelector('[data-wiz="refine"]'), null, "B cannot continue to fine-tuning");
-  assert.match(wiz().querySelector(".wiz-main > .wiz-accordion:not(.wiz-technical)").innerHTML, /<strong>this cover will follow profile "tall_two_leaf"<\/strong>/);
-  await press("save");
-  assert.equal(code(), "B-09");
-  assert.equal(wiz().querySelector(".wiz-title").textContent, "Preview of the summary", "a preview never says it saved");
-  assert.equal(wiz().querySelector(".wiz-steps-line").textContent, "Result", "Y-d: «Result» alone");
-  assert.deepEqual([...wiz().querySelectorAll(".wiz-steps > ol > li")].map((item) => item.dataset.stepState), ["done", "done", "current"],
-    "Y-d: the summary is not ticked: nothing was saved");
-  assert.equal(wiz().querySelector(".wiz-body").textContent, "End of the preview: nothing has been saved and Living room shutter 1 keeps the values it used before.");
-  assert.deepEqual([...wiz().querySelectorAll(".wiz-action")].map((button) => button.textContent), ["Close"]);
+  // L-46: a preview saves nothing: no Save, no «what happens when I save?», one notice, Close or another cover.
+  assert.equal(wiz().querySelector(".wiz-save-info"), null);
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((button) => button.dataset.wiz), ["close", "another"]);
+  assert.equal(wiz().querySelector(".wiz-result-notices").textContent, "Preview: in this version this path saves nothing yet; Living room shutter 1 keeps using its current values.");
   assert.deepEqual([...wiz().querySelectorAll(".wiz-steps ul li")].map((item) => item.textContent), ['Like "tall_two_leaf"', "Curtain travel: 196 cm", "Check: 1 cm"], "the steps keep what was read");
   assert.ok(wiz().querySelector(".wiz-preview"));
   assert.deepEqual(calibrationTraffic(backend), [], "the preview sends nothing to Home Assistant");
@@ -154,8 +149,8 @@ test("path B with the cover's travel already saved skips its measurement and kee
   assert.match(wiz().querySelector(".wiz-body").textContent, /half of its 195 cm travel/, "the saved travel");
   await type("98");
   assert.equal(code(), "B-07");
-  await press("accept"); await press("save");
-  assert.equal(code(), "B-09");
+  await press("accept");
+  assert.equal(code(), "B-08");
   assert.ok([...wiz().querySelectorAll(".wiz-steps ul li")].some((item) => item.textContent === "Curtain travel: 195 cm"), "D-47: the steps keep the travel");
 });
 

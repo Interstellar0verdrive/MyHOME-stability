@@ -487,6 +487,9 @@ export const translations = {
     wiz_T562: "Gap {gap} cm: up to {threshold} cm the calibration counts as precise.",
     wiz_T563: "Gap {gap} cm: above the {threshold} cm we consider acceptable, the position estimate will be less precise along the travel. You can save anyway or repeat the check.",
     wiz_T564: "We will compare where it stops with where it should stop: up to {threshold} cm of difference the calibration is precise.",
+    wiz_T565: "Preview: in this version this path saves nothing yet; {cover} keeps using its current values.",
+    wiz_T566: "**Save:** the measured values become a new profile, «{name}», which {cover} follows from now on; you can then give it to other covers of the same type.\n\nIf you discard the calibration without saving, the values in use stay as they are.",
+    wiz_T567: "**Save:** the profile «{profile}» is updated with the measured values: {cover} and the covers following it use them from now on.\n\nIf you discard the calibration without saving, the values in use stay as they are.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1438,6 +1441,9 @@ export const translations = {
     wiz_T562: "Scarto {gap} cm: fino a {threshold} cm la calibrazione si considera precisa.",
     wiz_T563: "Scarto {gap} cm: sopra i {threshold} cm che consideriamo accettabili, la stima della posizione sarà meno precisa lungo la corsa. Puoi salvare comunque o ripetere la verifica.",
     wiz_T564: "Confronteremo dove si ferma con dove dovrebbe fermarsi: fino a {threshold} cm di differenza la calibrazione è precisa.",
+    wiz_T565: "Anteprima: in questa versione questo percorso non salva ancora niente; {cover} continua a usare i valori attuali.",
+    wiz_T566: "**Salva:** i valori misurati diventano un profilo nuovo, «{name}», che {cover} segue da subito; potrai poi assegnarlo ad altre tapparelle dello stesso tipo.\n\nSe abbandoni la calibrazione senza salvare, i valori attualmente in uso resteranno invariati.",
+    wiz_T567: "**Salva:** il profilo «{profile}» viene aggiornato con i valori misurati: {cover} e le tapparelle che lo seguono li usano da subito.\n\nSe abbandoni la calibrazione senza salvare, i valori attualmente in uso resteranno invariati.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

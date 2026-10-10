@@ -654,6 +654,17 @@ test("L-45: no placeholder reaches a screen of the check, the summary or A-34, i
   }
 });
 
+test("L-46: the base summary's «What happens when I save?» says exactly what Save does with the choice made", () => {
+  const t = (key) => translations.it[key] || key;
+  const view = { mode: "geometry", phase: "review", values: { opening_time: 22, closing_time: 21 }, geometry: {}, travel_cm: 110, owner: true, sequence: 2,
+    check: { gap_cm: 1, passed: true, check_seconds: 10.5 } };
+  const at = (cover, local) => buildScreen({ t, language: "it", stage: "session", path: "A", cover, view, local: { saveProfile: true, ...local }, supports: () => true });
+  const fresh = at({ name: "Cucina 2", entity_id: "cover.kitchen_two", followers: [], effective: {} }, { profileName: "cucina_2" });
+  assert.match(fresh.saveInfo.body, /^\*\*Salva:\*\* i valori misurati diventano un profilo nuovo, «cucina_2», che Cucina 2 segue da subito/);
+  const follows = { name: "Cucina 2", entity_id: "cover.kitchen_two", profile: { name: "alte", provenance: { opening: { origin_entity_id: "cover.kitchen_two" } } }, followers: [], effective: {} };
+  assert.match(at(follows, {}).saveInfo.body, /^\*\*Salva:\*\* il profilo «alte» viene aggiornato con i valori misurati/);
+});
+
 test("L-18: a tap on the cover already chosen in A-01 un-chooses it", async () => {
   const { wiz, tab, pickCover, code } = await mount();
   tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
@@ -748,10 +759,10 @@ test("A-34 offers fine-tuning once the calibration is saved: path C on the same 
   assert.equal(code(), "A-32");
   await press("accept");
   assert.equal(code(), "A-33");
-  await press("save");
-  assert.equal(code(), "A-34");
-  assert.equal(wiz().querySelector(".wiz-body").textContent, translations.en.wiz_T322, "the calibration before it was saved; the preview changed nothing");
-  assert.equal(wiz().querySelector('[data-wiz="refine"]'), null, "the end of a preview offers no further fine-tuning");
+  // L-46: fine-tuning is a preview: its summary has no Save, only the notice and Close (or another cover).
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((button) => button.dataset.wiz), ["close", "another"]);
+  assert.match(wiz().querySelector(".wiz-result-notices").textContent, /^Preview: in this version this path saves nothing yet/);
+  assert.equal(wiz().querySelector(".wiz-profile-block"), null);
   assert.equal(actions().length, sent, "the fine-tuning preview sent nothing");
   assert.equal(backend.calls.filter((message) => message.action === "save").length, saves, "and saved nothing more");
 });
