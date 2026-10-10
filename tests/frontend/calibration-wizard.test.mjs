@@ -2120,6 +2120,25 @@ test("L-10: S-01 of an interrupted session cancels it, also from a tab that only
   void actions;
 });
 
+test("R-2: a refused cancel on «Start over» leaves the wizard alive: the next views still reach it", async () => {
+  const { backend, tab, wiz, code, panel } = await mount({ session: interrupted() });
+  tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
+  assert.equal(code(), "S-01");
+  const original = backend.hass.callWS;
+  backend.hass.callWS = async (message) => {
+    if (message.action === "cancel") { backend.calls.push(message); throw { code: "cover_unavailable", message: "busy" }; }
+    return original(message);
+  };
+  wiz().querySelector('[data-wiz="start-over"]').click(); await tick(12);
+  assert.equal(backend.session.phase, "interrupted", "not cancelled");
+  assert.ok(wiz(), "still open");
+  backend.hass.callWS = original;
+  // The session moves on elsewhere: the wizard still follows it (before R-2 every callback was ignored).
+  backend.session.phase = "briefing"; backend.session.reason = null; backend.session.step = "top"; backend.emit(); await tick(8);
+  assert.notEqual(code(), "S-01", "the new view reached the wizard");
+  void panel;
+});
+
 test("L-10: Start over and Abandon from S-01 cancel the interrupted session first; the exit of a live one cancels it", async () => {
   // Start over: the session is cancelled, then the wizard starts again from «Before you begin».
   const a = await mount({ session: interrupted(), owner: false });

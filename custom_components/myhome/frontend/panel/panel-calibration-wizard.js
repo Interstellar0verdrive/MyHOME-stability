@@ -962,7 +962,8 @@ export class CalibrationWizard {
     const item = this._item(), { hass, t } = this._context, generation = this._generation;
     return { host: this._engineHost(), hass, t, entity: { entry_id: item.entry.entry_id, entity_id: item.cover.entity_id }, revision: item.revision,
       onSaved: () => { if (generation === this._generation) this._saved(); },
-      onCancel: () => { if (generation === this._generation) this._finish(); } };
+      // R-2: a cancel asked to start over closes the session, not the wizard (one-shot, set by `_abortDead`).
+      onCancel: () => { if (generation !== this._generation) return; if (this._staying) { this._staying = false; return; } this._finish(); } };
   }
 
   _begin() {
@@ -1365,10 +1366,11 @@ export class CalibrationWizard {
     const gateway = this._gateway, view = gateway?.view;
     if (!gateway || gateway.preview || view?.phase !== "interrupted" || !view.recoverable) return true;
     const discarded = this._discarded(gateway);
-    // Staying: the view's own close after Cancel must not close the wizard (its callbacks belong to this generation).
-    if (stay) this._generation++;
+    // Staying: the view's own close after Cancel must not close the wizard. R-2: a one-shot flag, not a new generation,
+    // so a refused cancel leaves every callback of this gateway alive.
+    if (stay) this._staying = true;
     await gateway.abort();
-    if (gateway.status.cancelPending || gateway.status.error) { if (this._gateway === gateway) this._render(); return false; }
+    if (gateway.status.cancelPending || gateway.status.error) { this._staying = false; if (this._gateway === gateway) this._render(); return false; }
     discarded();
     return true;
   }
