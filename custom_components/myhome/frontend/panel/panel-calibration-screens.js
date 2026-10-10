@@ -513,7 +513,8 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
       return screen;
     }
     // The return to the top before a repeated descent: a positioning run to confirm at the end stop.
-    positioning("09", t("wiz_T086"), topTime);
+    // L-29: the end stop it goes to, by direction («va», not «torna»: it did not come from there).
+    positioning("09", t("wiz_T553"), topTime);
     screen.phase = "descent";
     if (["starting_open", "opening"].includes(phase)) screen.actions = toEndStop("wiz_T432", "opening");
     if (phase === "opening") stoppedEarly(topTime, "wiz_T441");
@@ -526,7 +527,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     const down = Math.max(((view.values?.closing_time || 0) - (view.geometry?.slat_time_s || 0)) / 2, 0);
     const first = step === "top";
     Object.assign(screen, { code: p("19"), title: t("wiz_T027"),
-      wait: { text: t("wiz_T086"), stages: [
+      wait: { text: t("wiz_T553"), stages: [
         // V-1: each leg says the time its bar counts down from (the run to the top from where the cover is), whole
         // seconds rounded up as the time left is, so «circa 23 s» never shows «circa 24 s» left.
         { text: tx("wiz_T084", { seconds: n(Math.ceil((topTime ?? view.values?.opening_time ?? 0) - 0.001), 0) }), state: first ? "current" : "done" },
@@ -535,7 +536,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     // The return to the top is a positioning run: Home Assistant needs its end stop confirmed.
     if (first && ["starting_open", "opening"].includes(phase)) screen.actions = returnEnd("wiz_T432", "opening", topTime);
     // L-37: the return to the top before the check run says so (not the half descent's stages).
-    if (first && view.check) { screen.code = p("30"); screen.wait = { text: t("wiz_T086"), stages: [], progress: waitBar(view, elapsed, topTime) }; }
+    if (first && view.check) { screen.code = p("30"); screen.wait = { text: t("wiz_T553"), stages: [], progress: waitBar(view, elapsed, topTime) }; }
     if (first && phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
     if (!first && phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
     return screen;
@@ -548,7 +549,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     if (phase === "reading") return Object.assign(screen, { code: p("31"), title: t("wiz_T138"), body: t("wiz_T139"), notices: [...screen.notices, ...discrepancyNotes(ctx, tx, n)],
       field: { label: t("wiz_T064"), hint: expectedHint(t, tx, n, view.check?.target_cm, view.travel_cm), min: 0.1, max: view.travel_cm ?? 10000, kind: "height" },
       actions: [{ id: "reading", label: t("wiz_T051"), kind: "primary" }, { id: "repeat", label: t("wiz_T033"), kind: "secondary" }] });
-    positioning("30", t("wiz_T086"));
+    positioning("30", t(view.check?.direction === "opening" ? "wiz_T554" : "wiz_T553"));
     if (phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
     return screen;
   }

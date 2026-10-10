@@ -475,6 +475,8 @@ export const translations = {
     wiz_T550: "Usually between {min} and {max} cm: a few centimetres of difference is normal. Enter what the tape says; a comma or a point is fine.",
     wiz_T551: "Calibrate this cover from scratch",
     wiz_T552: "Choose another profile",
+    wiz_T553: "The cover goes to its top end stop, then positions itself. Wait for it to stop.",
+    wiz_T554: "The cover goes to its bottom end stop, then positions itself. Wait for it to stop.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1414,6 +1416,8 @@ export const translations = {
     wiz_T550: "Di solito fra {min} e {max} cm: qualche centimetro di differenza è normale. Scrivi quello che dice il metro; virgola o punto vanno bene.",
     wiz_T551: "Calibra da zero questa tapparella",
     wiz_T552: "Scegli un altro profilo",
+    wiz_T553: "La tapparella va al finecorsa in alto e poi si posiziona da sola. Aspetta che si fermi.",
+    wiz_T554: "La tapparella va al finecorsa in basso e poi si posiziona da sola. Aspetta che si fermi.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",
