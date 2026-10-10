@@ -710,22 +710,34 @@ test("bus sweep follows the selected gateway and preserves unscoped Lovelace usa
   ]);
 });
 
-test("Back/Forward asks the tab's guard first: staying keeps the gateway and puts the address back", async () => {
-  window.history.replaceState(null, "", "/myhome?entry_id=one");
+test("Back/Forward asks the tab's guard first: staying keeps the gateway, leaving goes back, the history never grows", async () => {
+  const popped = () => new Promise((resolve) => window.addEventListener("popstate", () => setTimeout(resolve, 0), { once: true }));
+  const entry = () => new URL(window.location.href).searchParams.get("entry_id");
+  window.history.replaceState(null, "", "/myhome?entry_id=two");
+  window.history.pushState(null, "", "/myhome?entry_id=one");
   const { panel } = await mount();
   assert.equal(panel._entryId, "one");
-  let answer;
-  panel.setBeforeLeave(() => new Promise((resolve) => { answer = resolve; }));
-  window.history.replaceState(null, "", "/myhome?entry_id=two");
-  window.dispatchEvent(new Event("popstate"));
+  const length = window.history.length;
+  let answers = [];
+  panel.setBeforeLeave(() => new Promise((resolve) => { answers.push(resolve); }));
+  // Back: the question; the address back on the gateway shown, in place of the entry just left.
+  let wait = popped(); window.history.back(); await wait;
   assert.equal(panel._entryId, "one", "nothing changes before the answer");
-  assert.equal(new URL(window.location.href).searchParams.get("entry_id"), "one", "the address is back on the gateway shown");
-  answer(false); await new Promise((resolve) => setTimeout(resolve, 0));
-  assert.equal(panel._entryId, "one", "staying keeps it");
-  window.history.replaceState(null, "", "/myhome?entry_id=two");
-  window.dispatchEvent(new Event("popstate"));
-  answer(true); await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(entry(), "one", "the address is back on the gateway shown");
+  assert.equal(window.history.length, length, "no entry added");
+  // A second Back while it asks: back to the gateway shown, asked once only.
+  wait = popped(); window.history.back(); await wait; await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(entry(), "one");
+  assert.equal(answers.length, 1, "one question, one answer awaited");
+  // Staying keeps it.
+  answers[0](false); await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(panel._entryId, "one");
+  // Back again, leaving: the browser goes back to the other gateway, no entry added.
+  wait = popped(); window.history.back(); await wait;
+  wait = popped(); answers[1](true); await wait;
   assert.equal(panel._entryId, "two", "leaving goes on to the other gateway");
+  assert.equal(entry(), "two");
+  assert.equal(window.history.length, length, "the history did not grow");
   panel.setBeforeLeave(null);
   panel.remove();
   window.history.replaceState(null, "", "/myhome");

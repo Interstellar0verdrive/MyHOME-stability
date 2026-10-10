@@ -177,18 +177,29 @@ class MyHomePanel extends HTMLElement {
     }
   }
 
-  /** Back/Forward to another gateway: the tab's guard first; staying puts the address back until the answer. */
+  /**
+   * Back/Forward to another gateway: the tab's guard first. While it asks, the address goes back to the gateway shown
+   * (one entry, the one the browser just left, written again); leaving then goes back to the gateway asked for with
+   * the browser's own Back, so the history does not grow. A second Back while the question is open returns to the
+   * gateway shown without asking twice.
+   */
   _guardedLocation() {
+    const skip = this._popSkip;
+    this._popSkip = null;
+    if (skip === "sync") { this._syncGatewayFromUrl(); return; }
+    if (skip === "stay") return;
+    if (this._popAsking) { this._popSkip = "stay"; history.forward(); return; }
     const url = new URL(window.location.href), entryId = url.searchParams.get("entry_id");
     const pending = entryId !== this._entryQuery && this._beforeLeave ? this._beforeLeave() : null;
     if (!pending) { this._syncGatewayFromUrl(); return; }
-    const target = url.href, back = new URL(url.href);
+    const back = new URL(url.href);
     if (this._entryQuery) back.searchParams.set("entry_id", this._entryQuery); else back.searchParams.delete("entry_id");
     history.pushState(null, "", back.href);
-    Promise.resolve(pending).then((leave) => {
+    this._popAsking = Promise.resolve(pending).then((leave) => {
+      this._popAsking = null;
       if (!leave) return;
-      history.pushState(null, "", target);
-      this._syncGatewayFromUrl();
+      this._popSkip = "sync";
+      history.back();
     });
   }
 
