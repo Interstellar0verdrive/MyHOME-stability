@@ -1482,6 +1482,7 @@ test("L-10: Start over and Abandon from S-01 cancel the interrupted session firs
   reset();
   const c = await mount();
   await c.startFor("cover.kitchen_two", "C");
+  c.backend.hass.states["cover.kitchen_two"] = { state: "closed", attributes: { current_position: 0 } };
   await c.press("current");
   const radio = c.wiz().querySelector('input[name="case"][value="times_only"]'); radio.checked = true; radio.dispatchEvent(new Event("change", { bubbles: true })); await tick();
   await c.press("case"); await c.press("begin");

@@ -963,7 +963,9 @@ export class CalibrationWizard {
    */
   _home(item) {
     const { hass } = this._context, entity = item.cover.entity_id, state = hass.states?.[entity];
-    if (state?.state === "closed" && (state.attributes?.current_position ?? 0) === 0) return false;
+    // Only a cover Home Assistant reports closed at a known 0 skips it: an unknown position (after a restart Home
+    // Assistant discards a modelled cover's position) is positioned first, whatever its state says.
+    if (state?.state === "closed" && state.attributes?.current_position === 0) return false;
     const position = state?.attributes?.current_position, closing = item.cover.effective?.closing?.value;
     const seconds = closing > 0 ? closing * (Number.isFinite(position) ? position / 100 : 1) : null;
     this._local.homing = { entity, started: Date.now(), seconds };

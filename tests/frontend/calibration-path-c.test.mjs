@@ -8,7 +8,9 @@ afterEach(reset);
 after(() => dom.window.close());
 
 async function toCase(context, scope) {
-  const { wiz, press, startFor, code } = context;
+  const { wiz, press, startFor, code, backend } = context;
+  // L-38: a times-only measurement starts at once only from a cover Home Assistant reports closed at a known 0.
+  if (scope === "times_only") backend.hass.states["cover.kitchen_two"] = { state: "closed", attributes: { current_position: 0 } };
   await startFor("cover.kitchen_two", "C");
   assert.equal(code(), "C-01");
   await press("current");
@@ -210,8 +212,8 @@ test("L-4: a «solo tempi» session the wizard started opens in the wizard's rea
 test("L-38: times only first closes an open cover, as path A does, then starts on «check that it is fully closed»", async () => {
   const context = await mount();
   const { backend, wiz, code, press, panel } = context;
-  backend.hass.states["cover.kitchen_two"] = { state: "open", attributes: { current_position: 100 } };
   await toCase(context, "times_only");
+  backend.hass.states["cover.kitchen_two"] = { state: "open", attributes: { current_position: 100 } };
   await press("begin");
   assert.equal(code(), "C-04", "the positioning first");
   assert.equal(wiz().querySelector(".wiz-title").textContent, "Positioning cover");
@@ -226,12 +228,25 @@ test("L-38: times only first closes an open cover, as path A does, then starts o
   // Stop during the positioning: Home Assistant stops the cover, nothing has started.
   reset();
   const again = await mount();
-  again.backend.hass.states["cover.kitchen_two"] = { state: "open", attributes: { current_position: 60 } };
   await toCase(again, "times_only");
+  // After a restart Home Assistant knows no position for a modelled cover: positioned first too.
+  again.backend.hass.states["cover.kitchen_two"] = { state: "open", attributes: { current_position: null } };
   await again.press("begin");
   again.wiz().querySelector('[data-wiz="stop"]').click(); await tick(4);
   assert.deepEqual(again.backend.hass.services.at(-1), { domain: "cover", service: "stop_cover", data: { entity_id: "cover.kitchen_two" } });
   assert.equal(again.backend.subscriptions.some((message) => message.type === "myhome/cover_calibration/start"), false);
+  // From «Perfeziona» (start: refine): C-01 → C-02 → times only, a cover reported closed but at no known position.
+  reset();
+  const third = await mount();
+  const tabView = third.panel._calibrationTab, item = tabView._covers().find((entry) => entry.cover.entity_id === "cover.kitchen_two");
+  third.backend.hass.states["cover.kitchen_two"] = { state: "closed", attributes: { current_position: null } };
+  tabView._openWizard({ start: "refine", item }); await tick();
+  assert.equal(third.code(), "C-01");
+  await third.press("current");
+  const radio = third.wiz().querySelector('input[name="case"][value="times_only"]'); radio.checked = true; radio.dispatchEvent(new Event("change", { bubbles: true }));
+  await third.press("case"); await third.press("begin");
+  assert.equal(third.code(), "C-04", "an unknown position is positioned first, whatever the state says");
+  assert.equal(third.backend.hass.services.at(-1).service, "close_cover");
 });
 
 test("D-20: in C-01 a value not known is «—» without its unit", async () => {
