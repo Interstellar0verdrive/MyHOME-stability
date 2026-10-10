@@ -483,6 +483,10 @@ export const translations = {
     wiz_T558: "About {cm} cm expected: a few centimetres of difference is normal. Enter what the tape says; a comma or a point is fine.",
     wiz_T559: "2/2 Descends to half the travel — about {seconds} s",
     wiz_T560: "2/2 Rises to half the travel — about {seconds} s",
+    wiz_T561: "Check at half travel: the cover stopped at {measured} cm, about {expected} cm was expected.",
+    wiz_T562: "Gap {gap} cm: up to {threshold} cm the calibration counts as precise.",
+    wiz_T563: "Gap {gap} cm: above the {threshold} cm we consider acceptable, the position estimate will be less precise along the travel. You can save anyway or repeat the check.",
+    wiz_T564: "We will compare where it stops with where it should stop: up to {threshold} cm of difference the calibration is precise.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1430,6 +1434,10 @@ export const translations = {
     wiz_T558: "Atteso circa {cm} cm: qualche centimetro di differenza è normale. Scrivi quello che dice il metro; virgola o punto vanno bene.",
     wiz_T559: "2/2 Scende fino a metà corsa — circa {seconds} s",
     wiz_T560: "2/2 Sale fino a metà corsa — circa {seconds} s",
+    wiz_T561: "Verifica a metà corsa: la tapparella si è fermata a {measured} cm, l'atteso era circa {expected} cm.",
+    wiz_T562: "Scarto {gap} cm: fino a {threshold} cm la calibrazione si considera precisa.",
+    wiz_T563: "Scarto {gap} cm: sopra i {threshold} cm che consideriamo accettabili, la stima della posizione sarà meno precisa lungo la corsa. Puoi salvare comunque o ripetere la verifica.",
+    wiz_T564: "Confronteremo dove si ferma con dove dovrebbe fermarsi: fino a {threshold} cm di differenza la calibrazione è precisa.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

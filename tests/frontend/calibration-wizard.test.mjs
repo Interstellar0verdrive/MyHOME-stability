@@ -625,6 +625,33 @@ test("L-44: the check runs as the half readings do: to the top (confirmed by the
   assert.equal(wiz().querySelector("#wiz-field-hint").textContent, "About 99 cm expected: a few centimetres of difference is normal. Enter what the tape says; a comma or a point is fine.");
   await type("97");
   assert.equal(code(), "A-21", "then the summary");
+  // L-45: the result is a tile with the other measured values, and a note with the heights and the threshold.
+  const tile = [...wiz().querySelectorAll(".wiz-result")].find((item) => item.querySelector(".wiz-result-label").textContent === "Check");
+  assert.equal(tile.querySelector(".wiz-result-value").textContent.replace(/\s+/g, " ").trim(), "2 cm");
+  assert.match(wiz().querySelector(".wiz-result-notices").textContent,
+    /Check at half travel: the cover stopped at 97 cm, about 99 cm was expected\. Gap 2 cm: up to 4 cm the calibration counts as precise\./);
+  assert.doesNotMatch(wiz().textContent, /\{\w+\}/, "no placeholder left on screen");
+  await press("save");
+  assert.equal(code(), "A-34");
+  assert.ok([...wiz().querySelectorAll(".wiz-result-label")].some((item) => item.textContent === "Check"), "the tile on A-34 too");
+  assert.doesNotMatch(wiz().textContent, /\{\w+\}/);
+});
+
+test("L-45: no placeholder reaches a screen of the check, the summary or A-34, in Italian or English", () => {
+  const check = { direction: "closing", target_cm: 99, check_seconds: 7.5, planned_seconds: 7.4, expected_cm: 99, measured_cm: 97, deviation_cm: -2, passed: true };
+  const base = { mode: "geometry", values: { opening_time: 22, closing_time: 21 }, samples: { lift: 4 }, readings: { gap: 3, half_open: 97, half_close: 101 },
+    geometry: { slat_time_s: 4, opening_roll: 1.8, closing_roll: 1.9 }, travel_cm: 198, slats: true, owner: true, sequence: 9, check_threshold_cm: 4 };
+  const views = [{ phase: "review", step: "half_close" }, { phase: "review", step: "half_close", check }, { phase: "review", step: "half_close", check: { ...check, measured_cm: 93, deviation_cm: -6, passed: false } },
+    { phase: "opening", step: "top", check }, { phase: "closing", step: "check", check }, { phase: "reading", step: "check", check }];
+  for (const language of ["it", "en"]) {
+    const t = (key) => translations[language][key] || key;
+    const screens = [...views.map((view) => buildScreen({ t, language, stage: "session", path: "A", view: { ...base, ...view }, local: { ackReadings: true }, cover: { name: "K", effective: {} } })),
+      buildScreen({ t, language, stage: "saved", path: "A", local: { saved: { target: "profile_new", name: "k", check, threshold: 4 } }, cover: { name: "K" } })];
+    for (const screen of screens) {
+      const text = JSON.stringify([screen.title, screen.body, screen.notices, screen.results, screen.actions, screen.wait, screen.field, screen.precision, screen.stepper]);
+      assert.doesNotMatch(text, /\{\w+\}/, `${language} ${screen.code}`);
+    }
+  }
 });
 
 test("L-18: a tap on the cover already chosen in A-01 un-chooses it", async () => {
@@ -830,7 +857,7 @@ test("L-9: an intermediate reading names the expected height in Italian, refuses
   const review = buildScreen({ t, language: "it", stage: "session", path: "A", cover: { name: "Cucina 2" }, view: { ...view, phase: "review", reading_range: null, reading_band: null,
     geometry: { slat_time_s: 4, opening_roll: 5, closing_roll: 1.9 }, readings: { gap: 3, half_open: 40, half_close: 97 },
     reading_discrepancy: { half_open: { reading_cm: 40, expected_cm: 82.55, min_cm: 46.3, max_cm: 118.8 } }, check: { gap_cm: 1, passed: true, check_seconds: 10.5 } } });
-  assert.deepEqual(review.notices.map((notice) => [notice.tone, notice.text]), [["warning",
+  assert.deepEqual(review.notices.filter((notice) => notice.tone === "warning").map((notice) => [notice.tone, notice.text]), [["warning",
     "Metà tempo salita: la lettura (40 cm) era lontana da quella attesa (circa 83 cm). È stata tenuta e il modello si è fermato al suo limite: la verifica finale dirà se le posizioni sono giuste."]]);
   const running = buildScreen({ t, language: "it", stage: "session", path: "A", view: { ...view, phase: "closing", reading_range: null, reading_band: null }, elapsed: 3.2,
     local: { ackReadings: true }, cover: { name: "Cucina 2" } });

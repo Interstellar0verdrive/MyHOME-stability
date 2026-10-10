@@ -1197,7 +1197,9 @@ export class CalibrationWizard {
     // D-47: path B's stepper keeps the travel typed in B-04 too.
     if (this._gateway?.preview) local.fineReadings = { ...(this._gateway.view?.readings || {}), check: this._gateway.view?.check ?? null, travel: this._gateway.view?.travel_cm ?? null };
     local.saved = { target, name: previewSaved?.name ?? local.pendingSave?.name ?? null, travel_cm: this._gateway?.view?.travel_cm ?? local.review?.travel ?? null,
-      preview: !!this._gateway?.preview, orphan: this._gateway?.preview ? null : local.pendingSave?.orphan ?? null, reader };
+      preview: !!this._gateway?.preview, orphan: this._gateway?.preview ? null : local.pendingSave?.orphan ?? null, reader,
+      // L-45: the check's result stays on A-34 as a tile.
+      check: !this._gateway?.preview && view?.check ? { ...view.check } : null, threshold: view?.check_threshold_cm ?? null };
     if (local.path === "B") local.saved.target = "follow_profile";
     local.stage = "saved";
     if (!local.refining && local.review) local.base = { ...local.review };

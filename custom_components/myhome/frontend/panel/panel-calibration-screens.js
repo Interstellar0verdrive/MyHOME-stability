@@ -368,7 +368,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
   // L-43: it is part of the path (not skippable): its own step «Verifica», in a live view as in a reopened or read one.
   if (phase === "review" && !view.check && !view.check_interrupted && !local.refining && view.travel_cm > 0) {
     screen.phase = "check";
-    return Object.assign(screen, { code: p("21v"), title: t("wiz_T544"), body: t("wiz_T545"), illustration: false,
+    return Object.assign(screen, { code: p("21v"), title: t("wiz_T544"), body: `${t("wiz_T545")}\n\n${tx("wiz_T564", { threshold: n(view.check_threshold_cm ?? 4, 0) })}`, illustration: false,
       actions: [{ id: "check-start", label: t("wiz_T546"), kind: "primary" }] });
   }
   if (phase === "review" || phase === "saving") return summaryScreen(screen, ctx, tx, n, values);
@@ -729,7 +729,10 @@ function summaryScreen(screen, ctx, tx, n, values) {
     code: profileB || timesOnly ? "" : ["slat_time_s", "opening_roll", "closing_roll"].map((key) => `${key}: ${after[key === "slat_time_s" ? "slat" : key] == null ? "—" : n(after[key === "slat_time_s" ? "slat" : key], key === "slat_time_s" ? 1 : 2)}`).join("\n") };
   if (timesOnly && after.opening_roll == null) screen.technical = null;
   // D-35: a gap under 1 cm is said so, not «about 0 cm».
-  const precision = view.check ? tx(Number(view.check.gap_cm) < 1 ? "wiz_T513" : "wiz_T151", { gap: view.check.gap_cm, seconds: n(view.check.check_seconds) }) : null;
+  // L-45: a live check (the base calibration's) is a tile with the measured values, as the times are; the preview's
+  // check of fine-tuning keeps its sentence. The live check names its gap `deviation_cm`, the preview `gap_cm`.
+  const liveCheck = view.check && !view.preview ? checkResult(ctx, tx, n, view.check, view.check_threshold_cm) : null;
+  const precision = view.check && !liveCheck ? tx(Number(checkGap(view.check)) < 1 ? "wiz_T513" : "wiz_T151", { gap: checkGap(view.check), seconds: n(view.check.check_seconds) }) : null;
   const saveInfo = (key) => ({ title: t("wiz_T280"), body: counted(t, key, cover?.followers?.length ?? 0, values) });
   const save = { id: "save", label: t("wiz_T102"), kind: "primary" };
   if (profileB) {
@@ -763,9 +766,12 @@ function summaryScreen(screen, ctx, tx, n, values) {
     precision, profileBlock: block,
     saveInfo: c ? (follows ? saveInfo(refine ? "wiz_T286" : "wiz_T285") : saveInfo("wizSaveCoverOnly"))
       : saveInfo(refine ? (follows ? "wiz_T283" : "wiz_T282") : (follows ? "wiz_T281" : "wiz_T289")),
-    // Fine-tuning is offered once this is saved (A-34), not here.
-    actions: [{ ...save, target }] });
-  return withSupport(screen, ctx, target);
+    // Fine-tuning is offered once this is saved (A-34), not here. L-45: above the threshold the check can be repeated.
+    actions: [{ ...save, target }, ...(liveCheck && !liveCheck.passed ? [{ id: "check-start", label: t("wiz_T143"), kind: "secondary" }] : [])] });
+  withSupport(screen, ctx, target);
+  // After the notices that matter more (D-16: what cannot be saved comes first).
+  if (liveCheck) { screen.results = [...(screen.results || []), liveCheck.tile]; screen.notices.push(liveCheck.notice); }
+  return screen;
 }
 
 /** Under a new profile's name, for a cover that followed another: what happens to that one (left alone, or kept by others). */
@@ -826,6 +832,10 @@ export function slug(text) {
 function savedScreen(screen, ctx, tx, values) {
   const { t, path, local = {} } = ctx;
   const saved = local.saved || {};
+  // L-45: the check's tile and note, as in the summary.
+  const n = (value, digits = 1) => number(value, ctx.language || "en", digits);
+  const checked = saved.check ? checkResult(ctx, tx, n, saved.check, saved.threshold ?? 4) : null;
+  if (checked) { screen.results = [checked.tile]; screen.notices.push(checked.notice); }
   // "Close" keeps each mockup's own style: B-09 red filled, A-34 red text, C-34 red outlined.
   const close = (of) => ({ id: "close", label: t("wiz_T158"), kind: of === "B" ? "danger" : of === "C" ? "danger-outline" : "link" });
   screen.discard = false;
@@ -935,6 +945,21 @@ function halfField(ctx, tx, n) {
   if (!span) return { label: t("wiz_T064"), hint, min: 0.1, max: 10000, kind: "height" };
   return { label: t("wiz_T064"), hint, min: span.min_cm - RANGE_SLACK_CM, max: span.max_cm + RANGE_SLACK_CM, kind: "height",
     travel: view.travel_cm, band: band ? { min: band.min_cm, max: band.max_cm, warning: tx("wiz_T530", { expected: n(band.expected_cm, 0) }) } : null };
+}
+
+/** L-45: a check's gap, whichever way the session names it. */
+export const checkGap = (check) => check?.gap_cm ?? (check?.deviation_cm != null ? Math.abs(check.deviation_cm) : null);
+
+/**
+ * L-45: the base calibration's check as a result: a tile «Verifica» with its gap, and a note with the heights (the
+ * expected one «circa») and what the gap means against the threshold (the session's own, said once in A-21v).
+ */
+export function checkResult(ctx, tx, n, check, threshold = 4) {
+  const gap = checkGap(check);
+  if (gap == null) return null;
+  const passed = check.passed ?? gap <= threshold, values = { measured: n(check.measured_cm), expected: n(check.expected_cm ?? check.target_cm, 0), gap: n(gap, 0), threshold: n(threshold, 0) };
+  return { passed, tile: { label: ctx.t("wiz_T556"), value: n(gap, 0), unit: "cm" },
+    notice: { tone: passed ? "info" : "warning", result: true, text: `${tx("wiz_T561", values)} ${tx(passed ? "wiz_T562" : "wiz_T563", values)}` } };
 }
 
 /** L-44: the two stages of the check's wait: to the end stop (its time), then the timed run to its target (planned). */
@@ -1092,7 +1117,7 @@ function finalize(screen, ctx) {
       : path === "C" && scope === "points_only" ? fineSub(t, view, cm, local.fineReadings)
         : [[t("wiz_T077"), cm(readings.half_open)], [t("wiz_T078"), cm(readings.half_close)]],
     // L-43: the check's result once done, as the summary's precision says it.
-    check: source?.check?.gap_cm != null ? [[t("wiz_T557"), `${source.check.gap_cm} cm`]] : [],
+    check: checkGap(source?.check) != null ? [[t("wiz_T557"), `${n(checkGap(source.check), 0)} cm`]] : [],
     finetune: refining ? fineSub(t, view, cm, local.fineReadings) : [],
   };
   const finetuneLabel = refining ? t("wiz_T114") : t("wiz_T013");
