@@ -739,7 +739,8 @@ dialog.cal-dialog .cal-resume-entity { display: none; }
 [data-theme="dark"] { color-scheme: dark; }
 [data-theme="light"] { color-scheme: light; }
 /* M2-2: on dark themes the info notes take a light accent for their text, as the warning ones take their own tint. */
-[data-theme="dark"] .cal-note:not(.is-warning) { color: color-mix(in srgb, var(--panel-accent) 70%, var(--primary-text-color, #fff)); }
+/* L-60: the success note keeps its own green tint (it lost it to this rule, same weight and later). */
+[data-theme="dark"] .cal-note:not(.is-warning, .is-success) { color: color-mix(in srgb, var(--panel-accent) 70%, var(--primary-text-color, #fff)); }
 [data-theme="dark"] .cal-note.is-warning, [data-theme="dark"] .wiz-notice[data-tone="warning"], [data-theme="dark"] .cal-tab-busy, [data-theme="dark"] .cal-badge[data-status="running"] { color: color-mix(in srgb, var(--panel-warning) 70%, var(--primary-text-color, #fff)); }
 .cal-list { border: 1px solid var(--panel-border); border-radius: var(--panel-radius); background: var(--panel-surface); overflow: visible; }
 .cal-list-head { display: none; }

@@ -744,6 +744,48 @@ test("L-59: the check note beside the «Precision» tile is as tall as the tile"
   assert.doesNotMatch(css, /\.wiz-result-note \{[^}]*align-self: center/);
 });
 
+test("L-60: each note keeps its own tint for text, border and fill, in the light and the dark theme", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "");
+  const doc = dom.window.document;
+  const weight = (selector) => {
+    const flat = selector.replace(/:(?:not|is)\(([^,)]*)[^)]*\)/g, "$1").replace(/:where\([^)]*\)/g, "");
+    const ids = (flat.match(/#[\w-]+/g) || []).length;
+    const classes = (flat.match(/\.[\w-]+|\[[^\]]+\]|:(?!:)[\w-]+/g) || []).length;
+    const types = (flat.replace(/\[[^\]]+\]|[.#:][\w-]+/g, " ").match(/[a-z][\w-]*/gi) || []).length;
+    return ids * 10000 + classes * 100 + types;
+  };
+  // The declaration of `property` that wins for `element`: highest weight, then the later rule.
+  const winner = (element, property) => {
+    let best = null, order = 0;
+    for (const [, selectors, body] of css.matchAll(/(?<=^|[{}])\s*([^{}@]+?)\s*\{([^{}]*)\}/g)) {
+      order += 1;
+      const value = body.match(new RegExp(`(?:^|;)\\s*${property}\\s*:\\s*([^;]+)`))?.[1]?.trim();
+      if (!value) continue;
+      for (const selector of selectors.split(/,(?![^(]*\))/).map((part) => part.trim())) {
+        let hit = false; try { hit = element.matches(selector); } catch { /* selectors jsdom does not know */ }
+        const w = weight(selector);
+        if (hit && (!best || w > best.w || (w === best.w && order >= best.order))) best = { w, order, value, selector };
+      }
+    }
+    return best?.value ?? "";
+  };
+  for (const theme of ["light", "dark"]) {
+    const host = doc.createElement("div"); host.dataset.theme = theme; doc.body.append(host);
+    const note = (tone) => { const p = doc.createElement("p"); p.className = `cal-note${tone ? ` is-${tone}` : ""}`; host.append(p); return p; };
+    const success = note("success"), warning = note("warning"), info = note("");
+    for (const property of ["color", "background", "border"]) {
+      assert.match(winner(success, property), /--panel-success/, `${theme}: success ${property}`);
+    }
+    assert.match(winner(warning, "background"), /--panel-warning/, `${theme}: warning background`);
+    assert.match(winner(warning, "border-color"), /--panel-warning/, `${theme}: warning border`);
+    assert.match(winner(info, "background"), /--panel-accent/, `${theme}: info background`);
+    assert.doesNotMatch(winner(success, "color") + winner(warning, "color"), /--panel-accent/, `${theme}: no accent text on a success or a warning note`);
+    if (theme === "dark") assert.match(winner(warning, "color"), /--panel-warning/, "dark: warning text in its tint");
+    host.remove();
+  }
+});
+
 test("L-18: a tap on the cover already chosen in A-01 un-chooses it", async () => {
   const { wiz, tab, pickCover, code } = await mount();
   tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
