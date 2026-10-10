@@ -263,21 +263,23 @@ test("path A runs the live geometry session from the first close to Save, one me
   await move(backend, { seconds: 22.2 });
   await press("endpoint");
   backend.stopped(); await tick();
+  // L-13: the travel first, then the ascent's result with it.
+  assert.equal(code(), "A-13");
+  assert.equal(wiz().querySelector('[name="reading_cm"]').value, "195", "the saved travel is offered, not sent");
+  await type("198");
   assert.equal(code(), "A-12");
+  assert.equal(backend.calls.filter((message) => message.action === "reading").length, 1, "the travel is not sent before «OK, continue»");
   // What was measured sits in tiles above the text: a small label, a big value; the text no longer repeats it.
   const tiles = () => [...wiz().querySelectorAll(".wiz-results .wiz-result")].map((tile) => [tile.querySelector(".wiz-result-label").textContent,
     tile.querySelector(".wiz-result-value").textContent.replace(/\s+/g, " ").trim()]);
-  assert.equal(tiles().length, 2);
+  assert.equal(tiles().length, 3);
   assert.equal(tiles()[0][0], "Lift-off");
   assert.match(tiles()[0][1], /^\d+(\.\d)? s · 3 cm$/, "lift-off time and gap in one tile");
-  assert.deepEqual(tiles()[1], ["Full ascent", "22.2 s"]);
+  assert.deepEqual(tiles().slice(1), [["Full ascent", "22.2 s"], ["Curtain travel", "198 cm"]]);
   assert.deepEqual([wiz().querySelector(".wiz-results").nextElementSibling.className, wiz().querySelector(".wiz-results").nextElementSibling.nextElementSibling.className],
     ["wiz-result-notices", "wiz-body"], "above the text, with the notices about the result between them (G2-11)");
   assert.match(wiz().querySelector(".wiz-body").textContent, /^If both presses came at the right moment, continue\./);
   await press("ack:ascent");
-  assert.equal(code(), "A-13");
-  assert.equal(wiz().querySelector('[name="reading_cm"]').value, "195", "the saved travel is offered, not sent");
-  await type("198");
   assert.equal(code(), "A-14");
   assert.equal(wiz().querySelector(".wiz-steps-line").textContent, "Descent · 4 of 7");
   await press("next");
@@ -285,7 +287,7 @@ test("path A runs the live geometry session from the first close to Save, one me
   await press("endpoint");
   backend.stopped(); await tick();
   assert.equal(code(), "A-15");
-  assert.deepEqual(tiles(), [["Full descent", "21.7 s"], ["Curtain travel", "198 cm"]]);
+  assert.deepEqual(tiles(), [["Full descent", "21.7 s"]], "L-13: the duration only");
   assert.doesNotMatch(wiz().querySelector(".wiz-body").textContent, /21\.7/);
   await press("repeat");
   assert.equal(actions().at(-1), "next", "the return to the top starts by itself");
@@ -368,7 +370,7 @@ test("without slats the lift-off is skipped and the slat choice is sent", async 
   assert.match(body(), /To start the ascent, press button ①/);
   await press("next"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
   assert.equal(code(), "A-13");
-  await type("198");
+  await type("198"); await press("ack:ascent");
   assert.equal(code(), "A-14");
   assert.doesNotMatch(body(), /slat|NOT press when the edge/i, "D-10: no slats in the descent, nor the late press they need");
   assert.match(body(), /To start the descent, press button ①/);
@@ -495,7 +497,7 @@ test("a cover that follows a profile saves only on itself by default, which wait
   await press("ack:lift"); await press("next"); await move(backend); await press("lift"); backend.stopped(); await tick();
   await type("3"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
   await press("next"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
-  await press("ack:ascent"); await type("110");
+  await type("110"); await press("ack:ascent");
   await press("next"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
   await press("ack:descent"); await press("ack:readings"); await move(backend, { auto: true, stop: true });
   await type("54"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
@@ -553,7 +555,7 @@ async function runToSaved({ backend, press, type, startFor, code, tab, choosePat
   await press("ack:lift"); await press("next"); await move(backend, { seconds: 4.4 }); await press("lift"); backend.stopped(); await tick();
   await type("3"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
   await press("next"); await move(backend, { seconds: 22.2 }); await press("endpoint"); backend.stopped(); await tick();
-  await press("ack:ascent"); await type("198");
+  await type("198"); await press("ack:ascent");
   await press("next"); await move(backend, { seconds: 21.7 }); await press("endpoint"); backend.stopped(); await tick();
   await press("ack:descent"); await press("ack:readings"); await move(backend, { auto: true, stop: true });
   await type("97"); await move(backend, { seconds: 24 }); await press("endpoint"); backend.stopped(); await tick();
@@ -570,7 +572,7 @@ test("L-37: the base calibration ends with an optional check from the top to hal
   await press("ack:lift"); await press("next"); await move(backend, { seconds: 4.4 }); await press("lift"); backend.stopped(); await tick();
   await type("3"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
   await press("next"); await move(backend, { seconds: 22.2 }); await press("endpoint"); backend.stopped(); await tick();
-  await press("ack:ascent"); await type("198");
+  await type("198"); await press("ack:ascent");
   await press("next"); await move(backend, { seconds: 21.7 }); await press("endpoint"); backend.stopped(); await tick();
   await press("ack:descent"); await press("ack:readings"); await move(backend, { auto: true, stop: true });
   await type("97"); await move(backend, { seconds: 24 }); await press("endpoint"); backend.stopped(); await tick();
@@ -610,7 +612,7 @@ test("A-34 offers fine-tuning once the calibration is saved: path C on the same 
   await press("ack:lift"); await press("next"); await move(backend, { seconds: 4.4 }); await press("lift"); backend.stopped(); await tick();
   await type("3"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
   await press("next"); await move(backend, { seconds: 22.2 }); await press("endpoint"); backend.stopped(); await tick();
-  await press("ack:ascent"); await type("198");
+  await type("198"); await press("ack:ascent");
   await press("next"); await move(backend, { seconds: 21.7 }); await press("endpoint"); backend.stopped(); await tick();
   await press("ack:descent"); await press("ack:readings"); await move(backend, { auto: true, stop: true });
   await type("97"); await move(backend, { seconds: 24 }); await press("endpoint"); backend.stopped(); await tick();
@@ -796,8 +798,8 @@ test("each mockup gets its drawing by code: readings after the text, steps and b
   assert.deepEqual(drawn({ step: "reset", phase: "closing" }), ["A-10", "window-closed before-body"], "the closed window, as on A-05");
   assert.deepEqual(drawn({ step: "reset", phase: "closing" }, {}, "C"), ["C-10", "window-closed before-body"]);
   assert.deepEqual(drawn({ step: "opening", phase: "opening" }), ["A-11", "ascent-sequence before-body"]);
-  assert.deepEqual(drawn({ step: "opening", phase: "reading" }), ["A-12", null]);
-  assert.deepEqual(drawn({ step: "opening", phase: "reading" }, { ackAscent: true }), ["A-13", "curtain-open-tape after-body"]);
+  assert.deepEqual(drawn({ step: "opening", phase: "reading" }, { travelTyped: 198 }), ["A-12", null]);
+  assert.deepEqual(drawn({ step: "opening", phase: "reading" }), ["A-13", "curtain-open-tape after-body"]);
   assert.deepEqual(drawn({ step: "closing", phase: "closing" }), ["A-14", "descent-sequence before-body"]);
   assert.deepEqual(drawn({ step: "half_open", phase: "briefing" }), ["A-15", null]);
   assert.deepEqual(drawn({ step: "half_open", phase: "briefing" }, { ackDescent: true }), ["A-16", "curtain-partial-tape before-body"]);
@@ -1282,7 +1284,7 @@ test("a full run ended by the bus: valid with a press while the motor ran, other
   await toAscent(a);
   a.backend.tick(22); a.backend.emit(); await tick();
   await a.press("endpoint"); a.backend.stopped(); await tick();
-  assert.deepEqual([a.code(), !!a.wiz().querySelector('[data-wiz="ack:ascent"]'), notice(a.wiz)], ["A-12", true, ""]);
+  assert.deepEqual([a.code(), notice(a.wiz)], ["A-13", ""], "valid: on to the travel (L-13)");
   // (b) L-3: ② exists only while the motor runs: a click racing the stop's view (the button still drawn) confirms
   // nothing valid; the run is not valid and its end is confirmed once.
   const b = await mount();
@@ -1340,7 +1342,7 @@ test("the full descent follows the same rule, and the lift-off run is not affect
   await press("lift"); backend.stopped(); await tick();
   await type("3"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
   await press("next"); await move(backend, { seconds: 22.2 }); await press("endpoint"); backend.stopped(); await tick();
-  await press("ack:ascent"); await type("198");
+  await type("198"); await press("ack:ascent");
   assert.equal(code(), "A-14");
   await press("next"); backend.started(); backend.tick(21); Object.assign(backend.session, { motor_stopped: true, stopped_elapsed: backend.view().elapsed }); backend.emit(); await tick(6);
   assert.equal(wiz().querySelector(".wiz-title").textContent, "Descent not valid", "L-3: at once, before its end is confirmed");
@@ -1648,7 +1650,7 @@ test("L-14: a return before a tape reading waits for the user: its end stop is e
     await press("ack:lift"); await press("next"); await move(backend, { seconds: 4.4 }); await press("lift"); backend.stopped(); await tick();
     await type("3"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
     await press("next"); await move(backend, { seconds: 22.2 }); await press("endpoint"); backend.stopped(); await tick();
-    await press("ack:ascent"); await type("198");
+    await type("198"); await press("ack:ascent");
     await press("next"); await move(backend, { seconds: 21.7 }); await press("endpoint"); backend.stopped(); await tick();
     await press("ack:descent"); await press("ack:readings"); await move(backend, { auto: true, stop: true });
     await type("97");
@@ -1687,7 +1689,7 @@ test("L-14: the return to the bottom before a repeated half-ascent reading waits
   await press("ack:lift"); await press("next"); await move(backend, { seconds: 4.4 }); await press("lift"); backend.stopped(); await tick();
   await type("3"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
   await press("next"); await move(backend, { seconds: 22.2 }); await press("endpoint"); backend.stopped(); await tick();
-  await press("ack:ascent"); await type("198");
+  await type("198"); await press("ack:ascent");
   await press("next"); await move(backend, { seconds: 21.7 }); await press("endpoint"); backend.stopped(); await tick();
   await press("ack:descent"); await press("ack:readings"); await move(backend, { auto: true, stop: true });
   assert.equal(code(), "A-18");
@@ -1884,7 +1886,7 @@ test("a subscription replayed after a reconnection never starts a movement, even
   await press("ack:lift"); await press("next"); await move(backend, { seconds: 4 }); await press("lift"); backend.stopped(); await tick();
   await type("3"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
   await press("next"); await move(backend, { seconds: 22 }); await press("endpoint"); backend.stopped(); await tick();
-  await press("ack:ascent"); await type("198");
+  await type("198"); await press("ack:ascent");
   await press("next"); await move(backend, { seconds: 21 }); await press("endpoint"); backend.stopped(); await tick();
   await press("ack:descent"); await press("ack:readings"); await move(backend, { auto: true, stop: true });
   await type("97");
@@ -2912,8 +2914,8 @@ test("V-1: A-19 asks to confirm the top only on its first leg, and each leg says
 test("D-33: the result tiles show times with one decimal too", () => {
   const t = (key) => translations.en[key] || key;
   const view = { mode: "geometry", phase: "reading", step: "opening", values: { opening_time: 23 }, samples: { lift: 5 }, readings: { gap: 3 }, slats: true, owner: true, sequence: 4 };
-  const screen = buildScreen({ t, stage: "session", path: "A", view, local: {}, cover: { name: "K" } });
-  assert.deepEqual(screen.results.map((tile) => tile.value), ["5.0", "23.0"]);
+  const screen = buildScreen({ t, stage: "session", path: "A", view, local: { travelTyped: 198 }, cover: { name: "K" } });
+  assert.deepEqual(screen.results.map((tile) => tile.value), ["5.0", "23.0", "198"]);
 });
 
 test("D-36: A-02's notes and warnings hold each number to its unit", async () => {

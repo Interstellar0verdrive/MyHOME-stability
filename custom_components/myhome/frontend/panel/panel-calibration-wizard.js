@@ -40,7 +40,7 @@ const STAGES_BEFORE_SESSION = ["choose", "path", "profile", "current", "case", "
  */
 export const CONFIRM_GUARD_MS = 700;
 /** L-25: the choices made on the owner's own screens that its readers need to show the same step. */
-const SHARED_FLAGS = ["ackLift", "ackAscent", "ackDescent", "ackReadings", "invalidRun", "discarded", "misbehaved"];
+const SHARED_FLAGS = ["ackLift", "ackAscent", "ackDescent", "ackReadings", "invalidRun", "discarded", "misbehaved", "travelTyped"];
 /** How long a sheet takes to slide in or out (the CSS animations use the same). */
 const SHEET_MS = 220;
 /** Home Assistant keeps a session open this long for its owner at rest (IDLE_LEASE_SECONDS) when the view does not say. */
@@ -702,6 +702,11 @@ export class CalibrationWizard {
     if (id === "current") { local.stage = "case"; return this._render(); }
     if (id === "case") { local.scope = this._value("case") || local.scope || "points_only"; local.stage = "before"; return this._render(); }
     if (id === "begin") { if (local.stage === "before") local.slats = (this._value("slats") ?? (local.slats === false ? "no" : "yes")) !== "no"; return this._begin(); }
+    if (id === "ack:ascent" && local.travelTyped != null) {
+      const travel = local.travelTyped;
+      Object.assign(local, { ackAscent: true, travelTyped: null });
+      return this._send("reading", { reading_cm: travel });
+    }
     if (id.startsWith("ack:")) {
       local[{ lift: "ackLift", ascent: "ackAscent", descent: "ackDescent", readings: "ackReadings" }[id.slice(4)]] = true;
       if (id === "ack:readings") return this._send("next");
@@ -741,7 +746,7 @@ export class CalibrationWizard {
       const key = local.invalidRun.step === "opening" ? "opening_time" : "closing_time";
       local.discarded = { step: local.invalidRun.step, value: gateway?.view?.values?.[key] ?? null };
     }
-    if (id === "repeat") local.invalidRun = null;
+    if (id === "repeat") { local.invalidRun = null; local.travelTyped = null; }
     if (["next", "lift", "endpoint", "repeat", "repeat_step", "accept", "repeat_check", "redo_readings", "continue_anyway", "continue", "skip"].includes(id)) return this._send(id);
     // "It did not do what it should" (A-05): today the run is stopped and S-01 offers to start over (L2 will repeat the step).
     // L-38: Stop during the positioning before a times-only measurement: Home Assistant stops the cover, nothing started.
@@ -833,6 +838,10 @@ export class CalibrationWizard {
     // The lift-off gap as typed (G2-9): a value under the backend's 1 cm counts as still resting, and the screen of the
     // repeated run names it. The backend uses the number as sent, without rounding (0.5 is under 1).
     if (input.dataset.kind === "gap") { this._local.lastGap = value; this._local.liftOrigin = "typed"; }
+    // L-13: the travel is typed first and kept here: the ascent's result (with it) comes next, and «OK, continue»
+    // sends it; «Repeat the run» forgets it and nothing was sent.
+    const view = this._gateway?.view;
+    if (input.dataset.kind === "travel" && view && !view.preview && view.mode === "geometry" && view.step === "opening") { this._local.travelTyped = value; return this._render(); }
     return this._send("reading", { reading_cm: value });
   }
 
@@ -1344,7 +1353,7 @@ function accepted(input) {
  * Fine-tuning keeps its base on purpose (`_startRefine` passes it again).
  */
 function freshFlags() {
-  return { ackLift: false, ackAscent: false, ackDescent: false, ackReadings: false, arm: null, run: null, fullRun: null, invalidRun: null, repeatQueued: false, moreOpen: false, checkSkipped: false, checkOffer: false, lastPhase: null, discarded: null, misbehaved: false, stopSent: false,
+  return { ackLift: false, ackAscent: false, ackDescent: false, ackReadings: false, arm: null, run: null, fullRun: null, invalidRun: null, repeatQueued: false, moreOpen: false, checkSkipped: false, checkOffer: false, lastPhase: null, travelTyped: null, discarded: null, misbehaved: false, stopSent: false,
     review: null, pendingSave: null, fieldError: null, fieldSequence: undefined, errorPhase: undefined, saveProfile: undefined, saveChoice: undefined,
     profileName: undefined, refining: false, lastGap: null, liftOrigin: null, baseReadings: null, fineReadings: null, pathChoice: null, reachedPhase: null };
 }

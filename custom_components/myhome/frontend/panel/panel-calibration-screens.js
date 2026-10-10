@@ -446,8 +446,9 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     if (phase === "reading") {
       const bad = invalid("opening");
       if (bad) return repeatOnly(p("12"), t("wiz_T502"), [slats ? liftTile() : null, { ...timeTile("wiz_T040", view.values?.opening_time), invalid: true }], bad);
-      if (!local.ackAscent && slats) return Object.assign(screen, { code: p("12"), title: t("wiz_T058"), body: t("wiz_T059"),
-        results: [liftTile(), timeTile("wiz_T040", view.values?.opening_time)].filter(Boolean),
+      // L-13 (decided): the travel first, then the ascent's result with it («Corsa del telo»), confirmed or repeated.
+      if (local.travelTyped != null) return Object.assign(screen, { code: p("12"), title: t("wiz_T058"), body: t("wiz_T059"),
+        results: [slats ? liftTile() : null, timeTile("wiz_T040", view.values?.opening_time), { label: t("wiz_T041"), value: n(local.travelTyped), unit: "cm" }].filter(Boolean),
         actions: [{ id: "ack:ascent", label: t("wiz_T060"), kind: "primary" }, { id: "repeat", label: t("wiz_T061"), kind: "secondary" }] });
       return Object.assign(screen, { code: p("13"), title: t("wiz_T062"), body: t("wiz_T063"),
         // Z-11: one pattern for every reading's hint: the expected value when known, the field's limits otherwise.
@@ -484,7 +485,8 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
       return screen;
     }
     if (phase === "briefing" && !local.ackDescent) return Object.assign(screen, { code: p("15"), phase: "descent", title: t("wiz_T071"), body: t("wiz_T072"),
-      results: [timeTile("wiz_T068", view.values?.closing_time), view.travel_cm == null ? null : { label: t("wiz_T041"), value: n(view.travel_cm), unit: "cm" }].filter(Boolean),
+      // L-13: the descent's result is its duration only (the travel belongs to the ascent's).
+      results: [timeTile("wiz_T068", view.values?.closing_time)].filter(Boolean),
       actions: [{ id: "ack:descent", label: t("wiz_T060"), kind: "primary" }, { id: "repeat", label: t("wiz_T061"), kind: "secondary" }] });
     if (phase === "briefing" && !local.ackReadings) return Object.assign(screen, { code: p("16"), title: t("wiz_T074"), body: t("wiz_T075"),
       actions: [{ id: "ack:readings", label: t("wiz_T076"), kind: "primary" }] });

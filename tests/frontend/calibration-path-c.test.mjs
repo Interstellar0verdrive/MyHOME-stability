@@ -143,7 +143,7 @@ test("remeasuring everything runs the geometry session with the C texts and wait
   await press("next"); await move(backend); await press("lift"); backend.stopped(); await tick();
   await type("2"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
   await press("next"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
-  await press("ack:ascent"); await type("110");
+  await type("110"); await press("ack:ascent");
   await press("next"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
   await press("ack:descent"); await press("ack:readings"); await move(backend, { auto: true, stop: true });
   await type("54"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
