@@ -481,7 +481,7 @@ export class CalibrationWizard {
     // Why the name cannot be saved, under the field (Save stays disabled meanwhile).
     const nameError = root.querySelector(".wiz-name-error");
     if (nameError) { nameError.textContent = block?.error || ""; nameError.hidden = !block?.error; }
-    const actions = JSON.stringify([screen.actions.map((action) => [action.id, action.label, action.kind, action.note]), screen.readOnly, screen.links]);
+    const actions = JSON.stringify([screen.actions.map((action) => [action.id, action.label, action.kind, action.note]), screen.readOnly]);
     const column = root.querySelector(".wiz-actions");
     if (actions !== this._actionsSignature) {
       // The hold protects a tap from landing on a button that just appeared or changed. A button that only goes away
@@ -496,12 +496,15 @@ export class CalibrationWizard {
       column.innerHTML = `${screen.readOnly ? `<div class="wiz-readonly"><p class="wiz-readonly-status">${esc(screen.readOnly.status)}</p><p>${esc(screen.readOnly.text)}</p>
           <button type="button" class="wiz-take ${screen.readOnly.primary || screen.readOnly.consequence ? "primary" : "secondary"}" data-wiz="take">${esc(screen.readOnly.take)}</button>
           ${screen.readOnly.consequence ? `<p class="muted">${esc(screen.readOnly.consequence)}</p>` : ""}</div>` : ""}
-        ${screen.actions.map((action) => action.kind === "status" || action.kind === "state"
-          ? `<p class="wiz-action status${action.kind === "state" ? " is-still" : ""}" data-wiz="${esc(action.id)}" role="status">${action.kind === "status" ? '<span class="wiz-spinner" aria-hidden="true"></span>' : ""}${esc(action.label)}</p>`
-          : `<button type="button" class="wiz-action ${action.kind}" data-wiz="${esc(action.id)}"${action.note ? ` aria-describedby="wiz-note-${esc(action.id.replace(/\W/g, "-"))}"` : ""}>${esc(action.label)}</button>${action.note
-          ? `<p class="wiz-action-note muted" id="wiz-note-${esc(action.id.replace(/\W/g, "-"))}">${esc(action.note)}</p>` : ""}`).join("")}
-        ${screen.links?.length ? `<div class="wiz-more"><button type="button" class="wiz-more-toggle" data-wiz="more" aria-expanded="false" aria-controls="wiz-more-list">${esc(t("wiz_T529"))}<ha-icon icon="mdi:chevron-down" aria-hidden="true"></ha-icon></button>
-          <div class="wiz-more-list" id="wiz-more-list">${screen.links.map((link) => `<button type="button" class="wiz-link" data-wiz="${esc(link.id)}">${esc(link.label)}</button>`).join("")}</div></div>` : ""}`;
+        ${(() => {
+          const one = (action) => action.kind === "status" || action.kind === "state"
+            ? `<p class="wiz-action status${action.kind === "state" ? " is-still" : ""}" data-wiz="${esc(action.id)}" role="status">${action.kind === "status" ? '<span class="wiz-spinner" aria-hidden="true"></span>' : ""}${esc(action.label)}</p>`
+            : `<button type="button" class="wiz-action ${action.kind}" data-wiz="${esc(action.id)}"${action.note ? ` aria-describedby="wiz-note-${esc(action.id.replace(/\W/g, "-"))}"` : ""}>${esc(action.label)}</button>${action.note
+            ? `<p class="wiz-action-note muted" id="wiz-note-${esc(action.id.replace(/\W/g, "-"))}">${esc(action.note)}</p>` : ""}`;
+          const { shown, more, red } = overflow(screen.actions);
+          return `${shown.map(one).join("")}${more.length ? `<div class="wiz-more"><button type="button" class="wiz-more-toggle" data-wiz="more" aria-expanded="false" aria-controls="wiz-more-list">${esc(t("wiz_T529"))}<ha-icon icon="mdi:chevron-down" aria-hidden="true"></ha-icon></button>
+            <div class="wiz-more-list" id="wiz-more-list">${more.map(one).join("")}</div></div>` : ""}${red.map(one).join("")}`;
+        })()}`;
       if (focused) column.querySelector(`[data-wiz="${focused}"]`)?.focus({ preventScroll: true });
     }
     // L-1: the other ways on stack under the actions; in the phone's bar they wait behind «Altre opzioni».
@@ -1258,6 +1261,20 @@ export class CalibrationWizard {
 }
 
 function key(item) { return JSON.stringify([item.entry.entry_id, item.cover.entity_id]); }
+
+/** The actions in red (Close, Exit, Cancel, Stop): always last, never under «Altre opzioni» (L-27). */
+const RED_KINDS = ["link", "danger", "danger-outline", "stop"];
+/**
+ * L-28/L-27, the rule of every wizard bar: at most three actions in view; with more, the first (two with no red one)
+ * stay, the others go under «Altre opzioni ▾», and the red ones follow it, last. The columns show them all (CSS): the
+ * disclosure's toggle is hidden there and its actions are ordinary buttons.
+ */
+export function overflow(actions) {
+  const red = actions.filter((action) => RED_KINDS.includes(action.kind)), others = actions.filter((action) => !RED_KINDS.includes(action.kind));
+  if (actions.length <= 3 || others.length < 2) return { shown: others, more: [], red };
+  const keep = Math.max(1, 2 - red.length);
+  return { shown: others.slice(0, keep), more: others.slice(keep), red };
+}
 
 /** Z-2: a value the reading field accepts (a number within its own limits). */
 function accepted(input) {

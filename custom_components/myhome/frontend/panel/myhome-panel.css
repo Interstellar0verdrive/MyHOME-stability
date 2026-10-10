@@ -1242,11 +1242,12 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-box { display: grid; gap: 4px; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--panel-border);
   background: color-mix(in srgb, var(--primary-text-color, #182b37) 6%, var(--panel-surface)); }
 .wiz-box p { margin: 0; }
-/* L-1: the other ways on after a save, never in the text: stacked as text buttons under the two actions of the
-   column; in the phone's bar (one column) behind «Altre opzioni ▾». */
+/* L-1/L-28: more than three actions: in the columns all of them, as ordinary buttons (the disclosure's toggle hidden);
+   in a bar of one column (phone, single column) the first one, «Altre opzioni ▾» with the others as blue links, then
+   the red ones. */
 .wiz-more { display: grid; min-width: 0; }
 .wiz-more-toggle { display: none; }
-.wiz-more-list { display: grid; justify-items: center; }
+.wiz-more-list { display: grid; gap: 12px; min-width: 0; }
 .wiz-more-toggle { align-items: center; justify-content: center; gap: 4px; min-height: 44px; padding: 0; border: 0; background: transparent; box-shadow: none;
   color: var(--panel-accent); font-size: 14px; font-weight: 500; -webkit-tap-highlight-color: transparent; }
 .wiz-more-toggle ha-icon { display: inline-flex; --mdc-icon-size: 20px; transition: transform var(--panel-ease); }
@@ -1478,6 +1479,8 @@ dialog.cal-dialog .dialog-head { justify-content: space-between; padding-block: 
     .cal-batch-sticky { position: static; }
     .wiz-more-toggle { display: inline-flex; }
     .wiz-more:not(.is-open) > .wiz-more-list { display: none; }
+    .wiz-more-list { gap: 0; justify-items: center; }
+    .wiz-more-list > .wiz-action { min-height: 44px; height: auto; border: 0; background: transparent; box-shadow: none; color: var(--panel-accent); font-weight: 500; }
     /* R-2: the text scrolls under the bar through a 40 px fade of the surface; D-43: only while it does, the bar docked
        over the wizard, not when the bar sits at the end of the content. */
     .wiz-actions::before { content: ""; position: absolute; inset-inline: 0; bottom: calc(100% + 1px); height: 40px; pointer-events: none;
@@ -1530,6 +1533,8 @@ dialog.cal-dialog .dialog-head { justify-content: space-between; padding-block: 
   .wiz-action.stop, .wiz-action.link { min-height: 44px; background: transparent; }
   .wiz-more-toggle { display: inline-flex; }
   .wiz-more:not(.is-open) > .wiz-more-list { display: none; }
+  .wiz-more-list { gap: 0; justify-items: center; }
+  .wiz-more-list > .wiz-action { min-height: 44px; height: auto; border: 0; background: transparent; box-shadow: none; color: var(--panel-accent); font-weight: 500; }
 }
 /* The wizard's sheets: the Steps sheet and the confirmations (S-08, Calibration in progress) from the bottom on a phone or a
    short window (S-08 M); centred cards otherwise. */
@@ -1617,6 +1622,8 @@ dialog.cal-dialog .dialog-head { justify-content: space-between; padding-block: 
   /* L-1: a side column again: the other ways on stacked, no disclosure. */
   .wiz-more-toggle { display: none; }
   .wiz-more:not(.is-open) > .wiz-more-list { display: grid; }
+  .wiz-more-list { gap: 12px; justify-items: stretch; }
+  .wiz-more-list > .wiz-action { height: auto; border: 1px solid var(--panel-accent); background: transparent; color: var(--panel-accent); box-shadow: none; font-weight: inherit; }
   /* R-2: the centre column fades into its bottom edge while it has more to scroll. */
   .wiz-main::after { content: ""; flex: none; position: sticky; bottom: calc(-12px - var(--cal-safe-bottom)); height: 40px; margin-top: -40px;
     pointer-events: none; background: linear-gradient(to top, var(--panel-surface), transparent); opacity: 0; transition: opacity var(--panel-ease); }

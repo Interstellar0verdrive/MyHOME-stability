@@ -806,14 +806,15 @@ function savedScreen(screen, ctx, tx, values) {
   const assign = ["profile_new", "profile_update"].includes(saved.target) ? [{ id: "assign-profile", label: t("wiz_T426"), kind: "secondary" }] : [];
   // A new profile left the previous one without covers: it can be deleted from the Profiles tab (never by itself).
   if (saved.target === "profile_new" && saved.orphan) screen.note = { tone: "info", text: fill(t("wiz_T431"), { old: saved.orphan, tab: t("profileListTitle") }) };
-  // Z-8: the bar holds the primary and one secondary (assigning the profile just saved, or another cover); the other
-  // ways on are text links under the text, so a docked bar never covers the screen.
   // L-26: another device saved it: the same A-34, read only: «Chiudi» alone.
   if (saved.reader) return Object.assign(screen, { code: path === "C" ? "C-34" : "A-34", title: t("wiz_T154"), body,
     actions: [{ id: "close", label: t("wiz_T158"), kind: "secondary" }], links: [] });
+  // L-28 (final): fine-tuning first, then giving the new profile to other covers, another cover, this cover's details,
+  // and «Chiudi» in red, last. Where the bar is one column (phone, single column) the wizard keeps the first and the
+  // red one visible and puts the others under «Altre opzioni ▾» (the rule of every bar: at most three visible).
   if (path !== "C") return Object.assign(screen, { code: "A-34", title: t("wiz_T154"), body: `${body}\n\n${t("wiz_T319")}`,
-    actions: [{ id: "refine", label: t("wiz_T103"), kind: "primary" }, ...(assign.length ? assign : [{ id: "another", label: t("wiz_T156"), kind: "secondary" }])],
-    links: [...(assign.length ? [{ id: "another", label: t("wiz_T156") }] : []), { id: "open-cover", label: t("wiz_T157") }, { id: "close", label: t("wiz_T158") }] });
+    actions: [{ id: "refine", label: t("wiz_T103"), kind: "primary" }, ...assign, { id: "another", label: t("wiz_T156"), kind: "secondary" },
+      { id: "open-cover", label: t("wiz_T157"), kind: "secondary" }, close(path)] });
   return Object.assign(screen, { code: "C-34", title: t("wiz_T154"), body,
     actions: [{ id: "another", label: t("wiz_T156"), kind: "primary" }, { id: "open-cover", label: t("wiz_T157"), kind: "secondary" }, close(path)] });
 }

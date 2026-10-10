@@ -563,6 +563,26 @@ async function runToSaved({ backend, press, type, startFor, code, tab, choosePat
   assert.equal(code(), "A-34");
 }
 
+test("L-16: «Open the cover's details» closes the wizard and opens the cover's row in the list, never the maintainer's dialog", async () => {
+  const context = await mount();
+  await runToSaved(context);
+  context.wiz().querySelector('[data-wiz="open-cover"]').click(); await tick(8);
+  assert.equal(context.wiz(), null, "the wizard is closed");
+  const row = [...context.tab().querySelectorAll(".cal-row")].find((item) => item.dataset.entity === "cover.living_one");
+  assert.equal(row.classList.contains("is-expanded"), true, "its row opened in place");
+  assert.equal(context.panel.shadowRoot.querySelector("dialog.cover-profile-dialog[open]"), null, "no maintainer's dialog");
+});
+
+test("L-28/L-27: every bar keeps at most three actions in view; the red ones last, never under «Other options»", async () => {
+  const { overflow } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-wizard.js");
+  const a = (id, kind = "secondary") => ({ id, kind });
+  const ids = ({ shown, more, red }) => [shown.map((x) => x.id), more.map((x) => x.id), red.map((x) => x.id)];
+  assert.deepEqual(ids(overflow([a("p", "primary"), a("b"), a("c"), a("d"), a("x", "link")])), [["p"], ["b", "c", "d"], ["x"]]);
+  assert.deepEqual(ids(overflow([a("p", "primary"), a("b"), a("x", "link")])), [["p", "b"], [], ["x"]], "three: all in view");
+  assert.deepEqual(ids(overflow([a("p", "primary"), a("b"), a("c"), a("d")])), [["p", "b"], ["c", "d"], []], "no red one: two in view");
+  assert.deepEqual(ids(overflow([a("p", "primary"), a("s", "stop"), a("c"), a("d")])), [["p"], ["c", "d"], ["s"]], "Stop is red too");
+});
+
 test("A-34 offers fine-tuning once the calibration is saved: path C on the same cover, from the values just written", async () => {
   const { backend, wiz, code, press, type, actions, startFor } = await mount();
   await startFor("cover.living_one");
@@ -579,19 +599,21 @@ test("A-34 offers fine-tuning once the calibration is saved: path C on the same 
   assert.equal(wiz().querySelector('[data-wiz="refine"]'), null, "the summary only saves");
   await press("save");
   assert.equal(code(), "A-34");
+  // L-28 (final): fine-tuning, the new profile to other covers, another cover, this cover's details, «Close» in red last.
   const kinds = [...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => [item.dataset.wiz, item.className.replace("wiz-action ", "")]);
-  assert.deepEqual(kinds, [["refine", "primary"], ["assign-profile", "secondary"]], "fine-tuning is the next step; the new profile can go to other covers");
-  // L-1: the other ways on are never in the text: text buttons under the two actions, behind «Other options» in the
-  // phone's bar (CSS), so the bar keeps two actions.
-  assert.equal(wiz().querySelector(".wiz-main .wiz-link"), null, "nothing in the text column");
-  assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-more .wiz-more-list .wiz-link")].map((item) => item.dataset.wiz), ["another", "open-cover", "close"]);
+  assert.deepEqual(kinds, [["refine", "primary"], ["assign-profile", "secondary"], ["another", "secondary"], ["open-cover", "secondary"], ["close", "link"]]);
+  // In a one-column bar the three secondaries are under «Other options ▾» (CSS hides them there), «Close» after it.
+  assert.equal(wiz().querySelector(".wiz-main .wiz-action"), null, "nothing in the text column");
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-more .wiz-more-list .wiz-action")].map((item) => item.dataset.wiz), ["assign-profile", "another", "open-cover"]);
+  const order = [...wiz().querySelector(".wiz-actions").children].map((item) => item.dataset.wiz || item.className);
+  assert.deepEqual(order, ["refine", "wiz-more", "close"], "the primary, the disclosure, then the red one");
   const toggle = wiz().querySelector(".wiz-actions .wiz-more-toggle");
   assert.deepEqual([toggle.textContent.trim(), toggle.getAttribute("aria-expanded")], ["Other options", "false"]);
   toggle.click(); await tick();
   assert.deepEqual([wiz().querySelector(".wiz-more").classList.contains("is-open"), wiz().querySelector(".wiz-more-toggle").getAttribute("aria-expanded")], [true, "true"]);
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.equal((css.match(/\.wiz-more:not\(\.is-open\) > \.wiz-more-list \{ display: none; \}/g) || []).length, 2, "hidden behind the toggle in both bars");
-  assert.match(css, /\.wiz-more-toggle \{ display: none; \}\n\.wiz-more-list \{ display: grid;/, "stacked and always shown in the columns");
+  assert.match(css, /\.wiz-more-toggle \{ display: none; \}\n\.wiz-more-list \{ display: grid;/, "all shown, as buttons, in the columns");
   assert.equal(wiz().querySelector('[data-wiz="refine"]').textContent, "Continue with fine-tuning");
   assert.equal(wiz().querySelector("#wiz-note-refine"), null, "no note under the button");
   assert.equal(wiz().querySelector('[data-wiz="refine"]').hasAttribute("aria-describedby"), false);
@@ -1974,8 +1996,8 @@ test("the preview is announced before it starts and its end never says that some
   assert.equal(real.actions.find((action) => action.id === "refine").note, undefined, "no note under the button");
   assert.equal(real.body, `${translations.it.wiz_T155.replace("{name}", "cucina_2")}\n\n**Vuoi perfezionare la calibrazione?** Quattro letture col metro a un quarto e a tre quarti della corsa, più una verifica finale, renderanno la stima della posizione più precisa lungo tutta la corsa. Qualche minuto; la tapparella si muoverà.`,
     "T319 is the body's second paragraph");
-  assert.deepEqual(real.actions.map((action) => [action.id, action.kind]), [["refine", "primary"], ["assign-profile", "secondary"]]);
-  assert.deepEqual(real.links.map((link) => link.id), ["another", "open-cover", "close"], "Z-8");
+  assert.deepEqual(real.actions.map((action) => [action.id, action.kind]), [["refine", "primary"], ["assign-profile", "secondary"], ["another", "secondary"],
+    ["open-cover", "secondary"], ["close", "link"]], "L-28");
   const coverOnly = buildScreen({ t, language: "it", stage: "saved", path: "A", cover: { name: "Cucina 2" }, local: { saved: { target: "cover_only" } } });
   assert.equal(coverOnly.actions.some((action) => action.id === "assign-profile"), false, "no profile written, nothing to assign");
   assert.deepEqual(real.stepper.phases.map((phase) => [phase.key, phase.state]).slice(-2), [["summary", "done"], ["finetune", "future"]]);

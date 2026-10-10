@@ -986,21 +986,37 @@ export class CalibrationTab {
     // Back from the wizard opened on a cover's details page: the same page again (a row opened in place stays open).
     if (this._pageReturn && layout.phone()) this._page = this._pageReturn;
     this._pageReturn = null;
+    // L-16: a cover's details asked from the wizard open now, in the list's own way.
+    const show = this._showAfter;
+    this._showAfter = null;
+    if (show) { if (this._phone()) this._page = show; else this._expanded.add(show); }
     this._context.host.innerHTML = "";
     this._render();
+    if (show && !this._phone()) [...this._context.host.querySelectorAll(".cal-row")].find((row) => row.dataset.entity === JSON.parse(show)[1])?.scrollIntoView?.({ block: "start" });
     this.refresh();
+  }
+
+  /** L-16: the cover's details from the wizard: its row opened in place, or its page on a phone (never the maintainer's dialog). */
+  _showCover(entityId) {
+    const item = this._covers().find((entry) => entry.cover.entity_id === entityId);
+    if (!item) return;
+    const key = JSON.stringify([item.entry.entry_id, item.cover.entity_id]);
+    if (this._mode.kind !== "list") { this._showAfter = key; return; }
+    if (this._phone()) this._page = key; else this._expanded.add(key);
+    this._render();
   }
 
   _openWizard(options) {
     if (!this._wizard || !this._context) return;
     this._done = "";
     this._mode = { kind: "wizard" };
-    const { host, hass, t, onOpenCover } = this._context;
+    const { host, hass, t } = this._context;
     // The covers as they are at each step: after a save, fine-tuning (C-01) shows the values just written.
     this._wizard.open({ host, hass, t, covers: () => this._covers(), data: (entryId) => this._rows.get(entryId)?.data, ...options,
       // A-01's list, drawn as the tab's lists are, in the list's shared order.
       picker: { markup: (state) => this._pickerMarkup(state), sort: (key, dir) => this._setSort(key, dir), order: () => ({ ...this._sort }) },
-      onOpenCover: (entityId) => onOpenCover?.(entityId),
+      // L-16: «Open the cover's details» is ours: the row opened in place (the page on a phone), once the list is back.
+      onOpenCover: (entityId) => this._showCover(entityId),
       onAssignProfile: (profile) => this._assignToCovers(profile),
       onDiscarded: (entryId) => this._discarded(entryId),
       onClose: () => this._backToList() });
