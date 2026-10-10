@@ -17,6 +17,7 @@ from .cover_settings import (
     KEYS,
     centimetres,
     clear_check,
+    profile_times_changed,
     reference_profile,
     resolve,
     seconds,
@@ -78,11 +79,18 @@ async def mutate_settings(hass: Any, store: Any, entry: Any, entity: Any, msg: d
         if "travel_cm" not in msg:
             raise vol.Invalid("travel_cm is required")
         record = data["covers"].setdefault(entity.unique_id, {"overrides": {}})
+        travel_before = record.get("travel_cm")
         if msg["travel_cm"] is None:
             record.pop("travel_cm", None)
         else:
             record["travel_cm"] = centimetres(msg["travel_cm"])
         set_overrides(data, entity.unique_id, record["overrides"])
+        # N-1: a profile with a reference travel scales this cover's times to its own travel: another travel gives
+        # it other times, and the stored check described the old ones.
+        assigned = data["profiles"].get(data["assignments"].get(entity.unique_id))
+        if (assigned is not None and assigned.get("reference_travel_cm") is not None
+                and data["covers"].get(entity.unique_id, {}).get("travel_cm") != travel_before):
+            clear_check(data, entity.unique_id)
         affected = [entity.unique_id]
     elif action == "overrides":
         patch = OVERRIDE_PATCH(msg.get("overrides", {}))
@@ -121,7 +129,7 @@ async def mutate_settings(hass: Any, store: Any, entry: Any, entity: Any, msg: d
         stamp_geometry(profile, previous, entity.unique_id)
         data["profiles"][profile_id] = profile
         # L-73: new times for every cover that follows the profile: their stored checks no longer apply.
-        if any(previous.get(key) != profile.get(key) for key in ("opening_time", "closing_time", "geometry")):
+        if profile_times_changed(previous, profile):
             for unique in affected:
                 clear_check(data, unique)
     await commit_profiles(hass, store, entry.entry_id, data, affected)

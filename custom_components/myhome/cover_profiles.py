@@ -51,6 +51,7 @@ from .cover_settings import (
     clear_check,
     migrate,
     native_provenance,
+    profile_times_changed,
     record_check,
     reference_profile,
     resolve,
@@ -349,7 +350,7 @@ async def write_profile(hass: Any, msg: dict[str, Any], *, calibration: Any=None
                     for direction in DIRECTIONS
                 }
             stamp_geometry(profile, previous, entity.unique_id)
-            times_changed = previous is None or any(previous.get(key) != profile.get(key) for key in ("opening_time", "closing_time", "geometry"))
+            times_changed = previous is None or profile_times_changed(previous, profile)
             if calibration is not None and calibration.geometry_provenance is not None:
                 profile["geometry_provenance"] = copy.deepcopy(GEOMETRY_PROVENANCE(calibration.geometry_provenance))
                 data["covers"].setdefault(entity.unique_id, {})["travel_cm"] = calibration.measured_travel

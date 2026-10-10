@@ -198,6 +198,47 @@ async def test_an_assignment_in_bulk_clears_the_checks_of_the_covers_that_change
 
 
 # ---------------------------------------------------------------------------------
+# N-1: the reference travel scales the followers' times: changing it, or the travel of a cover that scales, clears.
+# ---------------------------------------------------------------------------------
+SCALED = {"name": "Living room", "opening_time": 42.5, "closing_time": 42.5, "reference_travel_cm": 150}
+
+
+async def test_an_edit_of_the_reference_travel_alone_clears_the_check(hass, plant):
+    first = await write_profile(hass, message(plant, profile=SCALED))
+    seed(hass, plant)
+    await write_profile(hass, message(plant, 1, profile_id=first["assigned_profile_id"], profile={**SCALED, "name": "Renamed"}))
+    assert stored(hass, plant) == OLD, "the same reference: the same times"
+    await write_profile(hass, message(plant, 2, profile_id=first["assigned_profile_id"], profile={**SCALED, "reference_travel_cm": 160}))
+    assert stored(hass, plant) == dict.fromkeys(CHECK_FIELDS)
+
+
+async def test_a_shared_update_of_the_reference_travel_alone_clears_every_follower_s_check(hass, plant):
+    first = await write_profile(hass, message(plant, profile=SCALED))
+    profile_id = first["assigned_profile_id"]
+    await write_profile(hass, message(plant, 1, index=1, action="assign", profile_id=profile_id))
+    seed(hass, plant, 0)
+    seed(hass, plant, 1)
+    msg = message(plant, 2, action="preview", profile_id=profile_id, profile={**SCALED, "reference_travel_cm": 160})
+    preview = await write_profile(hass, msg)
+    await write_profile(hass, {**msg, "action": "update_shared", "confirmation": preview["confirmation"]})
+    assert stored(hass, plant, 0) == dict.fromkeys(CHECK_FIELDS)
+    assert stored(hass, plant, 1) == dict.fromkeys(CHECK_FIELDS)
+
+
+async def test_a_new_travel_clears_the_check_only_when_the_profile_scales_the_times(hass, plant):
+    await write_profile(hass, message(plant, profile=SCALED))
+    await write_profile(hass, message(plant, 1, action="travel", travel_cm=150))
+    seed(hass, plant)
+    await write_profile(hass, message(plant, 2, action="travel", travel_cm=150))
+    assert stored(hass, plant) == OLD, "the same travel: the same times"
+    await write_profile(hass, message(plant, 3, action="travel", travel_cm=180))
+    assert stored(hass, plant) == dict.fromkeys(CHECK_FIELDS), "scaled to another travel: other times"
+    seed(hass, plant)
+    await write_profile(hass, message(plant, 4, action="travel", travel_cm=None))
+    assert stored(hass, plant) == dict.fromkeys(CHECK_FIELDS), "back to the reference times"
+
+
+# ---------------------------------------------------------------------------------
 # R-4: a times-only save on the cover or on its shared profile re-anchors like a new profile (L-36).
 # ---------------------------------------------------------------------------------
 @pytest.mark.parametrize("mode", ["cover", "shared"])
