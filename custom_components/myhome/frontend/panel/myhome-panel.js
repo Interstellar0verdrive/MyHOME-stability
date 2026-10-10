@@ -46,6 +46,8 @@ class MyHomePanel extends HTMLElement {
     this._beforeLeave = null;
     this._visibilityChanged = () => this._updatePolling();
     this._locationChanged = () => this._syncGatewayFromUrl();
+    // Review nit: the browser's Back/Forward goes through the tab's guard too (a live calibration asks first).
+    this._popped = () => this._guardedLocation();
   }
 
   set hass(value) {
@@ -95,7 +97,7 @@ class MyHomePanel extends HTMLElement {
     this._started = true;
     this._busMonitor.hass = this._hass;
     this._syncGatewayFromUrl();
-    window.addEventListener("popstate", this._locationChanged);
+    window.addEventListener("popstate", this._popped);
     window.addEventListener("location-changed", this._locationChanged);
     this._buildShell();
     this._renderInventory();
@@ -129,7 +131,7 @@ class MyHomePanel extends HTMLElement {
     this._profileList.clear(); this._calibrationTab.clear();
     this._started = false;
     document.removeEventListener("visibilitychange", this._visibilityChanged);
-    window.removeEventListener("popstate", this._locationChanged);
+    window.removeEventListener("popstate", this._popped);
     window.removeEventListener("location-changed", this._locationChanged);
     this._session++;
     clearInterval(this._timer);
@@ -173,6 +175,21 @@ class MyHomePanel extends HTMLElement {
         if (this._refreshAgain) { this._refreshAgain = false; this._refresh(); }
       }
     }
+  }
+
+  /** Back/Forward to another gateway: the tab's guard first; staying puts the address back until the answer. */
+  _guardedLocation() {
+    const url = new URL(window.location.href), entryId = url.searchParams.get("entry_id");
+    const pending = entryId !== this._entryQuery && this._beforeLeave ? this._beforeLeave() : null;
+    if (!pending) { this._syncGatewayFromUrl(); return; }
+    const target = url.href, back = new URL(url.href);
+    if (this._entryQuery) back.searchParams.set("entry_id", this._entryQuery); else back.searchParams.delete("entry_id");
+    history.pushState(null, "", back.href);
+    Promise.resolve(pending).then((leave) => {
+      if (!leave) return;
+      history.pushState(null, "", target);
+      this._syncGatewayFromUrl();
+    });
   }
 
   _syncGatewayFromUrl() {

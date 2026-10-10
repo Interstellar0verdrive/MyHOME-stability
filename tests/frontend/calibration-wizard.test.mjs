@@ -1176,8 +1176,10 @@ test("R-8: what the tab hangs on the window is removed when it is cleared, and a
     tab.show({ ...context, host }); await tick(4);
     tab.show({ ...context, host }); await tick(4);
     assert.equal(active.size, 1);
+    tab.requestWizard("one", "cover.living_one");
     tab.clear();
     assert.equal(active.size, 0);
+    assert.equal(tab._pendingWizard, null, "a wizard asked for before the clear never opens later by surprise");
   } finally {
     view.addEventListener = add; view.removeEventListener = remove;
   }

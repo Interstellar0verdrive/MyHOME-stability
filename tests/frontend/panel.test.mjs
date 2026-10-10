@@ -710,6 +710,27 @@ test("bus sweep follows the selected gateway and preserves unscoped Lovelace usa
   ]);
 });
 
+test("Back/Forward asks the tab's guard first: staying keeps the gateway and puts the address back", async () => {
+  window.history.replaceState(null, "", "/myhome?entry_id=one");
+  const { panel } = await mount();
+  assert.equal(panel._entryId, "one");
+  let answer;
+  panel.setBeforeLeave(() => new Promise((resolve) => { answer = resolve; }));
+  window.history.replaceState(null, "", "/myhome?entry_id=two");
+  window.dispatchEvent(new Event("popstate"));
+  assert.equal(panel._entryId, "one", "nothing changes before the answer");
+  assert.equal(new URL(window.location.href).searchParams.get("entry_id"), "one", "the address is back on the gateway shown");
+  answer(false); await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(panel._entryId, "one", "staying keeps it");
+  window.history.replaceState(null, "", "/myhome?entry_id=two");
+  window.dispatchEvent(new Event("popstate"));
+  answer(true); await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(panel._entryId, "two", "leaving goes on to the other gateway");
+  panel.setBeforeLeave(null);
+  panel.remove();
+  window.history.replaceState(null, "", "/myhome");
+});
+
 test("gateway deep links work on first load, route changes and browser navigation", async () => {
   window.history.replaceState(null, "", "/myhome?entry_id=two");
   const { panel, root } = await mount();

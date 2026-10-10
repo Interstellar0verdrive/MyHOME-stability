@@ -170,6 +170,8 @@ export class CalibrationTab {
     this._context?.setBeforeLeave?.(null);
     // R-8: one teardown for what the tab hung on the window and on a docked view.
     this._windowOff?.(); this._windowOff = null;
+    // Review nit: a wizard asked for before the tab was cleared never opens later by surprise.
+    this._pendingWizard = null;
     this._undockView?.(); this._undockView = null; this._dockedView = null;
     this._catalogue?.close();
     this._generation++;
@@ -190,7 +192,11 @@ export class CalibrationTab {
   show(context) {
     const key = JSON.stringify(context.gateways.map((entry) => entry.entry_id).sort());
     const changed = key !== this._key || context.hass.connection !== this._context?.hass.connection;
+    // A wizard asked for just before this showing (the profile dialog's «New guided measurement») survives the
+    // showing's own reset when its gateway is among the ones shown; any other clear forgets it.
+    const pending = this._pendingWizard;
     if (changed) this.clear();
+    if (pending && context.gateways.some((entry) => entry.entry_id === pending.entryId)) this._pendingWizard = pending;
     if (!changed && this._context && this._context.host !== context.host) {
       // A rebuilt shell gives a new element: whatever the old one showed is closed, as on any exit.
       this._calibration.close();
