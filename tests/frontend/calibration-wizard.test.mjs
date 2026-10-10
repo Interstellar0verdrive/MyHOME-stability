@@ -585,6 +585,18 @@ test("L-37: the base calibration ends with an optional check from the top to hal
   assert.equal(actions().length, sent + 1);
 });
 
+test("L-18: a tap on the cover already chosen in A-01 un-chooses it", async () => {
+  const { wiz, tab, pickCover, code } = await mount();
+  tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
+  await pickCover("cover.living_one");
+  assert.equal(wiz().querySelector('[data-wiz="choose"]').disabled, false);
+  const radio = [...wiz().querySelectorAll('.wiz-picker input[name="cover"]')].find((input) => JSON.parse(input.value)[1] === "cover.living_one");
+  radio.click(); await tick();
+  assert.equal(code(), "A-01");
+  assert.equal([...wiz().querySelectorAll('.wiz-picker input[name="cover"]')].some((input) => input.checked), false, "nothing chosen");
+  assert.equal(wiz().querySelector('[data-wiz="choose"]').disabled, true, "Continue off again");
+});
+
 test("L-16: «Open the cover's details» closes the wizard and opens the cover's row in the list, never the maintainer's dialog", async () => {
   const context = await mount();
   await runToSaved(context);

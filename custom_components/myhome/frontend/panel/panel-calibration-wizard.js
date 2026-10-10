@@ -662,6 +662,14 @@ export class CalibrationWizard {
     }
     // M6-1 (R7-7 for every sheet): a tap on the Steps sheet's backdrop closes it, as its ✕ does.
     if (event.target.classList?.contains("wiz-sheet")) { this._act("steps-close"); return; }
+    // L-18: a tap on the cover already chosen in A-01 un-chooses it (a radio cannot do that by itself).
+    const radio = event.target.matches?.('.wiz-picker input[name="cover"]') ? event.target : null;
+    if (radio && this._local.coverPicked && this._local.coverKey === radio.value) {
+      radio.checked = false;
+      Object.assign(this._local, { coverKey: "", coverPicked: false });
+      this._render();
+      return;
+    }
     const button = event.target.closest("button[data-wiz]");
     if (!button || button.disabled) return;
     event.preventDefault();
