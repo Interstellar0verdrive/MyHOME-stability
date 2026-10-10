@@ -1642,6 +1642,22 @@ test("L-25: the owner publishes its screen and a reader shows the same step, not
   assert.equal(reader.code(), "A-13", "not A-12, the screen the owner already left");
 });
 
+test("L-52: a reader that takes control continues on the step its former owner showed", async () => {
+  const view = { phase: "briefing", step: "half_open", reading_kind: "half_open", values: { opening_time: 22, closing_time: 21 },
+    screen: { code: "A-15", path: "A", scope: null, local: { ackLift: true, ackAscent: true } } };
+  const { backend, tab, wiz, code } = await mount({ session: resumed(view), owner: false });
+  tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
+  assert.equal(code(), "A-15");
+  // The owner acknowledges the descent: it now shows «Before the automatic readings» (A-16), a step of its own.
+  backend.session.screen = { code: "A-16", path: "A", scope: null, local: { ackLift: true, ackAscent: true, ackDescent: true } };
+  backend.emit(); await tick(6);
+  assert.equal(code(), "A-16", "the reader follows");
+  wiz().querySelector('[data-wiz="take"]').click(); await tick();
+  wiz().querySelector('[data-wiz="take"]').click(); await tick(8);
+  assert.equal(wiz().querySelector(".wiz-readonly"), null, "now the owner");
+  assert.equal(code(), "A-16", "on the same step, not one back on A-15");
+});
+
 test("L-28: a reopened session keeps the path it was started on, so a path A on a cover with a profile ends on A-34 with fine-tuning", async () => {
   const session = resumed({ phase: "review", step: "half_close", reading_kind: "half_close", readings: { gap: 3, half_open: 97, half_close: 101 },
     geometry: { slat_time_s: 4.4, opening_roll: 1.83, closing_roll: 1.91 }, screen: { code: "A-21", path: "A", scope: null, local: { ackAscent: true, ackDescent: true, ackReadings: true } } });

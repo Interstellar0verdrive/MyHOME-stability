@@ -1041,6 +1041,17 @@ export class CalibrationWizard {
 
   _viewChanged() {
     const view = this._gateway?.view, local = this._local;
+    // L-52: a reader that takes control continues on the step its former owner showed (published with `show`), not on
+    // the last transition of Home Assistant: the owner's path and choices become this tab's own.
+    if (view && !view.preview) {
+      if (view.read_only) local.following = true;
+      else if (local.following && view.owner) {
+        local.following = false;
+        const shown = view.screen;
+        if (shown) Object.assign(local, shown.path ? { path: shown.path, scope: shown.scope ?? null } : {},
+          Object.fromEntries(SHARED_FLAGS.filter((name) => shown.local?.[name] != null).map((name) => [name, shown.local[name]])));
+      }
+    }
     // L-40: the session was cancelled by the tab or device that guided it: for a reader it is over, said as such, once.
     // The gateway is closed (no more heartbeats against a session that is gone, so no «expired» and no flicker).
     if (view && !view.preview && view.read_only && view.phase === "cancelled") {
