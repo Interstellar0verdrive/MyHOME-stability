@@ -1286,7 +1286,7 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-result.is-success { background: color-mix(in srgb, var(--panel-success) 8%, var(--panel-surface));
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--panel-success) 20%, transparent); color: var(--panel-success); }
 .wiz-result.is-warning { background: color-mix(in srgb, var(--panel-warning) 8%, var(--panel-surface));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--panel-warning) 75%, transparent); color: var(--primary-text-color, #182b37); }
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--panel-warning) 75%, transparent); color: color-mix(in srgb, var(--panel-warning) 60%, #000); }
 .wiz-result:is(.is-success, .is-warning) :is(.wiz-result-label, .wiz-result-caption) { color: inherit; }
 [data-theme="dark"] .wiz-result.is-success { color: color-mix(in srgb, var(--panel-success) 70%, var(--primary-text-color, #fff)); }
 [data-theme="dark"] .wiz-result.is-warning { color: color-mix(in srgb, var(--panel-warning) 70%, var(--primary-text-color, #fff)); }
@@ -1669,10 +1669,12 @@ dialog.cal-dialog .dialog-head { justify-content: space-between; padding-block: 
 :is(.cal-note.is-warning, .cal-tab .notice.cal-tab-busy, .cal-tab .notice[data-tone="warning"]) { --note-tone: var(--panel-warning); }
 :is(.cal-tab .notice.error, .cal-tab .notice[data-tone="error"]) { --note-tone: var(--panel-error); }
 .cal-tab .notice ha-icon { display: none; }
-/* Light: an info note's text in the accent, a little darker to read on white. L-88: where the text has the tone's
+/* Light (L-89): an info note's text in the accent itself. L-88: where the text has the tone's
    colour (info, success, error) the bar takes exactly the text's colour, one token for both; a warning's text stays
    the text colour, its bar yellow. */
-.cal-note:not(.is-warning, .is-success) { color: color-mix(in srgb, var(--panel-accent) 80%, #000); border-inline-start-color: color-mix(in srgb, var(--panel-accent) 80%, #000); }
+.cal-note:not(.is-warning, .is-success) { color: var(--panel-accent); border-inline-start-color: var(--panel-accent); }
+/* L-90: on the light theme a warning's text is its own colour darkened to read on its tint; the bar stays solid. */
+:is(.cal-note.is-warning, .cal-tab .notice.cal-tab-busy, .cal-tab .notice[data-tone="warning"]) { color: color-mix(in srgb, var(--panel-warning) 60%, #000); }
 :is(.cal-note.is-success, .cal-tab .notice.cal-tab-done, .cal-tab .notice[data-tone="success"]) { border-inline-start-color: var(--panel-success); }
 /* Light: warning and error notes in their box, as before L-74 but square, with the 2 px bar. */
 .cal-note.is-warning { background: color-mix(in srgb, var(--panel-warning) 8%, var(--panel-surface));
@@ -1687,6 +1689,7 @@ dialog.cal-dialog .dialog-head { justify-content: space-between; padding-block: 
 [data-theme="dark"] :is(.cal-note.is-warning, .cal-tab .notice.cal-tab-busy, .cal-tab .notice[data-tone="warning"], .cal-tab .notice.error, .cal-tab .notice[data-tone="error"]) {
   background: none; border: 0 solid transparent; border-inline-start: 2px solid var(--note-tone); padding: 4px 0 4px 12px; }
 [data-theme="dark"] .cal-note:not(.is-warning, .is-success) { color: color-mix(in srgb, var(--panel-accent) 70%, var(--primary-text-color, #fff)); border-inline-start-color: var(--note-tone); }
+[data-theme="dark"] :is(.cal-note.is-warning, .cal-tab .notice.cal-tab-busy, .cal-tab .notice[data-tone="warning"]) { color: color-mix(in srgb, var(--panel-warning) 70%, var(--primary-text-color, #fff)); }
 /* L-72: one corner radius for the calibration tab, the wizard and their dialogs: the shell's 8 px (`--cal-btn-radius`)
    for notes, tiles, cards, boxes, menus, inputs, drop-downs and buttons. Chips and counts stay pills, marks and radios
    round; the dialogs' and sheets' own frames and the list and wizard frames keep Home Assistant's card radius. */

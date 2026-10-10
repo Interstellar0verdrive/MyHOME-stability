@@ -1095,23 +1095,23 @@ test("L-78: «the measurement state changed» is not shown once the session has 
   void panel;
 });
 
-test("L-80/L-82: notes by tone and theme: a 2 px solid bar, square; in light info and success are quotes with coloured text, warning and error boxed; in dark all quotes", () => {
+test("L-80/L-82: notes by tone and theme: a 2 px solid bar, square; in light info and success are quotes with coloured text (L-89: the accent itself), warning (L-90: darkened text) and error boxed; in dark all quotes", () => {
   const doc = dom.window.document;
   // [classes, tone token, light box?, light text, dark text]
   const notes = [
-    ["cal-note", "--panel-accent", false, "color-mix(in srgb, var(--panel-accent) 80%, #000)", "color-mix(in srgb, var(--panel-accent) 70%, var(--primary-text-color, #fff))"],
-    ["cal-note cal-tab-help", "--panel-accent", false, "color-mix(in srgb, var(--panel-accent) 80%, #000)", null],
+    ["cal-note", "--panel-accent", false, "var(--panel-accent)", "color-mix(in srgb, var(--panel-accent) 70%, var(--primary-text-color, #fff))"],
+    ["cal-note cal-tab-help", "--panel-accent", false, "var(--panel-accent)", null],
     ["cal-note wiz-subline", "--panel-accent", false, null, null],
     ["cal-note is-success", "--panel-success", false, "var(--panel-success)", "color-mix(in srgb, var(--panel-success) 70%, var(--primary-text-color, #fff))"],
     ["cal-note is-success wiz-result-note", "--panel-success", false, "var(--panel-success)", null],
     ["notice cal-tab-done", "--panel-success", false, "var(--panel-success)", null],
-    ["cal-note is-warning", "--panel-warning", true, "var(--primary-text-color, #182b37)", "color-mix(in srgb, var(--panel-warning) 70%, var(--primary-text-color, #fff))"],
+    ["cal-note is-warning", "--panel-warning", true, "color-mix(in srgb, var(--panel-warning) 60%, #000)", "color-mix(in srgb, var(--panel-warning) 70%, var(--primary-text-color, #fff))"],
     ["cal-note is-warning wiz-readonly-note", "--panel-warning", true, null, null],
     ["cal-note is-warning wiz-field-warning", "--panel-warning", true, null, null],
     ["cal-note is-warning wiz-radio-warning", "--panel-warning", true, null, null],
     ["cal-note is-warning cal-batch-note", "--panel-warning", true, null, null],
-    ["notice cal-tab-busy", "--panel-warning", true, null, "color-mix(in srgb, var(--panel-warning) 70%, var(--primary-text-color, #fff))"],
-    ["notice wiz-notice|warning", "--panel-warning", true, null, null],
+    ["notice cal-tab-busy", "--panel-warning", true, "color-mix(in srgb, var(--panel-warning) 60%, #000)", "color-mix(in srgb, var(--panel-warning) 70%, var(--primary-text-color, #fff))"],
+    ["notice wiz-notice|warning", "--panel-warning", true, "color-mix(in srgb, var(--panel-warning) 60%, #000)", "color-mix(in srgb, var(--panel-warning) 70%, var(--primary-text-color, #fff))"],
     ["notice error", "--panel-error", true, "var(--panel-error)", "var(--panel-error)"],
     ["notice wiz-notice|error", "--panel-error", true, "var(--panel-error)", null],
   ];
