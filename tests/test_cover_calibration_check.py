@@ -44,6 +44,11 @@ TRAVEL = 200.0
 RAISE, LOWER, STOP = "*2*1*11##", "*2*2*11##", "*2*0*11##"
 
 
+def unplanned(view):
+    """The check's view without its planned run (L-44: published for the panel's bar), asserted on its own."""
+    return {key: value for key, value in view.items() if key != "planned_seconds"}
+
+
 def height_after(seconds, *, opening=True, model=MODEL):
     """Where the bottom edge is after `seconds` of motor from an end stop, by the runtime's own inversion."""
     total, roll = (model.opening_time_s, model.opening_roll) if opening else (model.closing_time_s, model.closing_roll)
@@ -108,7 +113,8 @@ def test_a_check_plans_half_the_travel_upwards_from_the_bottom_by_default():
     assert (down.start.height, down.start.slats) == (1, 1)
     assert down.planned_seconds == pytest.approx(18 * (1 - winding(.25, 3)))
     assert height_after(down.planned_seconds, opening=False) == pytest.approx(.25)
-    assert check.view() == {"direction": "opening", "target_cm": 100.0, "check_seconds": None, "expected_cm": None,
+    assert check.view()["planned_seconds"] == round(check.planned_seconds, 2), "L-44: the planned run, for the panel's bar"
+    assert unplanned(check.view()) == {"direction": "opening", "target_cm": 100.0, "check_seconds": None, "expected_cm": None,
                             "measured_cm": None, "deviation_cm": None, "passed": None}
 
 
@@ -142,7 +148,7 @@ def test_no_run_no_verdict_and_readings_outside_the_travel_are_refused():
     check = CalibrationCheck.plan(MODEL, TRAVEL)
     with pytest.raises(ProfileError, match="calibration_step"):
         check.read(100)
-    assert set(check.view().values()) == {"opening", 100.0, None}
+    assert set(unplanned(check.view()).values()) == {"opening", 100.0, None}
     check.ran(check.planned_seconds + .5)
     assert check.check_seconds == pytest.approx(check.planned_seconds + .5)
     # The late Stop is not the model's fault: the expectation follows the real motor time.
@@ -180,7 +186,7 @@ def test_the_window_of_the_twentieth_of_september_fails_going_up_and_passes_comi
     really = 198 * height_after(up.planned_seconds, model=window)
     assert really == pytest.approx(108.6, abs=.2)
     up.read(round(really, 1))
-    assert up.view() == {"direction": "opening", "target_cm": 99.0, "check_seconds": pytest.approx(15.43, abs=.05),
+    assert unplanned(up.view()) == {"direction": "opening", "target_cm": 99.0, "check_seconds": pytest.approx(15.43, abs=.05),
                          "expected_cm": 99.0, "measured_cm": 108.6, "deviation_cm": 10, "passed": False}
 
     down = CalibrationCheck.plan(inherited, 198, "closing")
@@ -230,7 +236,7 @@ async def test_a_check_from_review_homes_runs_timed_and_returns_the_verdict(hass
     await act(cal, "reading", reading_cm=expected + 4.5)
     view = cal.session.view()
     assert (view["phase"], view["step"], view["can_repeat"]) == ("review", "half_close", True)
-    assert view["check"] == {"direction": "opening", "target_cm": 150.0, "check_seconds": pytest.approx(planned + .5),
+    assert unplanned(view["check"]) == {"direction": "opening", "target_cm": 150.0, "check_seconds": pytest.approx(planned + .5),
                              "expected_cm": expected, "measured_cm": expected + 4.5, "deviation_cm": 5, "passed": False}
     assert commands(cal, sent) == [LOWER, STOP, RAISE, STOP]
     # The measurement is untouched and Save stays available whatever the verdict.
@@ -280,7 +286,7 @@ async def test_repeat_on_the_reading_runs_the_same_check_again_from_its_end_stop
     await act(cal, "repeat")
     view = cal.session.view()
     assert (view["phase"], view["step"], cal.session.after_position) == ("briefing", "top", "check")
-    assert view["check"] == {"direction": "closing", "target_cm": 60.0, "check_seconds": None, "expected_cm": None,
+    assert unplanned(view["check"]) == {"direction": "closing", "target_cm": 60.0, "check_seconds": None, "expected_cm": None,
                              "measured_cm": None, "deviation_cm": None, "passed": None}
     assert len(cal.queue) == sent
     await endpoint(cal, 5)

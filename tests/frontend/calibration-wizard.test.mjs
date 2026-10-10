@@ -594,6 +594,39 @@ test("L-37/L-43: the base calibration ends with its check, a step of its own, fr
   assert.match(step.textContent.replace(/\s+/g, " "), /Gap: 1 cm/, "its result under it");
 });
 
+test("L-44: the check runs as the half readings do: to the top (confirmed by the user), then its timed run starts by itself, then the reading", async () => {
+  const { backend, press, type, startFor, code, wiz, actions } = await mount();
+  backend.realisticCheck = true;
+  await startFor("cover.living_one");
+  await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  await press("ack:lift"); await press("next"); await move(backend, { seconds: 4.4 }); await press("lift"); backend.stopped(); await tick();
+  await type("3"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  await press("next"); await move(backend, { seconds: 22.2 }); await press("endpoint"); backend.stopped(); await tick();
+  await type("198"); await press("ack:ascent");
+  await press("next"); await move(backend, { seconds: 21.7 }); await press("endpoint"); backend.stopped(); await tick();
+  await press("ack:descent"); await press("ack:readings"); await move(backend, { auto: true, stop: true });
+  await type("97"); await move(backend, { seconds: 24 }); await press("endpoint"); backend.stopped(); await tick();
+  await move(backend, { auto: true, stop: true }); await type("101");
+  await press("check-start"); await tick(6);
+  assert.deepEqual(actions().slice(-2), ["check", "next"], "the run to the top starts from the press");
+  backend.started(); backend.tick(5); backend.emit(); await tick();
+  assert.equal(code(), "A-30");
+  assert.equal(wiz().querySelector('[data-wiz="endpoint"]').disabled, true, "phase 1: the end stop comes on once the motor stopped");
+  assert.ok(wiz().querySelector('[data-wiz="stop"]'), "Stop while it moves");
+  backend.session.motor_stopped = true; backend.emit(); await tick(6);
+  await press("endpoint"); backend.stopped(); await tick(6);
+  assert.equal(actions().at(-1), "next", "phase 2: the timed run starts on that confirmation");
+  backend.started(); backend.tick(3); backend.emit(); await tick();
+  assert.equal(code(), "A-30");
+  assert.ok(wiz().querySelector(".wiz-progress:not(.is-indeterminate)"), "its own determinate bar");
+  assert.ok(wiz().querySelector('[data-wiz="stop"]'));
+  backend.autoStop(); await tick(); backend.stopped(); await tick(6);
+  assert.equal(code(), "A-31");
+  assert.equal(wiz().querySelector("#wiz-field-hint").textContent, "About 99 cm expected: a few centimetres of difference is normal. Enter what the tape says; a comma or a point is fine.");
+  await type("97");
+  assert.equal(code(), "A-21", "then the summary");
+});
+
 test("L-18: a tap on the cover already chosen in A-01 un-chooses it", async () => {
   const { wiz, tab, pickCover, code } = await mount();
   tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
@@ -756,23 +789,25 @@ test("a reader keeps Stop while the cover may move; the step's other buttons are
   assert.equal(screen.readOnly.primary, false, "the owner is present: taking control is not the first choice");
 });
 
-test("a check run is shown like an intermediate run, without elapsed time, then asks for its tape reading", () => {
+test("a check run is shown like an intermediate run, two stages and its own bar, Stop only while it moves, then asks for its tape reading (L-44)", () => {
   const t = (key) => translations.en[key] || key;
   const view = { mode: "geometry", phase: "opening", step: "check", values: { opening_time: 22, closing_time: 21 }, samples: { lift: 4 },
-    readings: {}, travel_cm: 110, slats: true, owner: true, sequence: 9, check: { direction: "opening", target_cm: 82.5, check_seconds: null } };
+    readings: {}, travel_cm: 110, slats: true, owner: true, sequence: 9, check: { direction: "opening", target_cm: 82.5, check_seconds: null, planned_seconds: 12.4 } };
   const screen = (extra) => buildScreen({ t, stage: "session", path: "A", view: { ...view, ...extra }, elapsed: 6.4, local: { ackReadings: true }, cover: { name: "Kitchen shutter 2" } });
   const running = screen({});
   assert.equal(running.code, "A-30");
   assert.equal(running.stopwatch, null, "Home Assistant stops the check run: no elapsed time");
   assert.equal(running.illustration, null, "a wait has no drawing");
   assert.deepEqual(running.actions.map((action) => action.id), ["stop"]);
-  assert.deepEqual(screen({ phase: "briefing" }).actions.map((action) => action.id), ["next", "stop"]);
+  assert.deepEqual(running.wait.stages.map((stage) => [stage.text, stage.state]), [["1/2 Down to the bottom — about 22 s", "done"], ["2/2 Rises to half the travel — about 13 s", "current"]]);
+  assert.equal(running.wait.progress.value != null, true, "a determinate bar for the planned run");
+  assert.deepEqual(screen({ phase: "briefing" }).actions.map((action) => action.id), ["next"], "no Stop while nothing moves");
   assert.equal(screen({ phase: "geometry_wait_stop" }).stopwatch, null);
   const reading = screen({ phase: "reading", reading_kind: "check" });
   assert.equal(reading.code, "A-31");
   assert.equal(reading.title, "Check the cover");
   assert.deepEqual([reading.field.min, reading.field.max], [0.1, 110]);
-  assert.match(reading.field.hint, /^Usually between 74 and 91 cm: a few centimetres of difference is normal\./, "L-30: 82.5 cm ± 7 % of 110 cm");
+  assert.equal(reading.field.hint, "About 83 cm expected: a few centimetres of difference is normal. Enter what the tape says; a comma or a point is fine.", "L-44: the expected height, not a range");
   assert.deepEqual(reading.actions.map((action) => action.id), ["reading", "repeat"]);
 });
 

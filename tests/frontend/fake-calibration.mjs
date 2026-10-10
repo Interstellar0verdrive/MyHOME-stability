@@ -109,7 +109,8 @@ export function createFakeBackend({ language = "en", inventory = coverInventory(
     const { action } = message;
     if (action === "next" && session.phase === "briefing") {
       session.gap_warning = session.still_resting = false;
-      session.phase = ["home", "reset", "closing", "half_close"].includes(session.step) ? "starting_close" : "starting_open";
+      session.phase = session.step === "check" ? (session.check?.direction === "opening" ? "starting_open" : "starting_close")
+        : ["home", "reset", "closing", "half_close"].includes(session.step) ? "starting_close" : "starting_open";
     } else if (action === "lift" && session.step === "lift" && session.phase === "opening") {
       session.samples.lift = clock - session._started;
       session.phase = "geometry_wait_stop"; session._after_stop = "reading";
@@ -127,6 +128,10 @@ export function createFakeBackend({ language = "en", inventory = coverInventory(
         if (session.still_resting) { delete session.samples.lift; session.lift_attempts += 1; } else session.readings.gap = number;
         session.gap_warning = number >= session.gap_warn_cm;
         session.step = "reset"; session._after_position = session.still_resting ? "lift" : "opening";
+      } else if (session.step === "check") {
+        const expected = session.check.target_cm, deviation = Math.round(number - expected);
+        Object.assign(session.check, { check_seconds: session.check.planned_seconds, expected_cm: expected, measured_cm: number, deviation_cm: deviation, passed: Math.abs(deviation) <= 4 });
+        session.phase = "review"; session.step = "half_close"; refresh(); return;
       } else if (session.step === "opening") {
         session.travel_cm = number; session.step = "closing";
       } else if (session.reading_range && number > session.reading_range.max_cm) {
@@ -144,10 +149,15 @@ export function createFakeBackend({ language = "en", inventory = coverInventory(
         session.geometry.closing_roll = 1.91; session.readings.half_close = number; session.phase = "review"; refresh(); return;
       }
       session.phase = "briefing";
+    } else if (action === "check" && session.phase === "review" && backend.realisticCheck) {
+      // L-44: as the backend: to the end stop first, then (on `next`) the timed run, then the reading.
+      session.check = { direction: message.direction, target_cm: message.target_cm, check_seconds: null, planned_seconds: 12.4,
+        expected_cm: null, measured_cm: null, deviation_cm: null, passed: null };
+      session.step = message.direction === "opening" ? "home" : "top"; session._after_position = "check"; session.phase = "briefing";
     } else if (action === "check" && session.phase === "review") {
       // L-37/L-43: the whole check (end stop, timed run, reading) at once: a passed check, 1 cm off.
       session.check = { direction: message.direction, target_cm: message.target_cm, predicted_cm: message.target_cm, measured_cm: message.target_cm + 1,
-        gap_cm: 1, passed: true, check_seconds: 10.5 };
+        expected_cm: message.target_cm, deviation_cm: 1, gap_cm: 1, passed: true, check_seconds: 10.5 };
     } else if (action === "repeat" && repeatable()) {
       const target = session.gap_warning ? "lift" : session.phase === "briefing" && session.step === "half_open" ? "closing" : session.step;
       session.step = ["half_close", "closing"].includes(target) ? "top" : session.slats ? "reset" : "home";

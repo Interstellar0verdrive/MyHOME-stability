@@ -480,6 +480,9 @@ export const translations = {
     wiz_T555: "current",
     wiz_T556: "Check",
     wiz_T557: "Gap",
+    wiz_T558: "About {cm} cm expected: a few centimetres of difference is normal. Enter what the tape says; a comma or a point is fine.",
+    wiz_T559: "2/2 Descends to half the travel — about {seconds} s",
+    wiz_T560: "2/2 Rises to half the travel — about {seconds} s",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1424,6 +1427,9 @@ export const translations = {
     wiz_T555: "attuale",
     wiz_T556: "Verifica",
     wiz_T557: "Scarto",
+    wiz_T558: "Atteso circa {cm} cm: qualche centimetro di differenza è normale. Scrivi quello che dice il metro; virgola o punto vanno bene.",
+    wiz_T559: "2/2 Scende fino a metà corsa — circa {seconds} s",
+    wiz_T560: "2/2 Sale fino a metà corsa — circa {seconds} s",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

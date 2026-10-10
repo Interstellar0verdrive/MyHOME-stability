@@ -1178,8 +1178,9 @@ export class CalibrationWizard {
     // The answer to the press arrives while it is still pending: decide once it has settled.
     if (status.busy) return;
     local.arm = null;
+    // L-44: the check's run to its target starts on the confirmation of its end stop, as the half readings' runs do.
     const due = (view.step === "home" && arm.start) || (view.step === "reset" && !view.gap_warning) || view.step === "top"
-      || (["half_open", "half_close"].includes(view.step) && local.ackReadings);
+      || (["half_open", "half_close"].includes(view.step) && local.ackReadings) || (view.step === "check" && !!view.check);
     if (!due) return;
     queueMicrotask(() => { if (this._gateway?.view === view) this._gateway.act("next"); });
   }

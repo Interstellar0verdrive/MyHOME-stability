@@ -133,6 +133,8 @@ class CalibrationCheck:
         self.passed = passes(self.deviation_cm)
 
     def view(self) -> dict[str, Any]:
+        # L-44: the planned run too (the panel's bar for the run to the target).
         return {"direction": self.direction, "target_cm": self.target_cm, "check_seconds": self.check_seconds,
+                "planned_seconds": round(self.planned_seconds, 2),
                 "expected_cm": self.expected_cm, "measured_cm": self.measured_cm,
                 "deviation_cm": self.deviation_cm, "passed": self.passed}

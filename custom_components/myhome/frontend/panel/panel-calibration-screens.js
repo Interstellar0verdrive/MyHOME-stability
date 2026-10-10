@@ -541,7 +541,13 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     // The return to the top is a positioning run: Home Assistant needs its end stop confirmed.
     if (first && ["starting_open", "opening"].includes(phase)) screen.actions = returnEnd("wiz_T432", "opening", topTime);
     // L-37: the return to the top before the check run says so (not the half descent's stages).
-    if (first && view.check) { screen.code = p("30"); screen.phase = "check"; screen.wait = { text: t("wiz_T553"), stages: [], progress: waitBar(view, elapsed, topTime) }; }
+    // L-44: the check's first leg, as the half readings': to the top (its bar), then the run to its target (second
+    // stage), which starts on the confirmation of the top.
+    if (first && view.check) {
+      screen.code = p("30"); screen.phase = "check";
+      screen.wait = { text: t("wiz_T553"), stages: checkStages(tx, n, view, topTime ?? view.values?.opening_time, true), progress: waitBar(view, elapsed, topTime) };
+      if (phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }];
+    }
     if (first && phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
     if (!first && phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
     return screen;
@@ -550,12 +556,18 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     // The check of the measured model (L-37/L-43): its run is stopped by Home Assistant like the intermediate runs, so
     // no elapsed time; then the tape reading, from 0.1 cm to the measured travel.
     screen.phase = "check";
-    // L-9: the final check says which reading was kept far from the model.
+    // L-9: the final check says which reading was kept far from the model. L-44: its hint gives the height expected
+    // (the check is the comparison with it), not a range.
+    const expectedCheck = view.check?.expected_cm ?? view.check?.target_cm;
     if (phase === "reading") return Object.assign(screen, { code: p("31"), title: t("wiz_T138"), body: t("wiz_T139"), notices: [...screen.notices, ...discrepancyNotes(ctx, tx, n)],
-      field: { label: t("wiz_T064"), hint: expectedHint(t, tx, n, view.check?.target_cm, view.travel_cm), min: 0.1, max: view.travel_cm ?? 10000, kind: "height" },
+      field: { label: t("wiz_T064"), hint: expectedCheck != null ? tx("wiz_T558", { cm: n(expectedCheck, 0) }) : t("wiz_T491"), min: 0.1, max: view.travel_cm ?? 10000, kind: "height" },
       actions: [{ id: "reading", label: t("wiz_T051"), kind: "primary" }, { id: "repeat", label: t("wiz_T033"), kind: "secondary" }] });
-    positioning("30", t(view.check?.direction === "opening" ? "wiz_T554" : "wiz_T553"));
-    if (phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
+    // L-44: the second leg, the timed run to the target: its own bar; Stop only while it moves.
+    const planned = view.check?.planned_seconds;
+    Object.assign(screen, { code: p("30"), title: t("wiz_T027"),
+      wait: { text: t(view.check?.direction === "opening" ? "wiz_T554" : "wiz_T553"), stages: checkStages(tx, n, view, view.values?.opening_time, false), progress: waitBar(view, elapsed, planned) },
+      actions: phase === "briefing" ? [{ id: "next", label: t("wiz_T060"), kind: "primary" }]
+        : phase === "geometry_wait_stop" ? [{ id: "stopping", label: t("wiz_T459"), kind: "status" }] : [stop] });
     return screen;
   }
   if (phase === "geometry_wait_stop") return positioning("04", "");
@@ -923,6 +935,13 @@ function halfField(ctx, tx, n) {
   if (!span) return { label: t("wiz_T064"), hint, min: 0.1, max: 10000, kind: "height" };
   return { label: t("wiz_T064"), hint, min: span.min_cm - RANGE_SLACK_CM, max: span.max_cm + RANGE_SLACK_CM, kind: "height",
     travel: view.travel_cm, band: band ? { min: band.min_cm, max: band.max_cm, warning: tx("wiz_T530", { expected: n(band.expected_cm, 0) }) } : null };
+}
+
+/** L-44: the two stages of the check's wait: to the end stop (its time), then the timed run to its target (planned). */
+function checkStages(tx, n, view, endTime, first) {
+  const up = view.check?.direction !== "opening", whole = (seconds) => n(Math.ceil((seconds ?? 0) - 0.001), 0);
+  return [{ text: tx(up ? "wiz_T084" : "wiz_T120", { seconds: whole(endTime) }), state: first ? "current" : "done" },
+    { text: tx(up ? "wiz_T559" : "wiz_T560", { seconds: whole(view.check?.planned_seconds) }), state: first ? "future" : "current" }];
 }
 
 /** L-30: the hint of a reading with one expected height: «usually between» it ± 7 % of the travel (whole cm). */
