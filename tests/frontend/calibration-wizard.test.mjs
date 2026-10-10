@@ -46,7 +46,7 @@ test("the summaries speak of leaving the calibration, never of a window", () => 
     const texts = Object.entries(translations[language]).filter(([key]) => key.startsWith("wiz"));
     // The window of the house (the base the closed cover rests on, G2-8) is not a window of the interface.
     assert.deepEqual(texts.filter(([, value]) => /finestra|the window/.test(value.replace(/base della finestra|the window base/g, ""))).map(([key]) => key), [], `${language}: no window`);
-    for (const key of ["wiz_T281", "wiz_T289", "wiz_T310", "wiz_T317", "wizSaveCoverOnly"]) assert.ok(translations[language][key].endsWith(phrase), `${language} ${key}`);
+    for (const key of ["wiz_T310", "wiz_T317", "wizSaveCoverOnly"]) assert.ok(translations[language][key].endsWith(phrase), `${language} ${key}`);
     assert.ok(translations[language].wiz_T176.endsWith(stop), `${language} T176`);
   }
 });

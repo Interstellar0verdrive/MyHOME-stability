@@ -1,5 +1,7 @@
 # Calibration tab and wizard (panel 0.43.0)
 
+> Texts no screen draws any more were removed from the panel in the final review (0.43.0): calTabBusy, calTabEmptyTitle, calTabIntro, wizTopReached, T038, T083, T086, T100, T112, T123, T170, T173, T177, T201, T262, T268, T281, T282, T283, T285, T286, T289, T323, T324, T325, T326, T327, T328, T329, T330, T331, T332, T333, T334, T335, T336, T337, T338, T339, T340, T341, T342, T343, T344, T345, T346, T347, T348, T349, T350, T351, T352, T353, T354, T355, T356, T357, T358, T359, T360, T361, T362, T363, T367, T375, T376, T380, T389, T393, T394, T396, T397, T398, T421, T449, T451, T462, T508, T527, T528, T547. Where the tables below still name one of them, it is the mockup's text, not the panel's.
+
 Panel 0.43.0 adds a **Calibration** view to WHO 2 covers, next to **Devices** and **Profiles**, and a calibration
 wizard that opens inside it. The backend is unchanged: every step that exists today runs on the current session
 API ([WebSocket API](panel-websocket-api.md)); the steps whose verbs do not exist yet run as a local **preview**
@@ -118,7 +120,7 @@ The intermediate readings (A-18, A-20) use the session's `reading_band` and `rea
 hint gives the heights the model explains («di solito fra … e … cm», `model_min_cm`–`model_max_cm`); a value above
 `reading_range` (the travel plus 3 cm) is refused in the field (T531, Home Assistant's `reading_over_travel`) before
 anything is sent; a value outside `reading_band` is accepted with a warning under the field (T530) and reported in the
-summary (`reading_discrepancy`). The mockups' rough expectation (T083) is shown only when the view carries no band. As in the profile dialog, the intermediate runs show
+summary (`reading_discrepancy`). As in the profile dialog, the intermediate runs show
 no elapsed time (Home Assistant stops them); their wait card keeps the stages and a progress bar. A check run, which
 Home Assistant stops in the same way, is shown alike.
 

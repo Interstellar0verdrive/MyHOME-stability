@@ -31,7 +31,6 @@ export function inline(text, values) {
 const UNIT = /(\d+(?:[.,]\d+)?) (s|cm|secondi|seconds|%)(?![\p{L}\d])/gu, UNIT_HTML = '<span class="cal-nb">$1 $2</span>';
 export function units(html) { return String(html).replace(UNIT, UNIT_HTML); }
 
-/** A localized number: tenths of a second or centimetre unless `digits` says otherwise. */
 /** A live value with a fixed number of decimals ("12.0 s", never "12 s"), so it never changes length mid-run. */
 export function fixed(value, language = "en", digits = 1) {
   if (value == null || !Number.isFinite(Number(value))) return "—";
@@ -93,7 +92,6 @@ export function readingRange(span, language = "en", reading = null) {
     ...(reading == null ? {} : { reading_cm: number(reading, language, 3) }) };
 }
 
-/** A list of names joined the way the language joins them ("A, B and C"). */
 /** "Followed by X and Y" / "… X, Y, Z and 2 more" / "No cover follows it": who follows a profile, by name. */
 export function followedBy(t, list, language = "en") {
   if (!list.length) return t("wiz_T374");

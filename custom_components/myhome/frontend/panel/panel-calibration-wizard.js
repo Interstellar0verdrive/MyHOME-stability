@@ -13,7 +13,6 @@ const { buildScreen, slug, stopVerdict } = screens;
 const { LiveCalibrationGateway, PreviewCalibrationGateway } = gateways;
 const { illustrationMarkup, ILLUSTRATIONS } = illustration;
 
-/** "Label: value" as the tab's blocks show facts: the label regular, the value bold. */
 /** A cover's room, gateway and bus address: one string, and its units for the header (responsive map §3.3). */
 const subline = (lead, bus) => {
   const units = lead.filter(Boolean);
@@ -53,10 +52,6 @@ const TRANSIT = ["starting_open", "starting_close", "opening", "closing", "geome
 export class CalibrationWizard {
   constructor({ stageMs, guardMs = CONFIRM_GUARD_MS } = {}) { this._stageMs = stageMs; this._guardMs = guardMs; this._generation = 0; }
 
-  /**
-   * Sessions the wizard draws itself when opened from the list: slat and roll measurement. A guided
-   * session (times only) opens in the existing view, which offers every save mode it was started with.
-   */
   /** L-4: its own sessions, geometry and guided («solo tempi», marked `origin: "wizard"`); the rest is the maintainer's. */
   handles(session) { return !!session && !session.batch && (session.mode === "geometry" || (session.mode === "guided" && session.origin === "wizard" && !session.direction)); }
 
@@ -83,7 +78,6 @@ export class CalibrationWizard {
     this._navResolve = null;
     this._unloadGuard(false);
     this._generation++;
-    clearInterval(this._ticker);
     clearTimeout(this._guardTimer);
     this._gateway?.close();
     this._gateway = null;
@@ -344,10 +338,6 @@ export class CalibrationWizard {
 
   _engineHost() { return this._engine; }
 
-  /**
-   * A sheet from the bottom slides down before it hides (it slides up when shown, by CSS). Without motion (reduced
-   * motion, or no media queries) it hides at once.
-   */
   /** A confirmation hides at once while centred; as a sheet (window under 720 × 500 px) it slides down first. */
   _hideDialog(dialog, done) {
     if (layout.sheets()) { this._slideAway(dialog, done); return; }

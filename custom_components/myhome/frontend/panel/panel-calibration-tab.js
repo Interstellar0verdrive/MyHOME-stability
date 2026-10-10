@@ -1102,8 +1102,6 @@ export class CalibrationTab {
   /**
    * A dialog with the look of the maintainer's profile dialog, in the panel's dialog host. Closing it leaves an open
    * session as closing the profile dialog does: the session keeps running in Home Assistant.
-   */
-  /**
    * `hosted`: the dialog hosts the maintainer's view, which has its own Stop and Cancel/Close bar: the dialog's own
    * «Chiudi» is left out and its ✕ shown at every size, so there is one way to close and one bar (D-17, D-18).
    */
@@ -1202,11 +1200,6 @@ export class CalibrationTab {
     this.refresh();
   }
 
-  /**
-   * "Assign profile": the gateway's saved profiles as on B-01 (type, where and when measured, reference travel, who
-   * follows it), one to choose, then the existing `assign` write. Nothing moves; the profile dialog stays the
-   * maintainer's.
-   */
   /**
    * L-10 (4): what the busy notice says is only what the list offers: an open session can be resumed («Apri
    * sessione») or cancelled (the row's ⋮); one closed and waiting for the stop, or one that cannot be read, frees
@@ -1345,7 +1338,6 @@ export class CalibrationTab {
       addressDetails, t, onSaved: () => this.refresh() });
   }
 
-  /** Several covers in sequence: the existing selection and automatic batch, in a dialog, with readable names. */
   /** Sequence selection (T-06): a view in the tab, in place of the list, with our own rows. */
   async _selectBatch() {
     const { gateways } = this._context;
