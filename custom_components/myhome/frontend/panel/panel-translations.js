@@ -209,7 +209,7 @@ export const translations = {
     wiz_T260: "The calibration was idle too long. The cover has been released and will respond to normal commands again; if it was moving, it was stopped.\n\n**Nothing was saved**: the values currently in use remain the same.\n\nMeasurements taken so far cannot be resumed.\n\nPress \"Start over\" to restart calibration from the first screen: all measurements will need to be repeated.",
     wiz_T261: "Start over",
     wiz_T262: "Control: another device",
-    wiz_T263: "Another device is guiding this calibration.",
+    wiz_T263: "Another device is guiding the calibration and confirms the steps.",
     wiz_T264: "Take control",
     wiz_T265: "If you take control, this device will guide the calibration and the other can only view it. The readings already taken are kept and you continue from here.",
     wiz_T267: "Close without saving?",
@@ -494,7 +494,6 @@ export const translations = {
     wiz_T569: "The calibration has been saved. If the other device goes on with fine-tuning, there is nothing more to follow here.",
     wiz_T570: "Precision",
     wiz_T571: "gap at half travel",
-    wiz_T572: "The other device confirms this step.",
     wiz_T573: "Stop following",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
@@ -1169,7 +1168,7 @@ export const translations = {
     wiz_T260: "La calibrazione è rimasta ferma troppo a lungo. La tapparella è stata liberata e torna a rispondere ai comandi normali; se si stava muovendo è stata fermata.\n\n**Non è stato salvato niente**: i valori attualmente in uso restano quelli di prima.\n\nLe misure effettuate fin qui non si possono più riprendere.\n\nPremendo «Ricomincia» la calibrazione ripartirà dalla prima schermata: tutte le misure andranno rifatte.",
     wiz_T261: "Ricomincia",
     wiz_T262: "Controllo: un altro dispositivo",
-    wiz_T263: "Questa calibrazione è guidata da un altro dispositivo.",
+    wiz_T263: "Un altro dispositivo guida la calibrazione e conferma i passi.",
     wiz_T264: "Prendi il controllo",
     wiz_T265: "Prendendo il controllo, questo dispositivo guiderà la calibrazione e l'altro potrà solo guardarla. Le misure già fatte restano e si prosegue da qui.",
     wiz_T267: "Vuoi chiudere senza salvare?",
@@ -1454,7 +1453,6 @@ export const translations = {
     wiz_T569: "La calibrazione è stata salvata. Se l'altro dispositivo prosegue con il perfezionamento, qui non c'è altro da seguire.",
     wiz_T570: "Precisione",
     wiz_T571: "scarto a metà corsa",
-    wiz_T572: "La conferma di questo passo spetta all'altro dispositivo.",
     wiz_T573: "Smetti di seguire",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).

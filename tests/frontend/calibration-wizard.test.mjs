@@ -410,10 +410,10 @@ test("a reader sees the step read-only and takes control in two taps while the o
   assert.equal(code(), "A-18");
   // L-58: the reader's bar: one warning note, then Take control; none of the owner's buttons; no Stop at rest.
   assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-readonly > p")].map((line) => [line.className, line.textContent]),
-    [["cal-note is-warning wiz-readonly-note", "Another device is guiding this calibration."]]);
+    [["cal-note is-warning wiz-readonly-note", "Another device is guiding the calibration and confirms the steps."]], "L-75: one sentence says both");
   assert.equal(wiz().querySelector('[data-wiz="take"]').className, "wiz-take primary", "L-67: the reader's only action is its primary");
   assert.deepEqual([...wiz().querySelectorAll(".wiz-action")].map((button) => button.dataset.wiz), [], "no owner's buttons, not even greyed");
-  assert.match(wiz().querySelector(".wiz-body").textContent, /The other device confirms this step\.$/, "what the owner decides, said in the text");
+  assert.doesNotMatch(wiz().querySelector(".wiz-body").textContent, /other device/, "L-75: the step's text stays the step's");
   assert.equal(wiz().querySelector('.wiz-frame [name="reading_cm"]').disabled, true, "the field is there, read only");
   assert.ok(wiz().querySelector(".wiz-body").textContent.length > 0, "and the step's text");
   assert.equal(wiz().querySelector(".wiz-stopwatch").hidden, true, "who guides it is no longer in the stopwatch box");
@@ -1245,7 +1245,7 @@ test("L-58: a reader's bar while the cover moves: the note, Take control and Sto
   const screen = buildScreen({ t, stage: "session", path: "A", view, cover: { name: "Kitchen shutter 2" } });
   assert.equal(screen.code, "A-11");
   assert.deepEqual(screen.actions.map((action) => [action.id, action.kind, !!action.disabled]), [["stop", "stop", false]]);
-  assert.equal(screen.readOnly.text, "Another device is guiding this calibration.");
+  assert.equal(screen.readOnly.text, "Another device is guiding the calibration and confirms the steps.");
   assert.equal(screen.readOnly.take, "Take control");
 });
 
@@ -2148,10 +2148,11 @@ test("A-04 lasts the whole positioning; A-05 then offers the end stop and T033 a
   assert.deepEqual(run("reset", "A", { motor_stopped: true }, 3).actions.map((action) => action.id), ["endpoint", "stopped"], "Stop only while moving");
   assert.deepEqual([run("home", "C", {}, 22.5).code, run("home", "C", {}, 22.5).actions.map((action) => [action.id, !!action.disabled])],
     ["C-05", [["endpoint", false], ["misbehaved", false], ["stop", false]]], "the C clone too");
-  // L-58: a reader at rest has no button of the step (the end stop is the owner's to confirm, said in the text).
+  // L-58: a reader at rest has no button of the step (L-75: the note says the other device confirms; the text is the step's).
   const reader = run("home", "C", { read_only: true, owner: false, owner_present: true, motor_stopped: true });
   assert.deepEqual(reader.actions, []);
-  assert.match(reader.body, /La conferma di questo passo spetta all'altro dispositivo\.$/);
+  assert.doesNotMatch(reader.body, /altro dispositivo/);
+  assert.equal(reader.readOnly.text, "Un altro dispositivo guida la calibrazione e conferma i passi.");
 });
 
 test("a positioning lasts the share of the travel still ahead, from the cover's estimated position", async () => {

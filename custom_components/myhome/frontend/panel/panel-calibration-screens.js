@@ -1159,13 +1159,11 @@ function finalize(screen, ctx) {
   // L-23/L-23b: a reader (another tab or device guides it, or this one handed control over) sees the whole step: its
   // texts, results, notes and field (read only). L-58: its bar holds only what it can do: the note saying who guides
   // it, «Prendi il controllo» and, while the cover moves, «Ferma la tapparella» (a safety control for every device).
-  // The owner's buttons are not drawn; where the step waits for the owner's confirmation or choice, the text says so.
+  // The owner's buttons are not drawn; the reader's note says who guides and confirms the steps (L-75: once, there).
   if (view?.read_only && !ENDED.includes(view.phase)) {
     // L-58b: the armed confirmation counts its seconds down (`left`) before it goes back.
     screen.readOnly = { text: t("wiz_T263"), take: status.confirmTake ? t("calConfirmTakeControl") : t("wiz_T264"),
       left: status.confirmTake && status.confirmLeft ? status.confirmLeft : null, consequence: status.confirmTake ? t("wiz_T265") : null };
-    const decides = screen.actions.some((action) => action.kind === "primary" && !action.disabled && action.id !== "stop");
-    if (decides) screen.body = [screen.body, t("wiz_T572")].filter(Boolean).join("\n\n");
     screen.actions = MOVING(view) ? [{ id: "stop", label: t("wiz_T028"), kind: "stop" }] : [];
     screen.links = [];
     if (screen.field) screen.field = { ...screen.field, disabled: true };
