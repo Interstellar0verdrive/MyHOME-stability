@@ -1348,18 +1348,17 @@ export class CalibrationWizard {
 
 function key(item) { return JSON.stringify([item.entry.entry_id, item.cover.entity_id]); }
 
-/** The actions in red (Close, Exit, Cancel, Stop): always last, never under «Altre opzioni» (L-27). */
-const RED_KINDS = ["link", "danger", "danger-outline", "stop"];
+/** The red actions (outlined): emergencies and abandoning a process (Stop, Cancel the measurement, Exit without saving). */
+const RED_KINDS = ["danger", "danger-outline", "stop"];
 /**
- * L-28/L-27, the rule of every wizard bar: at most three actions in view; with more, the first (two with no red one)
- * stay, the others go under «Altre opzioni ▾», and the red ones follow it, last. The columns show them all (CSS): the
- * disclosure's toggle is hidden there and its actions are ordinary buttons.
+ * L-47 (revised), the rule of every wizard bar of one column: at most three actions in view, the primary and up to two
+ * secondaries; with more, the primary alone and the others under «Altre opzioni ▾» (blue links, the only text-style
+ * actions). A red action is always in view, after them, never in the disclosure. The columns show every action (CSS).
  */
 export function overflow(actions) {
   const red = actions.filter((action) => RED_KINDS.includes(action.kind)), others = actions.filter((action) => !RED_KINDS.includes(action.kind));
-  if (actions.length <= 3 || others.length < 2) return { shown: others, more: [], red };
-  const keep = Math.max(1, 2 - red.length);
-  return { shown: others.slice(0, keep), more: others.slice(keep), red };
+  if (others.length <= 3) return { shown: others, more: [], red };
+  return { shown: others.slice(0, 1), more: others.slice(1), red };
 }
 
 /** Z-2: a value the reading field accepts (a number within its own limits). */

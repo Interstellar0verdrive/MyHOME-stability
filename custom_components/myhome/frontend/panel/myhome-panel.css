@@ -1379,14 +1379,13 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 /* L-47: outlined actions answer the pointer as the primary does: the accent at 8 % under the pointer, 12 % pressed. */
 @media (hover: hover) { .wiz-action.secondary:hover:not(:disabled), button.wiz-take.secondary:hover:not(:disabled) { background: color-mix(in srgb, var(--panel-accent) 8%, transparent); } }
 .wiz-action.secondary:active:not(:disabled), button.wiz-take.secondary:active:not(:disabled) { background: color-mix(in srgb, var(--panel-accent) 12%, transparent); }
-/* L-47, the red rule (HANDOFF §9.122): OUTLINED red stops a movement or discards unsaved measurements now («Ferma la
-   tapparella», «Annulla la misurazione», «Esci senza salvare», «Abbandona la calibrazione»); TEXT red closes or
-   leaves without losing anything («Chiudi»). No red is filled. */
+/* L-47 (revised, HANDOFF §9.122): red is only for emergencies and abandoning a process, always outlined («Ferma la
+   tapparella», «Annulla la misurazione», «Esci senza salvare», «Abbandona la calibrazione»); no red text, no red fill. */
 .wiz-action.stop, .wiz-action.danger-outline { min-height: 44px; border: 1px solid var(--panel-error); color: var(--panel-error); background: transparent; box-shadow: none; }
-.wiz-action.link { min-height: 44px; border: 0; background: transparent; box-shadow: none; color: var(--panel-error); }
+.wiz-action.link { min-height: 44px; border: 0; background: transparent; box-shadow: none; color: var(--panel-accent); }
 @media (hover: hover) { :is(.wiz-action.stop, .wiz-action.danger-outline, .wiz-action.danger):hover:not(:disabled) { background: color-mix(in srgb, var(--panel-error) 8%, transparent); } }
 :is(.wiz-action.stop, .wiz-action.danger-outline, .wiz-action.danger):active:not(:disabled) { background: color-mix(in srgb, var(--panel-error) 12%, transparent); }
-@media (hover: hover) { .wiz-action.link:hover:not(:disabled) { background: transparent; text-decoration: underline; color: color-mix(in srgb, var(--panel-error) 80%, #000); } }
+@media (hover: hover) { .wiz-action.link:hover:not(:disabled) { background: transparent; text-decoration: underline; color: color-mix(in srgb, var(--panel-accent) 80%, #000); } }
 .wiz-action.danger { border: 1px solid var(--panel-error); background: transparent; color: var(--panel-error); }
 /* L-47: a blue text link among the actions (a way on that is neither the primary nor red). */
 .wiz-action.text { min-height: 44px; border: 0; background: transparent; box-shadow: none; color: var(--panel-accent); }

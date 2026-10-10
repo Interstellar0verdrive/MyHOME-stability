@@ -687,14 +687,14 @@ test("L-16: «Open the cover's details» closes the wizard and opens the cover's
   assert.equal(context.panel.shadowRoot.querySelector("dialog.cover-profile-dialog[open]"), null, "no maintainer's dialog");
 });
 
-test("L-28/L-27: every bar keeps at most three actions in view; the red ones last, never under «Other options»", async () => {
+test("L-47 (revised): every bar keeps the primary and up to two secondaries in view; with more, the primary and «Other options»; red always in view, last", async () => {
   const { overflow } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-wizard.js");
   const a = (id, kind = "secondary") => ({ id, kind });
   const ids = ({ shown, more, red }) => [shown.map((x) => x.id), more.map((x) => x.id), red.map((x) => x.id)];
-  assert.deepEqual(ids(overflow([a("p", "primary"), a("b"), a("c"), a("d"), a("x", "link")])), [["p"], ["b", "c", "d"], ["x"]]);
-  assert.deepEqual(ids(overflow([a("p", "primary"), a("b"), a("x", "link")])), [["p", "b"], [], ["x"]], "three: all in view");
-  assert.deepEqual(ids(overflow([a("p", "primary"), a("b"), a("c"), a("d")])), [["p", "b"], ["c", "d"], []], "no red one: two in view");
-  assert.deepEqual(ids(overflow([a("p", "primary"), a("s", "stop"), a("c"), a("d")])), [["p"], ["c", "d"], ["s"]], "Stop is red too");
+  assert.deepEqual(ids(overflow([a("p", "primary"), a("b"), a("c"), a("d"), a("e")])), [["p"], ["b", "c", "d", "e"], []], "A-34: the primary and the disclosure");
+  assert.deepEqual(ids(overflow([a("p", "primary"), a("b"), a("c")])), [["p", "b", "c"], [], []], "three: all in view");
+  assert.deepEqual(ids(overflow([a("p", "primary"), a("b"), a("s", "stop")])), [["p", "b"], [], ["s"]], "Stop in view, last");
+  assert.deepEqual(ids(overflow([a("p", "primary"), a("s", "danger-outline"), a("c"), a("d"), a("e")])), [["p"], ["c", "d", "e"], ["s"]], "red never in the disclosure");
 });
 
 test("A-34 offers fine-tuning once the calibration is saved: path C on the same cover, from the values just written", async () => {
@@ -713,14 +713,16 @@ test("A-34 offers fine-tuning once the calibration is saved: path C on the same 
   assert.equal(wiz().querySelector('[data-wiz="refine"]'), null, "the summary only saves");
   await press("save");
   assert.equal(code(), "A-34");
-  // L-28 (final): fine-tuning, the new profile to other covers, another cover, this cover's details, «Close» in red last.
+  // L-28/L-47: fine-tuning, the new profile to other covers, another cover, this cover's details, «Back to the list»
+  // (a secondary: never red, never «Close»).
   const kinds = [...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => [item.dataset.wiz, item.className.replace("wiz-action ", "")]);
-  assert.deepEqual(kinds, [["refine", "primary"], ["assign-profile", "secondary"], ["another", "secondary"], ["open-cover", "secondary"], ["close", "link"]]);
-  // In a one-column bar the three secondaries are under «Other options ▾» (CSS hides them there), «Close» after it.
+  assert.deepEqual(kinds, [["refine", "primary"], ["assign-profile", "secondary"], ["another", "secondary"], ["open-cover", "secondary"], ["close", "secondary"]]);
+  assert.equal(wiz().querySelector('.wiz-actions [data-wiz="close"]').textContent, "Back to the list");
+  // In a one-column bar the four secondaries are under «Other options ▾» (CSS hides them there).
   assert.equal(wiz().querySelector(".wiz-main .wiz-action"), null, "nothing in the text column");
-  assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-more .wiz-more-list .wiz-action")].map((item) => item.dataset.wiz), ["assign-profile", "another", "open-cover"]);
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-more .wiz-more-list .wiz-action")].map((item) => item.dataset.wiz), ["assign-profile", "another", "open-cover", "close"]);
   const order = [...wiz().querySelector(".wiz-actions").children].map((item) => item.dataset.wiz || item.className);
-  assert.deepEqual(order, ["refine", "wiz-more", "close"], "the primary, the disclosure, then the red one");
+  assert.deepEqual(order, ["refine", "wiz-more"], "the primary, then the disclosure");
   const toggle = wiz().querySelector(".wiz-actions .wiz-more-toggle");
   assert.deepEqual([toggle.textContent.trim(), toggle.getAttribute("aria-expanded")], ["Other options", "false"]);
   toggle.click(); await tick();
@@ -753,7 +755,7 @@ test("A-34 offers fine-tuning once the calibration is saved: path C on the same 
   const expected = Math.round(document.querySelector("myhome-panel")._calibrationTab._wizard._gateway.view.expected_cm);
   await type(String(expected + 6));
   assert.equal(code(), "A-32b");
-  assert.equal(wiz().querySelector('[data-wiz="continue_anyway"]').classList.contains("text"), true, "L-47: a blue text link (it loses nothing)");
+  assert.equal(wiz().querySelector('[data-wiz="continue_anyway"]').classList.contains("secondary"), true, "L-47: a secondary (it loses nothing; no text links outside «Other options»)");
   await press("repeat_check"); await settle();
   await type(String(expected + 1));
   assert.equal(code(), "A-32");
@@ -1128,7 +1130,7 @@ test("radios are plain rows, the advice badge is accent blue; L-47: red text clo
   assert.doesNotMatch(rule(".wiz-radio"), /border|background/, "no card around a radio");
   assert.doesNotMatch(css, /\.wiz-radio:has\(input:checked\)/, "no tint on the chosen radio");
   assert.match(rule(".wiz-recommended"), /color: var\(--panel-accent\)/);
-  assert.match(rule(".wiz-action.link"), /color: var\(--panel-error\)/);
+  assert.match(rule(".wiz-action.link"), /color: var\(--panel-accent\)/, "L-47: no red text");
   assert.match(rule(".wiz-action.danger"), /border: 1px solid var\(--panel-error\); background: transparent;/, "no red is filled");
   assert.match(rule(".wiz-leave"), /color: var\(--panel-error\); border: 1px solid var\(--panel-error\)/, "Exit without saving discards: outlined");
   assert.match(css, /\.wiz-action\.stop, \.wiz-action\.danger-outline \{ min-height: 44px; border: 1px solid var\(--panel-error\)/);
@@ -1281,19 +1283,19 @@ test("the screen behind an open Discard dialog is not rebuilt until the dialog c
   assert.equal(code(), "S-01");
 });
 
-test("L-47: «Close» loses nothing: red text after a save and on S-06; the primary at the end of a preview (U-8)", () => {
+test("L-47: a completed flow ends on «Back to the list», the primary (a secondary on S-06 beside Start over); never red", () => {
   const t = (key) => translations.it[key] || key;
   const close = (screen) => [screen.code, screen.actions.find((action) => action.id === "close")?.kind ?? (screen.links.some((link) => link.id === "close") ? "link" : null)];
   const saved = (path, preview = false) => buildScreen({ t, language: "it", stage: "saved", path, scope: path === "C" ? "times_only" : null,
     cover: { name: "Cucina 2", followProfile: "alta" }, local: { saved: { target: path === "B" ? "follow_profile" : "cover_only", preview } } });
-  assert.deepEqual(close(saved("B")), ["B-09", "link"]);
-  assert.deepEqual(close(saved("A")), ["A-34", "link"]);
-  assert.deepEqual(close(saved("C")), ["C-34", "link"]);
+  assert.deepEqual(close(saved("B")), ["B-09", "primary"]);
+  assert.deepEqual(close(saved("A")), ["A-34", "secondary"], "after fine-tuning is offered");
+  assert.deepEqual(close(saved("C")), ["C-34", "primary"]);
   assert.deepEqual([close(saved("B", true)), close(saved("A", true)), close(saved("C", true))],
-    [["B-09", "primary"], ["A-34", "link"], ["C-34", "primary"]], "U-8: at the end of a preview Close is the primary on B-09 and C-34");
+    [["B-09", "primary"], ["A-34", "primary"], ["C-34", "primary"]], "U-8: at the end of a preview it is the primary");
   const expired = buildScreen({ t, language: "it", stage: "session", path: "A", cover: { name: "Cucina 2" }, status: { expired: true },
     view: { mode: "geometry", phase: "briefing", step: "lift", values: {}, samples: {}, readings: {}, owner: true, sequence: 3 } });
-  assert.deepEqual(close(expired), ["S-06", "link"]);
+  assert.deepEqual(close(expired), ["S-06", "secondary"]);
 });
 
 test("full runs and the return to the top: once the motor stopped the stopwatch freezes, Stop goes, the bar is full; ② only while it runs (L-3)", async () => {
@@ -1538,7 +1540,7 @@ test("L-10: S-01 of an interrupted session cancels it, also from a tab that only
   tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
   assert.equal(code(), "S-01");
   const buttons = [...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((button) => [button.dataset.wiz, button.className.replace("wiz-action ", "")]);
-  assert.deepEqual(buttons, [["start-over", "primary"], ["close", "link"], ["abort", "danger-outline"]], "«Cancel the measurement», outlined red; «Close» red text (L-47)");
+  assert.deepEqual(buttons, [["start-over", "primary"], ["close", "secondary"], ["abort", "danger-outline"]], "«Cancel the measurement», outlined red (L-47)");
   assert.equal(wiz().querySelector('[data-wiz="abort"]').textContent, "Cancel the measurement");
   wiz().querySelector('[data-wiz="abort"]').click(); await tick(12);
   assert.equal(claims(backend), 1, "control taken first (a reader cannot cancel)");
@@ -2127,7 +2129,7 @@ test("the preview is announced before it starts and its end never says that some
   assert.equal(real.body, `${translations.it.wiz_T155.replace("{name}", "cucina_2")}\n\n**Vuoi perfezionare la calibrazione?** Quattro letture col metro a un quarto e a tre quarti della corsa, più una verifica finale, renderanno la stima della posizione più precisa lungo tutta la corsa. Qualche minuto; la tapparella si muoverà.`,
     "T319 is the body's second paragraph");
   assert.deepEqual(real.actions.map((action) => [action.id, action.kind]), [["refine", "primary"], ["assign-profile", "secondary"], ["another", "secondary"],
-    ["open-cover", "secondary"], ["close", "link"]], "L-28");
+    ["open-cover", "secondary"], ["close", "secondary"]], "L-28/L-47");
   const coverOnly = buildScreen({ t, language: "it", stage: "saved", path: "A", cover: { name: "Cucina 2" }, local: { saved: { target: "cover_only" } } });
   assert.equal(coverOnly.actions.some((action) => action.id === "assign-profile"), false, "no profile written, nothing to assign");
   assert.deepEqual(real.stepper.phases.map((phase) => [phase.key, phase.state]).slice(-2), [["summary", "done"], ["finetune", "future"]]);

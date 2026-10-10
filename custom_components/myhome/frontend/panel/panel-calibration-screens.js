@@ -261,7 +261,7 @@ export function buildScreen(ctx) {
   if (stage === "saved") return finish(savedScreen(screen, ctx, tx, values));
   // L-40: a reader whose session was cancelled where it was guided: its own end, with «Chiudi» only.
   if (stage === "cancelled") return finish(Object.assign(screen, { code: "S-01", phase: screen.phase, title: t("wiz_T542"), body: t("wiz_T543"),
-    discard: false, actions: [{ id: "close", label: t("wiz_T158"), kind: "link" }] }));
+    discard: false, actions: [{ id: "close", label: t("wiz_T390"), kind: "primary" }] }));
 
   // L-38: before a times-only measurement the cover is closed by Home Assistant, as path A's first positioning (C-04).
   if (local.homing && !view) {
@@ -676,8 +676,8 @@ function previewScreen(screen, ctx, tx, n, values, stop) {
       body: tx(passed ? "wiz_T142" : "wiz_T145", verdict),
       actions: passed ? [{ id: "accept", label: t("wiz_T060"), kind: "primary" }, { id: "repeat_check", label: t("wiz_T143"), kind: "secondary" }]
         : [{ id: "repeat_check", label: t("wiz_T143"), kind: "primary" }, { id: "redo_readings", label: t("wiz_T146"), kind: "secondary" },
-          // L-47: not red (it loses nothing): a blue text link.
-          { id: "continue_anyway", label: t("wiz_T147"), kind: "text" }] });
+          // L-47: not red (it loses nothing); text links exist only inside «Altre opzioni».
+          { id: "continue_anyway", label: t("wiz_T147"), kind: "secondary" }] });
   }
   return Object.assign(screen, { code: "unknown", title: t("loading"), actions: [stop] });
 }
@@ -742,7 +742,7 @@ function summaryScreen(screen, ctx, tx, n, values) {
     const code = profileB ? "B-08" : points ? "C-38" : path === "C" ? "C-33" : (follows ? "A-33c" : "A-33");
     if (points || refine) { screen.table.mutedBefore = points; if (points) screen.table.rows = [...screen.table.rows, ...rolls]; }
     Object.assign(screen, { code, title: t(profileB ? "wiz_T179" : "wiz_T149"), body: "", precision, profileBlock: null, saveInfo: null,
-      actions: [{ id: "close", label: t("wiz_T158"), kind: "primary" }, { id: "another", label: t("wiz_T156"), kind: "secondary" }] });
+      actions: [{ id: "close", label: t("wiz_T390"), kind: "primary" }, { id: "another", label: t("wiz_T156"), kind: "secondary" }] });
     screen.notices.push({ tone: "info", result: true, text: tx("wiz_T565", values) });
     return screen;
   }
@@ -851,8 +851,9 @@ function savedScreen(screen, ctx, tx, values) {
   const checked = saved.check ? checkResult(ctx, tx, n, saved.check, saved.threshold ?? 4) : null;
   if (checked) { screen.results = [checked.tile]; screen.notices.push(checked.notice); }
   // "Close" keeps each mockup's own style: B-09 red filled, A-34 red text, C-34 red outlined.
-  // L-47: «Chiudi» after a save or a preview loses nothing: red text everywhere.
-  const close = () => ({ id: "close", label: t("wiz_T158"), kind: "link" });
+  // L-47 (revised): the end of a completed flow is not «Chiudi»: «Torna all'elenco», the primary unless fine-tuning is
+  // offered (then a secondary); never red.
+  const close = (kind = "primary") => ({ id: "close", label: t("wiz_T390"), kind });
   screen.discard = false;
   screen.phase = "done";
   screen.preview = !!saved.preview;
@@ -864,13 +865,12 @@ function savedScreen(screen, ctx, tx, values) {
       body: local.baseSaved ? t("wiz_T322") : tx("wiz_T321", values),
       // U-8: at the end of a preview nothing is lost: on B-09 and C-34 «Chiudi» is the primary, not red (A-34 keeps its
       // primary «another» and Close as red text).
-      actions: path === "B" ? [{ ...close("B"), kind: "primary" }]
-        : path === "C" ? [{ ...close("C"), kind: "primary" }, { id: "another", label: t("wiz_T156"), kind: "secondary" }, { id: "open-cover", label: t("wiz_T157"), kind: "secondary" }]
-        : [{ id: "another", label: t("wiz_T156"), kind: "primary" }, { id: "open-cover", label: t("wiz_T157"), kind: "secondary" }, close(path)] });
+      actions: path === "B" ? [close()]
+        : [close(), { id: "another", label: t("wiz_T156"), kind: "secondary" }, { id: "open-cover", label: t("wiz_T157"), kind: "secondary" }] });
   }
   if (path === "B") return Object.assign(screen, { code: "B-09", title: t("wiz_T154"),
     body: tx("wiz_T182", { ...values, profile: ctx.cover?.followProfile ?? "", travel: number(saved.travel_cm, ctx.language, 0) }),
-    actions: [close("B")] });
+    actions: [close()] });
   const body = saved.target === "profile_new" ? tx("wiz_T155", { name: saved.name ?? "" })
     : path === "C" && ctx.cover?.profile ? tx("wiz_T228", values) : tx("wizSavedCover", values);
   // A-34: the base calibration is saved; fine-tuning (path C on the same cover) is the primary next step, explained
@@ -881,15 +881,15 @@ function savedScreen(screen, ctx, tx, values) {
   if (saved.target === "profile_new" && saved.orphan) screen.note = { tone: "info", text: fill(t("wiz_T431"), { old: saved.orphan, tab: t("profileListTitle") }) };
   // L-26: another device saved it: the same A-34, read only: «Chiudi» alone.
   if (saved.reader) return Object.assign(screen, { code: path === "C" ? "C-34" : "A-34", title: t("wiz_T154"), body,
-    actions: [{ id: "close", label: t("wiz_T158"), kind: "link" }], links: [] });
+    actions: [close()], links: [] });
   // L-28 (final): fine-tuning first, then giving the new profile to other covers, another cover, this cover's details,
   // and «Chiudi» in red, last. Where the bar is one column (phone, single column) the wizard keeps the first and the
   // red one visible and puts the others under «Altre opzioni ▾» (the rule of every bar: at most three visible).
   if (path !== "C") return Object.assign(screen, { code: "A-34", title: t("wiz_T154"), body: `${body}\n\n${t("wiz_T319")}`,
     actions: [{ id: "refine", label: t("wiz_T103"), kind: "primary" }, ...assign, { id: "another", label: t("wiz_T156"), kind: "secondary" },
-      { id: "open-cover", label: t("wiz_T157"), kind: "secondary" }, close(path)] });
+      { id: "open-cover", label: t("wiz_T157"), kind: "secondary" }, close("secondary")] });
   return Object.assign(screen, { code: "C-34", title: t("wiz_T154"), body,
-    actions: [{ id: "another", label: t("wiz_T156"), kind: "primary" }, { id: "open-cover", label: t("wiz_T157"), kind: "secondary" }, close(path)] });
+    actions: [close(), { id: "another", label: t("wiz_T156"), kind: "secondary" }, { id: "open-cover", label: t("wiz_T157"), kind: "secondary" }] });
 }
 
 /** S-01…S-06: a step that ended. Today's sessions end with their reason (repeating starts over);
@@ -909,7 +909,7 @@ function problemScreen(screen, ctx, reason, step = false) {
   if (code === "S-06") {
     screen.body = t(body);
     // As in its mockup, "Close" is outlined in red.
-    screen.actions = [{ id: "start-over", label: t("wiz_T261"), kind: "primary" }, { id: "close", label: t("wiz_T158"), kind: "link" }];
+    screen.actions = [{ id: "start-over", label: t("wiz_T261"), kind: "primary" }, { id: "close", label: t("wiz_T390"), kind: "secondary" }];
   } else if (step) {
     // The step alone is repeated: the texts of the mockups describe exactly this.
     screen.body = t(body);
@@ -934,7 +934,7 @@ function problemScreen(screen, ctx, reason, step = false) {
       : reason === "stopped" && ctx.local && !ctx.local.stopSent ? t("wiz_T524")
       : reason === "unexpected_stop" && ctx.view?.step === "lift" ? t("wiz_T443")
         : t(key) === key ? t("calPhase_interrupted") : t(key);
-    screen.actions = [{ id: "start-over", label: t("wiz_T261"), kind: "primary" }, { id: "close", label: t("wiz_T158"), kind: "link" }];
+    screen.actions = [{ id: "start-over", label: t("wiz_T261"), kind: "primary" }, { id: "close", label: t("wiz_T390"), kind: "secondary" }];
     // L-10: a session interrupted (a Stop from another tab, say) stays open in Home Assistant, holding the cover, until
     // it is cancelled: S-01 says how, in red; «Start over» cancels it too before starting again.
     if (ctx.view && !ctx.view.preview && ctx.view.phase === "interrupted" && ctx.view.recoverable) screen.actions.push({ id: "abort", label: t("wiz_T533"), kind: "danger-outline" });
