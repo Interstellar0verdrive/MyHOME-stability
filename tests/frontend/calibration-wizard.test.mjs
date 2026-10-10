@@ -417,7 +417,7 @@ test("a reader sees the step read-only and takes control in two taps while the o
   assert.ok(wiz().querySelector(".wiz-body").textContent.length > 0, "and the step's text");
   assert.equal(wiz().querySelector(".wiz-stopwatch").hidden, true, "who guides it is no longer in the stopwatch box");
   wiz().querySelector('[data-wiz="take"]').click(); await tick();
-  assert.equal(wiz().querySelector('[data-wiz="take"]').textContent, "Confirm take control");
+  assert.equal(wiz().querySelector('[data-wiz="take"]').textContent, "Confirm take control · 10 s");
   assert.match(wiz().querySelector(".wiz-readonly").textContent, /this device will guide the calibration/);
   assert.equal(backend.subscriptions.filter((message) => message.claim).length, 0, "the first tap sends nothing");
   wiz().querySelector('[data-wiz="take"]').click(); await tick(6);
@@ -889,6 +889,36 @@ test("the profile dialog offers the new wizard next to the existing measurement"
   assert.equal(root.querySelector('[data-action="cover-view"][data-id="calibration"]').getAttribute("aria-pressed"), "true");
   assert.equal(code(), "A-02");
   assert.equal(wiz().querySelector(".wiz-cover").textContent, "Living room shutter 1");
+});
+
+test("L-58b: an armed «Confirm take control» counts down and goes back after 10 s, or when the owner shows another step", async (t) => {
+  const view = { phase: "briefing", step: "half_open", reading_kind: "half_open", values: { opening_time: 22, closing_time: 21 },
+    screen: { code: "A-15", path: "A", scope: null, local: { ackLift: true, ackAscent: true } } };
+  // Fake clocks from the start, so every interval the wizard keeps is a fake one.
+  t.mock.timers.enable({ apis: ["setInterval", "Date"], now: Date.now() });
+  const { backend, tab, wiz } = await mount({ session: resumed(view), owner: false });
+  tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
+  const take = () => wiz().querySelector('[data-wiz="take"]');
+  // (b) 10 s without confirming.
+  take().click(); await tick();
+  assert.equal(take().textContent, "Confirm take control · 10 s");
+  t.mock.timers.tick(4000); await tick();
+  assert.equal(take().textContent, "Confirm take control · 6 s", "it counts down");
+  t.mock.timers.tick(6000); await tick();
+  assert.equal(take().textContent, "Take control", "back after 10 s");
+  // (a) the owner shows another step.
+  take().click(); await tick();
+  assert.match(take().textContent, /^Confirm take control/);
+  backend.session.screen = { ...view.screen, code: "A-16", local: { ...view.screen.local, ackDescent: true } };
+  backend.emit(); await tick(6);
+  assert.equal(take().textContent, "Take control", "back when the step changes");
+  // Confirmed: the timer is gone with the confirmation.
+  take().click(); await tick();
+  take().click(); await tick(8);
+  assert.equal(wiz().querySelector(".wiz-readonly"), null, "now the owner");
+  t.mock.timers.tick(20000); await tick();
+  assert.equal(wiz().querySelector(".wiz-readonly"), null, "nothing comes back");
+  t.mock.timers.reset();
 });
 
 test("L-58: a reader stops a moving cover from its bar", async () => {
@@ -2366,7 +2396,7 @@ test("the second tap of Take control is held back too, so a double click cannot 
   await new Promise((resolve) => setTimeout(resolve, 720));
   const take = () => wiz().querySelector('[data-wiz="take"]');
   take().click(); await tick();
-  assert.equal(take().textContent, "Confirm take control");
+  assert.equal(take().textContent, "Confirm take control · 10 s");
   assert.equal(take().disabled, true);
   take().click(); await tick();
   assert.equal(backend.subscriptions.filter((message) => message.claim).length, 0, "a double click does not claim");

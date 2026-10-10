@@ -1161,7 +1161,8 @@ function finalize(screen, ctx) {
   // it, «Prendi il controllo» and, while the cover moves, «Ferma la tapparella» (a safety control for every device).
   // The owner's buttons are not drawn; where the step waits for the owner's confirmation or choice, the text says so.
   if (view?.read_only && !ENDED.includes(view.phase)) {
-    screen.readOnly = { text: t("wiz_T263"), take: t(status.confirmTake ? "calConfirmTakeControl" : "wiz_T264"),
+    // L-58b: the armed confirmation counts its seconds down before it goes back.
+    screen.readOnly = { text: t("wiz_T263"), take: status.confirmTake ? (status.confirmLeft ? `${t("calConfirmTakeControl")} · ${status.confirmLeft} s` : t("calConfirmTakeControl")) : t("wiz_T264"),
       consequence: status.confirmTake ? t("wiz_T265") : null, primary: view.owner_present === false };
     const decides = screen.actions.some((action) => action.kind === "primary" && !action.disabled && action.id !== "stop");
     if (decides) screen.body = [screen.body, t("wiz_T572")].filter(Boolean).join("\n\n");

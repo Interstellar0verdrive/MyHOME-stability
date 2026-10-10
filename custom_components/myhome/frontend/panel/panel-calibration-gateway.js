@@ -17,6 +17,10 @@ const asset = (name) => { const url = new URL(name, import.meta.url); url.search
 const { CoverCalibration, calibrationClient, checkedCalibrationClient } = await import(asset("panel-cover-calibration.js"));
 
 const RESUME = "myhome/cover_calibration/resume", ACTION = "myhome/cover_calibration/action";
+/** L-58b: how long «Conferma presa di controllo» waits before it goes back to «Prendi il controllo». */
+export const CONFIRM_TAKE_MS = 10000;
+/** The step a reader is looking at: what the owner shows (its screen) and Home Assistant's step and phase. */
+const armKey = (state) => JSON.stringify([state?.step ?? null, state?.phase ?? null, state?.screen?.code ?? null]);
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
@@ -64,6 +68,7 @@ class WizardSession extends CoverCalibration {
     // L-26: the last view stays readable after the engine closes on «saved».
     this.lastView = state;
     super._accept(state);
+    this.onAccept?.(state);
     // Attached again (Home Assistant reconnected, or the page came back): the interruption is over.
     if (state.attached && !this._lost) this.connection = null;
     // A claim against a sequence that moved on only reads: the wizard says so.
@@ -101,6 +106,27 @@ export class LiveCalibrationGateway {
     this._onChange = onChange;
     this._engine = new WizardSession((kind) => this._onChange?.(kind));
     this._engine.onBeatExpired = () => this._verify();
+    // L-58b: an armed «Conferma presa di controllo» goes back when the owner shows another step.
+    this._engine.onAccept = (state) => { if (this._armed && armKey(state) !== this._armed.key) this._disarm(); };
+  }
+
+  /** L-58b: «Conferma presa di controllo» armed: back to «Prendi il controllo» after CONFIRM_TAKE_MS, counting down. */
+  _arm() {
+    const engine = this._engine;
+    this._disarm(false);
+    engine._confirmTake = true;
+    this._armed = { key: armKey(engine._state), until: Date.now() + CONFIRM_TAKE_MS };
+    this._armTimer = setInterval(() => {
+      if (!this._armed) return;
+      if (Date.now() >= this._armed.until || engine._lost) this._disarm(); else this._onChange?.("view");
+    }, 1000);
+  }
+
+  _disarm(notify = true) {
+    clearInterval(this._armTimer); this._armTimer = null;
+    const was = !!this._armed;
+    this._armed = null;
+    if (was && this._engine._confirmTake) { this._engine._confirmTake = false; if (notify) this._onChange?.("view"); }
   }
 
   /**
@@ -137,6 +163,7 @@ export class LiveCalibrationGateway {
   get status() {
     const engine = this._engine;
     return { busy: !!engine._busy, lost: !!engine._lost, expired: !!engine._expired, error: engine.error, notice: engine.notice, connection: engine.connection,
+      confirmLeft: this._armed && engine._confirmTake ? Math.max(1, Math.ceil((this._armed.until - Date.now()) / 1000)) : null,
       cancelPending: !!engine._cancelPending, confirmTake: !!engine._confirmTake, locked: !!engine._state && engine._locked() };
   }
 
@@ -163,10 +190,11 @@ export class LiveCalibrationGateway {
   claim() {
     const engine = this._engine;
     if (engine._state?.owner_present === true && !engine._confirmTake) {
-      engine._confirmTake = true;
+      this._arm();
       this._onChange?.("view");
       return Promise.resolve();
     }
+    this._disarm(false);
     return engine.open({ ...this._base, claim: true, resume: engine._state });
   }
 
@@ -219,7 +247,7 @@ export class LiveCalibrationGateway {
     return this._engine._perform("save", target === "profile_new" ? { save_mode: "new", name } : { save_mode: "cover" });
   }
 
-  close() { return this._engine.dispose(); }
+  close() { this._disarm(false); return this._engine.dispose(); }
 }
 
 /** Half-up to the whole centimetre: 4.5 cm is 5 cm (the threshold of the check is on the integer). */
