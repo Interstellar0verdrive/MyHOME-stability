@@ -26,7 +26,9 @@ function overview() {
     profiles: [{ id: "tall", name: "tall_two_leaf", opening_time: 22.4, closing_time: 21.9, assigned_to: ["cover.living_two", "cover.kitchen_two"],
       provenance: { opening: guided("2026-09-29T10:00:00+00:00"), closing: guided("2026-09-29T10:00:00+00:00") } }],
     covers: [
+      // L-73: calibrated with its check kept (2 cm: verified, green).
       { entity_id: "cover.living_one", name: "Living room shutter 1", profile_id: null, travel_cm: 198, available: true, advanced: false, overrides: {},
+        check_cm: 2, check_measured_cm: 97, check_expected_cm: 99, check_at: "2026-10-01T09:10:00+00:00",
         effective: { opening: timing(22.24, guided("2026-10-01T09:00:00+00:00")), closing: timing(21.71, guided("2026-10-01T09:00:00+00:00")) } },
       { entity_id: "cover.living_two", name: "Living room shutter 2", profile_id: "tall", travel_cm: 196, available: true, advanced: false, overrides: {},
         effective: { opening: timing(22.4, guided("2026-09-29T10:00:00+00:00", { inherited: true, origin_name: "Living room shutter 1" }), "profile"),
@@ -83,14 +85,16 @@ const rows = (tab) => [...tab.querySelectorAll(".cal-row")];
 const row = (tab, id) => tab.querySelector(`.cal-row[data-entity="${id}"]`);
 const commands = (calls) => calls.filter((message) => message.type.startsWith("myhome/cover_calibration/"));
 
-test("status comes from the saved evidence: to measure, times measured, times and roll", () => {
+test("L-73: status comes from the saved evidence and the kept check: to calibrate, calibrated, verified", () => {
   const data = overview();
   const [one, two, kitchen, bedroom] = data.covers;
-  assert.deepEqual(coverStatus(one), { status: "times", rolls: false, last: "2026-10-01T09:00:00+00:00", method: "guided", origin: null });
-  assert.equal(coverStatus(two).status, "rolls");
+  assert.deepEqual(coverStatus(one), { status: "verified", detail: "times", check: 2, rolls: false, last: "2026-10-01T09:00:00+00:00", method: "guided", origin: null });
+  assert.deepEqual([coverStatus(two).status, coverStatus(two).detail, coverStatus(two).check], ["calibrated", "rolls", null], "a followed profile carries no check");
   assert.equal(coverStatus(two).method, "inherited");
   assert.equal(coverStatus(two).origin, "Living room shutter 1");
-  assert.equal(coverStatus(kitchen).status, "times");
+  assert.deepEqual([coverStatus(kitchen).status, coverStatus(kitchen).detail], ["calibrated", "times"]);
+  assert.equal(coverStatus({ ...one, check_cm: null }).status, "calibrated", "measured times without a check");
+  assert.equal(coverStatus({ ...bedroom, check_cm: 3 }).status, "to_measure", "a check without measured times says nothing");
   assert.equal(coverStatus(bedroom).status, "to_measure");
   assert.equal(coverStatus(bedroom).last, null);
   assert.deepEqual(timedCovers(data).map((cover) => cover.entity_id), ["cover.living_one", "cover.living_two", "cover.kitchen_two", "cover.bedroom"]);
@@ -106,7 +110,8 @@ test("the Calibration sub-tab sits next to Devices and Profiles and lists timed 
   assert.equal(row(tab, "cover.sensor"), null, "covers with a position sensor need no calibration");
   const badge = (id) => row(tab, id).querySelector(".cal-badge");
   assert.deepEqual(["cover.bedroom", "cover.living_one", "cover.living_two"].map((id) => [badge(id).dataset.status, badge(id).textContent]),
-    [["to_measure", "To calibrate"], ["times", "Calibrated (times)"], ["rolls", "Calibrated (times and roll)"]]);
+    [["to_measure", "To calibrate"], ["verified", "Verified · 2 cm"], ["calibrated", "Calibrated"]], "L-73: three states");
+  assert.equal(badge("cover.living_one").dataset.tone, "success", "within the check's threshold: green");
   assert.equal(row(tab, "cover.living_two").querySelector(".cal-profile-chip").textContent, "tall_two_leaf");
   assert.equal(row(tab, "cover.living_one").querySelector(".cal-row-profile").textContent.trim(), "—");
   assert.deepEqual([...tab.querySelectorAll(".cal-list-head > span")].map((cell) => cell.querySelector("button")?.firstChild.textContent ?? cell.textContent),
@@ -153,7 +158,7 @@ test("the chevron expands a row in place with the values in use, the last measur
   // D-04: values keep their unit and dates their year with no-break spaces.
   const nb = "\u00a0";
   assert.deepEqual(facts, { "Opening time": `22.4${nb}s`, "Closing time": `21.9${nb}s`, Slats: `Yes · 4.4${nb}s`, "Curtain travel": `196${nb}cm`,
-    "Roll on ascent": "1.83", "Roll on descent": "1.91", Date: facts.Date, Method: "From the profile" });
+    "Roll on ascent": "1.83", "Roll on descent": "1.91", Date: facts.Date, Method: "From the profile · times and roll" }, "L-73: what was measured, now on the Method line");
   // L-33: the date with its time (in the browser's time zone).
   assert.match(facts.Date, new RegExp(`^Sep${nb}29,${nb}2026${nb}\\d{2}:\\d{2}$`));
   assert.match(details.textContent, /Also followed by Kitchen shutter\u00a02\./);
@@ -193,7 +198,8 @@ test("every text key the calibration screens use exists in English and Italian",
   }
   // Keys built from a value: every value the views can carry.
   for (const value of ["all", "to_measure", "calibrated", "profile"]) keys.add(`calTabFilter_${value}`);
-  for (const value of ["to_measure", "times", "rolls"]) keys.add(`calTabStatus_${value}`);
+  for (const value of ["to_measure", "calibrated", "verified"]) keys.add(`calTabStatus_${value}`);
+  for (const value of ["times", "rolls"]) keys.add(`calTabStatusDetail_${value}`);
   for (const value of ["guided", "automatic", "inherited", "none"]) keys.add(`calTabMethod_${value}`);
   for (const value of ["unexpected_movement", "external_command", "unexpected_stop", "stopped", "not_delivered", "start_timeout",
     "not_stopped", "stop_queue_full", "invalid_measurement", "travel_timeout", "cover_unavailable"]) keys.add(`calReason_${value}`);
@@ -429,7 +435,7 @@ test("a session in progress marks its cover, blocks new measurements and opens a
     assert.equal(row(tab, id).querySelector(".cal-badge").dataset.status, "running");
     assert.equal(row(tab, id).querySelector(".cal-badge").textContent, "In progress · paused");
   }
-  assert.equal(row(tab, "cover.living_two").querySelector(".cal-badge").dataset.status, "rolls");
+  assert.equal(row(tab, "cover.living_two").querySelector(".cal-badge").dataset.status, "calibrated");
   const open = row(tab, "cover.bedroom").querySelector('[data-action="cal-tab-session"]');
   assert.equal(open.textContent, "Open session");
   open.click(); await tick();
@@ -530,7 +536,7 @@ test("several covers in sequence are chosen in a view of the tab, not a dialog, 
     ["Bedroom", "Kitchen shutter 2", "Living room shutter 1", "Living room shutter 2"], "inventory names, sorted by name");
   assert.doesNotMatch(tab.textContent, /cover\.bedroom|cover_bedroom_raw|living_two_raw|gruppo/i);
   assert.match(tab.querySelector('.cal-batch-row[data-entity="cover.kitchen_two"]').textContent.replace(/\u00a0/g, " "), /Kitchen · Indirizzo: 91 · A: 9 · PL: 1/);
-  assert.equal(tab.querySelector('.cal-batch-row[data-entity="cover.living_two"] .cal-badge').textContent.replace(/\u00a0/g, " "), "Calibrata (tempi e rullo)");
+  assert.equal(tab.querySelector('.cal-batch-row[data-entity="cover.living_two"] .cal-badge').textContent.replace(/\u00a0/g, " "), "Calibrata");
   assert.equal(tab.querySelector('.cal-batch-row[data-entity="cover.living_two"] .cal-profile-chip').textContent, "tall_two_leaf");
   assert.equal(tab.querySelector('.cal-batch-row input[value="cover.living_one"]').disabled, true);
   tab.querySelector(".cal-batch .wiz-back").click(); await tick();
@@ -631,7 +637,8 @@ test("Italian texts of the tab carry no placeholder", async () => {
   const { tab } = await mount({ language: "it" });
   row(tab, "cover.living_two").querySelector('[data-action="cal-tab-toggle"]').click();
   assert.doesNotMatch(tab.textContent, /\{\w+\}|calTab|wiz_T/);
-  assert.match(tab.textContent, /Calibrata \(tempi e rullo\)/);
+  assert.match(tab.textContent, /Verificata · 2 cm/);
+  assert.match(tab.textContent, /Dal profilo · tempi e rullo/, "L-73: the Method line says what was measured");
   assert.match(tab.querySelector(".cal-tab-summary").textContent, /^4 tapparelle · 3 calibrate · 1 da calibrare$/);
 });
 
@@ -758,10 +765,10 @@ test("the list opens sorted by name, ascending, with the arrow on Cover", async 
 test("Status sorts by what needs attention, then reversed, then back to the default order", async () => {
   const { tab } = await mount();
   sortBy(tab, "status");
-  assert.deepEqual(order(tab), ["bedroom", "kitchen_two", "living_one", "living_two"], "to measure, times measured (by name), times and roll");
+  assert.deepEqual(order(tab), ["bedroom", "kitchen_two", "living_two", "living_one"], "to calibrate, calibrated (by name), verified (L-73)");
   assert.deepEqual(arrows(tab), [["cover", "false", null], ["status", "true", "mdi:arrow-up"], ["profile", "false", null]]);
   sortBy(tab, "status");
-  assert.deepEqual(order(tab), ["living_two", "kitchen_two", "living_one", "bedroom"], "reversed rank, ties still by name");
+  assert.deepEqual(order(tab), ["living_one", "kitchen_two", "living_two", "bedroom"], "reversed rank, ties still by name");
   assert.equal(arrows(tab)[1][2], "mdi:arrow-down");
   sortBy(tab, "status");
   assert.deepEqual(arrows(tab)[0], ["cover", "true", "mdi:arrow-up"]);
@@ -782,12 +789,12 @@ test("Profile sorts by profile name in both orders, covers without a profile alw
 test("the order is kept per browser, restored on opening, and applies with the active filter", async () => {
   window.localStorage.setItem("myhome-panel-calibration-sort-v1", JSON.stringify({ key: "status", dir: "desc" }));
   const { tab } = await mount();
-  assert.deepEqual(order(tab), ["living_two", "kitchen_two", "living_one", "bedroom"]);
+  assert.deepEqual(order(tab), ["living_one", "kitchen_two", "living_two", "bedroom"]);
   assert.deepEqual(arrows(tab)[1], ["status", "true", "mdi:arrow-down"]);
   tab.querySelector('[data-action="cal-tab-filter"][data-id="calibrated"]').click();
-  assert.deepEqual(order(tab), ["living_two", "kitchen_two", "living_one"]);
+  assert.deepEqual(order(tab), ["living_one", "kitchen_two", "living_two"], "«Calibrate» counts calibrated and verified (L-73)");
   tab.querySelector('[data-action="cal-tab-filter"][data-id="profile"]').click();
-  assert.deepEqual(order(tab), ["living_two", "kitchen_two"]);
+  assert.deepEqual(order(tab), ["kitchen_two", "living_two"], "same rank: by name");
 });
 
 test("a stored order that makes no sense falls back to the default", async () => {
@@ -816,9 +823,9 @@ test("on phones the list has one row of two drop-downs: the filter opens a sheet
   assert.deepEqual([...compact.querySelector("select[data-sort]").options].map((option) => option.textContent),
     ["Tapparella ↑", "Tapparella ↓", "Stato ↑", "Stato ↓", "Profilo ↑", "Profilo ↓"]);
   pick("status:asc");
-  assert.deepEqual(order(tab), ["bedroom", "kitchen_two", "living_one", "living_two"]);
+  assert.deepEqual(order(tab), ["bedroom", "kitchen_two", "living_two", "living_one"]);
   pick("status:desc");
-  assert.deepEqual(order(tab), ["living_two", "kitchen_two", "living_one", "bedroom"]);
+  assert.deepEqual(order(tab), ["living_one", "kitchen_two", "living_two", "bedroom"]);
   assert.equal(tab.querySelector('.cal-tab-compact select[data-sort="order"]').value, "status:desc");
   assert.equal(tab.querySelector('.cal-list-head [data-id="status"] ha-icon').getAttribute("icon"), "mdi:arrow-down", "the headers show the same choice");
   // The filter: a native drop-down whose options carry the counts.
@@ -849,9 +856,9 @@ test("the sequence list sorts like the tab, and reordering never changes the pla
   tick_(tab, "cover.living_two"); tick_(tab, "cover.bedroom");
   const sort = (value) => { const select = tab.querySelector('.cal-batch .cal-compact-sort select[data-sort="order"]'); select.value = value; select.dispatchEvent(new Event("change", { bubbles: true })); };
   sort("status:asc");
-  assert.deepEqual(names(), ["bedroom", "kitchen_two", "living_one", "living_two"], "to measure, times measured, times and roll");
+  assert.deepEqual(names(), ["bedroom", "kitchen_two", "living_two", "living_one"], "to calibrate, calibrated, verified (L-73)");
   sort("status:desc");
-  assert.deepEqual(names(), ["living_two", "kitchen_two", "living_one", "bedroom"]);
+  assert.deepEqual(names(), ["living_one", "kitchen_two", "living_two", "bedroom"]);
   assert.deepEqual(places(tab).filter(([, place]) => place).sort(), [["bedroom", "2"], ["living_two", "1"]], "the places follow the ticks, not the rows");
   sort("profile:asc");
   assert.deepEqual(names(), ["kitchen_two", "living_two", "bedroom", "living_one"], "covers without a profile last");
@@ -1432,7 +1439,9 @@ test("status, profile and filter chips share one shape: 24 px, 12 px text, their
   const rule = css.match(/\.cal-chip, \.cal-badge, \.cal-profile-chip \{([^}]*)\}/)?.[1] || "";
   for (const part of ["min-height: 24px", "padding: 3px 10px", "border: 1px solid color-mix(in srgb, var(--cal-chip) 20%, transparent)",
     "background: color-mix(in srgb, var(--cal-chip) 12%, transparent)", "font-size: 12px", "line-height: 16px"]) assert.ok(rule.includes(part), part);
-  assert.match(css, /\.cal-badge\[data-status="verified"\] \{ --cal-chip: var\(--panel-success\); \}/);
+  assert.match(css, /\.cal-badge\[data-status="calibrated"\] \{ --cal-chip: var\(--panel-accent\); \}/);
+  assert.match(css, /\.cal-badge\[data-status="verified"\] \{ --cal-chip: var\(--panel-success\); white-space: nowrap; \}/);
+  assert.match(css, /\.cal-badge\[data-status="verified"\]\[data-tone="warning"\] \{ --cal-chip: var\(--panel-warning\);/);
   assert.match(css, /\.cal-profile-chip \{ --cal-chip: var\(--panel-accent\);/);
   assert.match(css, /\.cal-chip\[aria-pressed="true"\] \{ --cal-chip: var\(--panel-accent\); \}/);
 });

@@ -63,9 +63,9 @@ test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothin
   const rows = () => [...wiz().querySelectorAll(".wiz-picker .wiz-pick-row")];
   assert.deepEqual(rows().map((row) => [row.querySelector(".cal-row-name strong").textContent.replace(/\u00a0/g, " "), row.querySelector(".cal-row-name .muted").textContent.replace(/\u00a0/g, " "),
     row.querySelector(".cal-badge").textContent.replace(/\u00a0/g, " "), row.querySelector(".cal-batch-profile").textContent.trim()]), [
-    ["Kitchen shutter 2", "Kitchen · Address: 91 · A: 9 · PL: 1", "Calibrated (times and roll)", "tall_two_leaf"],
+    ["Kitchen shutter 2", "Kitchen · Address: 91 · A: 9 · PL: 1", "Calibrated", "tall_two_leaf"],
     ["Living room shutter 1", "Living room · Address: 91 · A: 9 · PL: 1", "To calibrate", "—"],
-    ["Living room shutter 3", "Living room · Address: 91 · A: 9 · PL: 1", "Calibrated (times)", "tall_two_leaf"]]);
+    ["Living room shutter 3", "Living room · Address: 91 · A: 9 · PL: 1", "Calibrated", "tall_two_leaf"]]);
   assert.equal(wiz().querySelector(".wiz-picker [role=radiogroup]").getAttribute("aria-label"), "Cover to calibrate");
   assert.deepEqual([...wiz().querySelectorAll(".wiz-pick-chips .cal-chip")].map((chip) => chip.textContent.replace(/\s+/g, " ").trim()),
     ["All 3", "To calibrate 1", "Calibrated 2", "With profile 2"], "the list's filter chips");
@@ -93,12 +93,12 @@ test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothin
   assert.equal(wiz().querySelector(".wiz-picker .cal-list-head"), null, "no table headers in the wizard");
   const sortBy = (value) => { const select = wiz().querySelector('.wiz-picker select[data-pick-sort="order"]'); select.value = value; select.dispatchEvent(new Event("change", { bubbles: true })); };
   sortBy("status:asc"); await tick();
-  assert.deepEqual(rows().map((row) => row.dataset.entity), ["cover.living_one", "cover.living_three", "cover.kitchen_two"], "sorted by status, as the list");
+  assert.deepEqual(rows().map((row) => row.dataset.entity), ["cover.living_one", "cover.kitchen_two", "cover.living_three"], "sorted by status, as the list (L-73: both calibrated, by name)");
   // P-3: the list's own bar; its narrow filter drop-down filters as the chips do.
   assert.deepEqual([...wiz().querySelectorAll(".wiz-picker .cal-filterbar-row > *")].map((part) => part.classList[0]), ["cal-tab-chips", "cal-tab-compact"]);
   const pickFilter = wiz().querySelector(".wiz-picker select[data-pick-filter]");
   pickFilter.value = "calibrated"; pickFilter.dispatchEvent(new Event("change", { bubbles: true })); await tick();
-  assert.deepEqual(rows().map((row) => row.dataset.entity), ["cover.living_three", "cover.kitchen_two"]);
+  assert.deepEqual(rows().map((row) => row.dataset.entity), ["cover.kitchen_two", "cover.living_three"]);
   assert.equal(wiz().querySelector('.wiz-pick-chips [data-wiz="pick-filter:calibrated"]').getAttribute("aria-pressed"), "true", "the chips follow");
   const back = wiz().querySelector(".wiz-picker select[data-pick-filter]");
   back.value = "all"; back.dispatchEvent(new Event("change", { bubbles: true })); await tick();
@@ -945,6 +945,33 @@ test("L-72: one corner radius (the shell's 8 px) for notes, tiles, cards, boxes,
     .map(([, selector, value]) => `${selector.trim().slice(0, 50)}: ${value}`)
     .filter((line) => !/^\.(?:cal-status|cal-visual|cal-actions|cal-values)/.test(line));
   assert.deepEqual(loose, [], "every other radius is the shell's");
+});
+
+test("L-73: the three status chips: grey, accent, and «Verified · N cm» green up to 4 cm, yellow beyond, in both themes", async () => {
+  const { statusBadge } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-tab.js");
+  const t = (key) => translations.en[key];
+  assert.equal(statusBadge({ status: "to_measure" }, t), '<span class="badge cal-badge" data-status="to_measure">To calibrate</span>');
+  assert.equal(statusBadge({ status: "calibrated" }, t), '<span class="badge cal-badge" data-status="calibrated">Calibrated</span>');
+  assert.equal(statusBadge({ status: "verified", check: 4 }, t), '<span class="badge cal-badge" data-status="verified" data-tone="success">Verified · 4 cm</span>', "the threshold itself passes");
+  assert.equal(statusBadge({ status: "verified", check: 5 }, t), '<span class="badge cal-badge" data-status="verified" data-tone="warning">Verified · 5 cm</span>');
+  const doc = dom.window.document;
+  for (const theme of ["light", "dark"]) {
+    const host = doc.createElement("div"); host.dataset.theme = theme; doc.body.append(host);
+    host.innerHTML = ["to_measure", "calibrated"].map((status) => `<span class="badge cal-badge" data-status="${status}"></span>`).join("")
+      + '<span class="badge cal-badge" data-status="verified" data-tone="success"></span><span class="badge cal-badge" data-status="verified" data-tone="warning"></span>';
+    const [grey, accent, green, yellow] = host.children;
+    assert.equal(winner(grey, "--cal-chip"), "var(--panel-text-2)");
+    assert.equal(winner(accent, "--cal-chip"), "var(--panel-accent)");
+    assert.equal(winner(green, "--cal-chip"), "var(--panel-success)");
+    assert.equal(winner(yellow, "--cal-chip"), "var(--panel-warning)");
+    for (const chip of host.children) {
+      assert.match(winner(chip, "background"), /--cal-chip\) 12%/, `${theme}: 12 % fill`);
+      assert.match(winner(chip, "border"), /--cal-chip\) 20%/, `${theme}: 20 % border`);
+      assert.equal(winner(chip, "border-radius"), "999px", `${theme}: a pill`);
+    }
+    assert.equal(winner(yellow, "color"), theme === "dark" ? "var(--panel-warning)" : "color-mix(in srgb, var(--panel-warning) 55%, #000)");
+    host.remove();
+  }
 });
 
 test("L-18: a tap on the cover already chosen in A-01 un-chooses it", async () => {
@@ -2563,7 +2590,7 @@ test("A-02 advises a path from the cover and the gateway's profiles, and presele
   assert.match(similar.body, /"Like a cover already measured" is the recommended option because .* If in doubt, choose this option\.$/);
   assert.deepEqual(advice(buildScreen({ t, stage: "path", profiles: [tall], cover: { name: "Kitchen 2", status: "to_measure", travel_cm: 110 } })), [["A", "Recommended"]], "198 cm is not similar: the first of its type");
   // Already calibrated: Ⓒ; another choice gets its warning under it (Ⓑ: "a different profile" only when one is followed).
-  const calibrated = (local, profile) => buildScreen({ t, stage: "path", local, profiles: [tall], cover: { name: "Kitchen 2", status: "rolls", last: "2026-10-01T09:00:00+00:00", profile } });
+  const calibrated = (local, profile) => buildScreen({ t, stage: "path", local, profiles: [tall], cover: { name: "Kitchen 2", status: "calibrated", detail: "rolls", last: "2026-10-01T09:00:00+00:00", profile } });
   assert.deepEqual([advice(calibrated({})), calibrated({}).choice.value, calibrated({}).subline], [[["C", "Recommended"]], "C", "Already calibrated (times and roll, Oct 1, 2026)"]);
   assert.deepEqual(note(calibrated({})), [translations.en.wiz_T453, "1 profile available"]);
   assert.equal(calibrated({}).choice.options.some((option) => option.warning), false);
@@ -2673,7 +2700,7 @@ test("A-01's list names the bus address and its notes in Italian too", async () 
   // Without a profile the clause about it falls.
   const t = (key) => translations.it[key] || key;
   const alone = buildScreen({ t, language: "it", stage: "choose", local: { coverKey: "k", coverPicked: true },
-    covers: [{ key: "k", label: "Cucina 2", status: "times", last: "2026-10-01T09:00:00+00:00" }], cover: { name: "Cucina 2", profile: null } });
+    covers: [{ key: "k", label: "Cucina 2", status: "calibrated", detail: "times", last: "2026-10-01T09:00:00+00:00" }], cover: { name: "Cucina 2", profile: null } });
   assert.deepEqual(alone.picker.notes, [{ tone: "warning",
     text: "Questa tapparella è già calibrata (tempi misurati, 1 ott 2026). Una nuova calibrazione, se la scegli al passo successivo, sostituirà i valori in uso; per correggerli, scegli il perfezionamento." }]);
 });
@@ -2757,7 +2784,7 @@ test("our texts name the shell's tabs with the shell's own labels, and never cal
 
 test("a cover that follows a profile without a measured travel says the values are not scaled (A-02, C-01)", () => {
   const t = (key) => translations.it[key] || key;
-  const cover = (travel_cm) => ({ name: "Cucina 2", status: "rolls", last: "2026-10-01T09:00:00+00:00", travel_cm, profile: { name: "alte" }, effective: {} });
+  const cover = (travel_cm) => ({ name: "Cucina 2", status: "calibrated", detail: "rolls", last: "2026-10-01T09:00:00+00:00", travel_cm, profile: { name: "alte" }, effective: {} });
   assert.equal(buildScreen({ t, language: "it", stage: "path", profiles: [], cover: cover(null) }).subline,
     "Segue il profilo «alte»: i valori sono quelli del profilo, senza adattamento alla corsa, che non è stata misurata.");
   assert.equal(buildScreen({ t, language: "it", stage: "path", profiles: [], cover: cover(110) }).subline, "Segue il profilo «alte»");
@@ -2976,8 +3003,8 @@ test("A-02 says why the advised option is advised, impersonally, and says nothin
   const t = (key) => translations.it[key] || key;
   const tall = { id: "tall", name: "alte", slat: 4.4, referenceTravel: 109 };
   const reason = (cover, profiles) => buildScreen({ t, language: "it", stage: "path", profiles, cover: { name: "Cucina 2", ...cover } }).body.split("\n\n")[1].replace(/ Nel dubbio, scegli questa opzione\.$/, "");
-  assert.equal(reason({ status: "rolls", last: "2026-10-01T09:00:00+00:00" }, [tall]), "«Perfezionamento» è l'opzione consigliata perché questa tapparella è già calibrata.");
-  assert.equal(reason({ status: "rolls", last: "2026-10-01T09:00:00+00:00", profile: { name: "alte" } }, [tall]),
+  assert.equal(reason({ status: "calibrated", detail: "rolls", last: "2026-10-01T09:00:00+00:00" }, [tall]), "«Perfezionamento» è l'opzione consigliata perché questa tapparella è già calibrata.");
+  assert.equal(reason({ status: "calibrated", detail: "rolls", last: "2026-10-01T09:00:00+00:00", profile: { name: "alte" } }, [tall]),
     "«Perfezionamento» è l'opzione consigliata perché questa tapparella è già calibrata e segue il profilo «alte».");
   assert.equal(reason({ status: "to_measure" }, [tall]),
     "«Prima tapparella del suo tipo» è l'opzione consigliata perché la tapparella non è mai stata misurata e, senza la lunghezza del telo, non si può dire se un profilo salvato le si adatti.");

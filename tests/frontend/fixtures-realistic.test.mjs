@@ -17,7 +17,15 @@ test("the realistic house lists every timed cover with its state, never the awni
   assert.equal(rows(tab).length, 10);
   assert.equal(rows(tab).some((row) => row.dataset.entity === "cover.tenda_terrazza"), false);
   assert.deepEqual(["cover.soggiorno_1", "cover.camera_giardino", "cover.cucina", "cover.ospiti", "cover.studio", "cover.bagno"].map((entity) => badge(tab, entity)),
-    ["rolls", "rolls", "times", "times", "to_measure", "to_measure"]);
+    ["verified", "verified", "calibrated", "calibrated", "to_measure", "to_measure"]);
+  // L-73: the gap in the label, green within the 4 cm threshold and yellow beyond; a follower of a checked cover has none.
+  const chip = (entity) => rows(tab).find((row) => row.dataset.entity === entity).querySelector(".cal-badge");
+  assert.deepEqual(["cover.soggiorno_1", "cover.camera_giardino"].map((entity) => [chip(entity).textContent, chip(entity).dataset.tone]),
+    [["Verificata · 2 cm", "success"], ["Verificata · 6 cm", "warning"]]);
+  assert.equal(badge(tab, "cover.soggiorno_2"), "calibrated", "it follows a verified cover's profile: no check of its own");
+  assert.equal(chip("cover.cucina").dataset.tone, undefined);
+  const counts = Object.fromEntries([...tab().querySelectorAll('[data-action="cal-tab-filter"]')].map((chip) => [chip.dataset.id, chip.querySelector(".count")?.textContent]));
+  assert.deepEqual([counts.to_measure, counts.calibrated], ["3", "7"], "«Calibrate» counts calibrated and verified, «Da calibrare» as before");
   assert.match(rows(tab).find((row) => row.dataset.entity === "cover.camera_giardino").textContent, /Tapparella Camera Matrimoniale Lato Giardino/);
 });
 

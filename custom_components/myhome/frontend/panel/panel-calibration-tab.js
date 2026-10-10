@@ -16,7 +16,7 @@ function holdScroll(host) {
 
 /** WHO 2 "Calibration" view: what each timed cover uses, its measurement state and the ways to measure it. */
 const asset = (name) => { const url = new URL(name, import.meta.url); url.search = new URL(import.meta.url).search; return url.href; };
-const [{ escapeHtml: esc }, model, text, { CoverCalibration }, { CalibrationWizard }, { ProfileCatalogueEditor }, { morph }, { layout, SHEETS, PHONE, SHORT, listBand, contentWidth, fitBars, fitRows, dockBar, keepScrollOnPick, focusOnOpen, revealHead }, { cancelSession }] = await Promise.all([
+const [{ escapeHtml: esc }, model, text, { CoverCalibration }, { CalibrationWizard }, { ProfileCatalogueEditor }, { morph }, { layout, SHEETS, PHONE, SHORT, listBand, contentWidth, fitBars, fitRows, dockBar, keepScrollOnPick, focusOnOpen, revealHead }, { cancelSession, CHECK_THRESHOLD_CM }] = await Promise.all([
   import(asset("panel-dom.js")), import(asset("panel-model.js")), import(asset("panel-calibration-text.js")),
   import(asset("panel-cover-calibration.js")), import(asset("panel-calibration-wizard.js")), import(asset("panel-profile-catalogue-editor.js")),
   import(asset("panel-calibration-morph.js")), import(asset("panel-calibration-layout.js")), import(asset("panel-calibration-gateway.js")),
@@ -33,7 +33,8 @@ const NO_PROFILE = "__no_profile__";
 export const DEFAULT_SORT = Object.freeze({ key: "cover", dir: "asc" });
 export const SORT_STORAGE_KEY = "myhome-panel-calibration-sort-v1";
 // Status from what needs attention first; a running cover is always on top, whatever the order.
-const STATUS_RANK = { to_measure: 0, times: 1, rolls: 2, verified: 3 };
+// L-73: to calibrate, calibrated (measured times, no check kept), verified (a check kept at the last save).
+const STATUS_RANK = { to_measure: 0, calibrated: 1, verified: 2 };
 
 function savedSort() {
   try {
@@ -52,11 +53,24 @@ export function coverStatus(cover) {
   const dates = [...measured, ...["slat_time_s", "opening_roll", "closing_roll"].map((key) => effective[key]?.provenance)]
     .map((item) => item?.recorded_at).filter((value) => value && !Number.isNaN(Date.parse(value))).sort();
   const latest = [...measured].sort((a, b) => String(b.recorded_at).localeCompare(String(a.recorded_at)))[0] || null;
+  const check = Number.isInteger(cover.check_cm) ? cover.check_cm : null;
   return {
-    status: rolls ? "rolls" : measured.length ? "times" : "to_measure",
+    status: !measured.length ? "to_measure" : check != null ? "verified" : "calibrated",
+    // What was measured, for the «Metodo» line and the wizard's «already calibrated (…)»: times, or times and roll.
+    detail: rolls ? "rolls" : "times", check,
     rolls, last: dates.at(-1) || null, method: latest ? (latest.inherited ? "inherited" : latest.source) : null,
     origin: latest?.inherited ? latest.origin_name || latest.origin_entity_id : null,
   };
+}
+
+/**
+ * L-73: the status chip of a cover: «Da calibrare» (grey), «Calibrata» (accent) or «Verificata · N cm», green within the
+ * check's threshold and yellow beyond.
+ */
+export function statusBadge(item, t) {
+  const tone = item.status === "verified" ? ` data-tone="${item.check > CHECK_THRESHOLD_CM ? "warning" : "success"}"` : "";
+  const label = item.status === "verified" ? fill(t("calTabStatus_verified"), { cm: item.check }) : t(`calTabStatus_${item.status}`);
+  return `<span class="badge cal-badge" data-status="${item.status}"${tone}>${esc(label)}</span>`;
 }
 
 /** Covers this view can measure: timed covers, never those with a position sensor (no resolved timings). */
@@ -447,7 +461,7 @@ export class CalibrationTab {
         <span class="cal-batch-lead"><input type="radio" name="cover" value="${esc(key)}" ${chosen ? "checked" : ""}>
           <span class="cal-row-icon" aria-hidden="true"><ha-icon icon="mdi:window-shutter"></ha-icon></span></span>
         <span class="cal-row-name"><strong>${esc(item.name)}</strong><span class="muted">${this._subline([item.area, gateways.length > 1 ? item.entry.title : ""], item.entity)}</span></span>
-        <span class="cal-batch-chips"><span class="cal-batch-status"><span class="badge cal-badge" data-status="${item.status}">${esc(t(`calTabStatus_${item.status}`))}</span></span>
+        <span class="cal-batch-chips"><span class="cal-batch-status">${statusBadge(item, t)}</span>
         <span class="cal-batch-profile">${profile(item)}</span></span>
         ${chosen && notes.length ? `<span class="wiz-pick-notes">${notes.map((note) => `<span class="cal-note${note.tone === "warning" ? " is-warning" : ""}">${esc(note.text)}</span>`).join("")}</span>` : ""}</label>`;
     }).join("");
@@ -703,7 +717,7 @@ export class CalibrationTab {
     const session = running ? item.session : null;
     const badge = session ? `<span class="badge cal-badge" data-status="running">${esc(t(session.waiting_for_stop ? "calTabRunning_waiting"
       : session.phase === "paused" ? "calTabRunning_paused" : session.owner_present ?? session.attached ? "calTabRunning_present" : "calTabRunning_absent"))}</span>`
-      : `<span class="badge cal-badge" data-status="${item.status}">${esc(t(`calTabStatus_${item.status}`))}</span>`;
+      : statusBadge(item, t);
     const profile = item.profile ? `${this._profileChip(item.profile.name)}` : `<span class="muted" aria-label="${esc(t("calTabProfileNone"))}">—</span>`;
     const last = item.last ? fill(t("calTabMeasuredOn"), { date: dateText(item.last, language) }) : "";
     const action = session
@@ -766,7 +780,7 @@ export class CalibrationTab {
     const session = this._running(item) ? item.session : null;
     const badge = session ? `<span class="badge cal-badge" data-status="running">${esc(t(session.waiting_for_stop ? "calTabRunning_waiting"
       : session.phase === "paused" ? "calTabRunning_paused" : session.owner_present ?? session.attached ? "calTabRunning_present" : "calTabRunning_absent"))}</span>`
-      : `<span class="badge cal-badge" data-status="${item.status}">${esc(t(`calTabStatus_${item.status}`))}</span>`;
+      : statusBadge(item, t);
     // N-09: a cover with its session open offers «Apri sessione» on its page too, as its row does.
     const open = session && !(session.waiting_for_stop || session.recoverable === false)
       ? `<div class="cal-page-session"><button type="button" class="primary" data-action="cal-tab-session" data-id="${esc(item.entry.entry_id)}">${esc(t("calOpenSession"))}</button></div>` : "";
@@ -847,7 +861,8 @@ export class CalibrationTab {
     return `<div class="cal-details-grid">
         <section><h4>${esc(t("calTabValues"))}</h4>${list(rows)}${this._originNote(item, language)}${action(refine)}</section>
         <section><h4>${esc(t("calTabColLast"))}</h4>${list([[t("calTabDate"), item.last ? text.dateTimeText(item.last, language).replace(/ /g, "\u00a0") : "—"],
-          [t("calTabMethod"), t(`calTabMethod_${item.method || "none"}`)]])}
+          // L-73: the chip no longer says what was measured: the «Metodo» line does («Guidata · tempi e rullo»).
+          [t("calTabMethod"), [t(`calTabMethod_${item.method || "none"}`), item.status !== "to_measure" ? t(`calTabStatusDetail_${item.detail}`) : ""].filter(Boolean).join(" · ")]])}
           ${item.profile && scaled ? `<p class="${note}">${esc(fill(t("calTabInheritedNote"), { profile: item.profile.name }))}</p>` : ""}${action(measure)}</section>
         <section><h4>${esc(t("calTabColProfile"))}</h4>${item.profile ? `<p>${this._profileChip(item.profile.name, true)}</p>
           <p>${esc(followers.length ? fill(t("calTabFollowers"), { names: names(followers, language) }) : t("calTabFollowersNone"))}</p>
@@ -1342,7 +1357,7 @@ export class CalibrationTab {
     const batch = this._batch, max = batch.data?.max_batch ?? 0, count = batch.order.length;
     // The same order as the list (shared choice); the place in the sequence stays the order of the ticks.
     const targets = this._batchTargets();
-    const statusBadge = (item) => item ? `<span class="badge cal-badge" data-status="${item.status}">${esc(t(`calTabStatus_${item.status}`))}</span>` : "";
+    const badge = (item) => item ? statusBadge(item, t) : "";
     const profile = (item) => item?.profile ? `${this._profileChip(item.profile.name)}`
       : `<span class="muted" aria-label="${esc(t("calTabProfileNone"))}">—</span>`;
     const rows = targets.map((target) => {
@@ -1352,7 +1367,7 @@ export class CalibrationTab {
           <span class="cal-batch-order" aria-hidden="true">${place >= 0 ? place + 1 : ""}</span>
           <span class="cal-row-icon" aria-hidden="true"><ha-icon icon="mdi:window-shutter"></ha-icon></span></span>
         <span class="cal-row-name"><strong>${esc(target.name)}</strong><span class="muted">${this._subline([target.area], target.entity, target.reason ? [t(`profileError_${target.reason}`)] : [])}</span></span>
-        <span class="cal-batch-chips"><span class="cal-batch-status">${statusBadge(target.item)}</span>
+        <span class="cal-batch-chips"><span class="cal-batch-status">${badge(target.item)}</span>
         <span class="cal-batch-profile">${profile(target.item)}</span></span></label>`;
     }).join("");
     const summary = count === 0 ? t("wiz_T386") : count === 1 ? t("wiz_T385") : fill(t("wiz_T384"), { count });

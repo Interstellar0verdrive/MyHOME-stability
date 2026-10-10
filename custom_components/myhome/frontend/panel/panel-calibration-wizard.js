@@ -159,7 +159,7 @@ export class CalibrationWizard {
     const followed = this._local.path === "B" ? data?.profiles.find((profile) => profile.id === this._local.profileId) : null;
     const address = item.entity?.address;
     return { name: item.name, entity_id: item.cover.entity_id, effective: item.cover.effective || {}, travel_cm: item.cover.travel_cm ?? null,
-      status: item.status, last: item.last,
+      status: item.status, detail: item.detail, last: item.last,
       profile: item.profile, followers, followProfile: followed?.name ?? null,
       // G4-1: as the list rows: room first (and the gateway when there are several), then the bus address; no WHO.
       // The units apart too (responsive map §3.3): the header wraps between them, never inside the address.
@@ -201,7 +201,7 @@ export class CalibrationWizard {
     const cover = this._cover(), language = hass.language || "en";
     const followed = local.path === "B" ? this._gatewayData()?.profiles.find((profile) => profile.id === local.profileId) : null;
     const screen = buildScreen({ t, language, path: local.path, scope: local.scope, stage: local.stage, local, cover,
-      covers: this._covers().map((item) => ({ key: key(item), label: this._coverLabel(item), status: item.status, last: item.last })),
+      covers: this._covers().map((item) => ({ key: key(item), label: this._coverLabel(item), status: item.status, detail: item.detail, last: item.last })),
       profiles: this._profiles(), followed, followerNames: cover ? names(cover.followers, language) : "",
       view: gateway?.view || null, status: gateway?.status || {}, elapsed: gateway?.elapsed() ?? null, runPosition: local.run?.position ?? null, now: Date.now(),
       preview: !!gateway?.preview, supports: (target) => gateway ? gateway.supports(target) : false });
