@@ -165,8 +165,13 @@ export function createFakeBackend({ language = "en", inventory = coverInventory(
     } else throw Object.assign(new Error("step"), { code: "calibration_step" });
   }
 
+  // The covers at rest, closed (L-38: a times-only measurement starts at once from a closed cover).
+  const states = Object.fromEntries((inventory.entities || []).filter((entity) => entity.domain === "cover" || String(entity.entity_id).startsWith("cover."))
+    .map((entity) => [entity.entity_id, { state: "closed", attributes: {} }]));
+  const services = [];
   const hass = {
-    language, states: {},
+    language, states, services,
+    callService: async (domain, service, data) => { services.push({ domain, service, data }); },
     connection: {
       subscribeEvents: async () => () => {},
       subscribeMessage: async (callback, message) => {

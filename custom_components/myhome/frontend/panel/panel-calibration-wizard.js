@@ -60,7 +60,7 @@ export class CalibrationWizard {
   /** L-4: its own sessions, geometry and guided («solo tempi», marked `origin: "wizard"`); the rest is the maintainer's. */
   handles(session) { return !!session && !session.batch && (session.mode === "geometry" || (session.mode === "guided" && session.origin === "wizard" && !session.direction)); }
 
-  updateHass(hass) { if (this._context) { this._context.hass = hass; this._theme(); } }
+  updateHass(hass) { if (this._context) { this._context.hass = hass; this._theme(); if (this._local?.homing) this._homeTick(); } }
 
   /** The drawings follow Home Assistant's dark mode; without theme data, the system's preference. */
   _theme() {
@@ -72,6 +72,7 @@ export class CalibrationWizard {
 
   close() {
     clearInterval(this._leaseTimer); this._leaseTimer = null;
+    clearInterval(this._homeTimer); this._homeTimer = null;
     clearInterval(this._tickTimer); this._tickTimer = null;
     if (this._onVisible) document.removeEventListener("visibilitychange", this._onVisible);
     this._onVisible = null;
@@ -740,6 +741,13 @@ export class CalibrationWizard {
     if (id === "repeat") local.invalidRun = null;
     if (["next", "lift", "endpoint", "repeat", "repeat_step", "accept", "repeat_check", "redo_readings", "continue_anyway", "continue", "skip"].includes(id)) return this._send(id);
     // "It did not do what it should" (A-05): today the run is stopped and S-01 offers to start over (L2 will repeat the step).
+    // L-38: Stop during the positioning before a times-only measurement: Home Assistant stops the cover, nothing started.
+    if ((id === "stop" || id === "misbehaved") && local.homing) {
+      const entity = local.homing.entity;
+      clearInterval(this._homeTimer); this._homeTimer = null; local.homing = null; local.stage = "before";
+      Promise.resolve(this._context.hass.callService?.("cover", "stop_cover", { entity_id: entity })).catch(() => {});
+      return this._render();
+    }
     if (id === "stop" || id === "misbehaved") { local.misbehaved = id === "misbehaved"; local.stopSent = true; this._closeDialog(false); return gateway?.stop(); }
     // Ownership gained by a claim or a reconnection moves nothing until this tab presses something.
     if (id === "take") { local.arm = null; return gateway?.claim(); }
@@ -907,8 +915,42 @@ export class CalibrationWizard {
       // Path B skips the travel measurement when the cover's travel is already saved (only the check remains).
       this._newGateway("preview", local.path === "B" ? "profile" : "rolls", { ...this._baseValues(item), skip_travel: local.path === "B" && item.cover.travel_cm > 0 }).start();
     } else {
-      this._newGateway("live").start({ ...this._liveContext(), mode: local.path === "C" && local.scope === "times_only" ? "guided" : "geometry", slats: local.slats !== false });
+      const guided = local.path === "C" && local.scope === "times_only";
+      // L-38: the times-only session (Home Assistant's guided protocol) starts from a closed cover with no positioning
+      // of its own: the panel closes the cover first, as path A does, then starts it.
+      if (guided && this._home(item)) return this._render();
+      this._newGateway("live").start({ ...this._liveContext(), mode: guided ? "guided" : "geometry", slats: local.slats !== false });
     }
+    this._render();
+  }
+
+  /**
+   * L-38: the positioning before a times-only measurement: Home Assistant closes the cover (its own close), the step
+   * waits for it to be closed and still (or for its closing time with a margin), then the session starts on its
+   * confirmation screen («Check that it is fully closed»). Returns false when the cover is already closed and still.
+   */
+  _home(item) {
+    const { hass } = this._context, entity = item.cover.entity_id, state = hass.states?.[entity];
+    if (state?.state === "closed" && (state.attributes?.current_position ?? 0) === 0) return false;
+    const position = state?.attributes?.current_position, closing = item.cover.effective?.closing?.value;
+    const seconds = closing > 0 ? closing * (Number.isFinite(position) ? position / 100 : 1) : null;
+    this._local.homing = { entity, started: Date.now(), seconds };
+    Promise.resolve(hass.callService?.("cover", "close_cover", { entity_id: entity })).catch(() => {});
+    clearInterval(this._homeTimer);
+    this._homeTimer = setInterval(() => this._homeTick(), 500);
+    return true;
+  }
+
+  _homeTick() {
+    const local = this._local, homing = local.homing;
+    if (!homing || !this._root) { clearInterval(this._homeTimer); this._homeTimer = null; return; }
+    const state = this._context.hass.states?.[homing.entity], elapsed = (Date.now() - homing.started) / 1000;
+    const still = state && !["closing", "opening"].includes(state.state);
+    const done = (still && state.state === "closed") || (homing.seconds != null && elapsed >= homing.seconds + Math.max(2, homing.seconds * 0.15) && still);
+    if (!done) { this._patch(this._screen()); return; }
+    clearInterval(this._homeTimer); this._homeTimer = null;
+    local.homing = null;
+    this._newGateway("live").start({ ...this._liveContext(), mode: "guided" });
     this._render();
   }
 

@@ -205,6 +205,33 @@ test("L-4: a «solo tempi» session the wizard started opens in the wizard's rea
   assert.equal(devices.wiz(), null);
 });
 
+test("L-38: times only first closes an open cover, as path A does, then starts on «check that it is fully closed»", async () => {
+  const context = await mount();
+  const { backend, wiz, code, press, panel } = context;
+  backend.hass.states["cover.kitchen_two"] = { state: "open", attributes: { current_position: 100 } };
+  await toCase(context, "times_only");
+  await press("begin");
+  assert.equal(code(), "C-04", "the positioning first");
+  assert.equal(wiz().querySelector(".wiz-title").textContent, "Positioning cover");
+  assert.deepEqual(backend.hass.services.at(-1), { domain: "cover", service: "close_cover", data: { entity_id: "cover.kitchen_two" } });
+  assert.equal(backend.subscriptions.some((message) => message.type === "myhome/cover_calibration/start"), false, "no session yet");
+  assert.ok(wiz().querySelector('[data-wiz="stop"]'), "Stop while it closes");
+  // Home Assistant reports it closed: the session starts on its confirmation.
+  backend.hass.states["cover.kitchen_two"] = { state: "closed", attributes: { current_position: 0 } };
+  panel._calibrationTab._wizard.updateHass(backend.hass); await tick(6);
+  assert.equal(backend.subscriptions.filter((message) => message.type === "myhome/cover_calibration/start").at(-1).mode, undefined, "the guided session");
+  assert.equal(code(), "C-11");
+  // Stop during the positioning: Home Assistant stops the cover, nothing has started.
+  reset();
+  const again = await mount();
+  again.backend.hass.states["cover.kitchen_two"] = { state: "open", attributes: { current_position: 60 } };
+  await toCase(again, "times_only");
+  await again.press("begin");
+  again.wiz().querySelector('[data-wiz="stop"]').click(); await tick(4);
+  assert.deepEqual(again.backend.hass.services.at(-1), { domain: "cover", service: "stop_cover", data: { entity_id: "cover.kitchen_two" } });
+  assert.equal(again.backend.subscriptions.some((message) => message.type === "myhome/cover_calibration/start"), false);
+});
+
 test("D-20: in C-01 a value not known is «—» without its unit", async () => {
   const { buildScreen } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-screens.js");
   const { translations } = await import("../../custom_components/myhome/frontend/panel/panel-translations.js");
