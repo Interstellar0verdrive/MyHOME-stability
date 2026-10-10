@@ -1053,6 +1053,17 @@ test("L-61: a reader's header says «Stop following» (secondary) and leaves wit
   assert.ok(tab().querySelector('[data-action="cal-tab-session"]'), "«Open session» still there");
 });
 
+test("L-61: the header follows the role even when nothing else on the screen changes (a run under way)", async () => {
+  const { backend, tab, wiz } = await mount({ session: resumed({ phase: "opening", step: "opening", reading_kind: "travel", values: {}, _started: 0 }) });
+  tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
+  const head = () => [...wiz().querySelectorAll(".wiz-head button:not(.icon-button)")].map((button) => button.className);
+  assert.deepEqual(head(), ["wiz-discard"], "owner");
+  const owned = backend.view;
+  backend.view = (extra = {}) => owned({ owner: false, read_only: true, ...extra });
+  backend.emit(); await tick(6);
+  assert.deepEqual(head(), ["wiz-unfollow"], "taken by another device mid-run");
+});
+
 test("L-58: a reader stops a moving cover from its bar", async () => {
   const { backend, tab, wiz } = await mount({ session: resumed({ phase: "opening", step: "opening", reading_kind: "travel", values: {}, _started: 0 }), owner: false });
   tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
