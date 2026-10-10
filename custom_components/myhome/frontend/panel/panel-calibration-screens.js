@@ -509,7 +509,10 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
       actions: phase === "briefing" ? [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop] : phase === "geometry_wait_stop"
         ? [{ id: "stopping", label: t("wiz_T459"), kind: "status" }] : [stop] });
   }
-  if (step === "top" && !local.ackReadings) {
+  // L-54: the return to the top before the half-descent reading is the readings' two-leg wait (A-19), known from the
+  // session itself (the half-ascent reading is in): never A-09's one leg, whatever this tab's own acknowledgements.
+  const readingsReturn = local.ackReadings || view.readings?.half_open != null || !!view.check;
+  if (step === "top" && !readingsReturn) {
     // D-12: once the motor has stopped the run is no longer «positioning»: the stop is said in the title, with its
     // warning when it came early, and the end stop to confirm (the state instead of Stop, U-9).
     if (phase === "opening" && MOTOR_STOPPED(view)) {
@@ -550,8 +553,9 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
       screen.wait = { text: t("wiz_T553"), stages: checkStages(tx, n, view, topTime ?? view.values?.opening_time, true), progress: waitBar(view, elapsed, topTime) };
       if (phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }];
     }
-    if (first && phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
-    if (!first && phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
+    // Started by the wizard itself; if that did not happen (a reopened session, a claim) it starts here. Stop only while
+    // something moves.
+    if (phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }];
     return screen;
   }
   if (step === "check") {

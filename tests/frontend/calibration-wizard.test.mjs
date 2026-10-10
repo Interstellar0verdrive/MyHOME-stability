@@ -694,6 +694,22 @@ test("L-53: a leg's label stays on one line; its «— about N s» goes in a nar
   assert.match(source, /<span class="wiz-stage-time"> — \$\{esc\(value\.slice\(at \+ 3\)\)\}<\/span>/);
 });
 
+test("L-54: the return to the top before the half-descent reading is the readings' two-leg wait, whatever this tab acknowledged", () => {
+  const t = (key) => translations.it[key] || key;
+  const view = { mode: "geometry", step: "top", phase: "opening", values: { opening_time: 22, closing_time: 21 }, samples: { lift: 4, half_open: 11 },
+    readings: { gap: 3, half_open: 97 }, geometry: { slat_time_s: 4.4 }, travel_cm: 198, slats: true, owner: true, sequence: 9 };
+  for (const local of [{}, { ackReadings: true }]) {
+    const screen = buildScreen({ t, language: "it", stage: "session", path: "A", view, local, elapsed: 4, cover: { name: "K", effective: {} } });
+    assert.equal(screen.code, "A-19", JSON.stringify(local));
+    assert.deepEqual(screen.wait.stages.map((stage) => stage.state), ["current", "future"], "two legs: to the top, then the half descent");
+    assert.equal(screen.stepper.line, "Letture col metro · 5 di 8", "a step of the readings, not of the descent");
+    assert.deepEqual(screen.actions.map((action) => action.id), ["endpoint", "stop"]);
+  }
+  // Before the readings (a repeated descent: no half-ascent reading yet) the return to the top stays A-09.
+  const repeat = buildScreen({ t, language: "it", stage: "session", path: "A", view: { ...view, readings: { gap: 3 } }, local: {}, elapsed: 4, cover: { name: "K", effective: {} } });
+  assert.equal(repeat.code, "A-09");
+});
+
 test("L-18: a tap on the cover already chosen in A-01 un-chooses it", async () => {
   const { wiz, tab, pickCover, code } = await mount();
   tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
@@ -1295,7 +1311,7 @@ test("taking control moves nothing, even on a step the wizard would otherwise co
   wiz().querySelector('[data-wiz="take"]').click(); await tick(8);
   assert.equal(wiz().querySelector(".wiz-readonly"), null);
   assert.deepEqual(actions(), ["reading", "next"], "nothing after the claim");
-  assert.equal(code(), "A-09", "a reopened session shows the return to the top as a positioning to start by hand");
+  assert.equal(code(), "A-19", "the readings' two-leg return (L-54), to start by hand after a claim");
   assert.equal(wiz().querySelector('[data-wiz="next"]').disabled, false);
 });
 
