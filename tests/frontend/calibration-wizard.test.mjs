@@ -1007,8 +1007,10 @@ test("L-58b: an armed «Confirm take control» counts down and goes back after 1
   // (b) 10 s without confirming.
   take().click(); await tick();
   assert.equal(take().textContent, "Confirm take control · 10 s");
+  const armed = take();
   t.mock.timers.tick(4000); await tick();
   assert.equal(take().textContent, "Confirm take control · 6 s", "it counts down");
+  assert.equal(take(), armed, "only the label changes: the button is not drawn again (no hold, no lost tap)");
   t.mock.timers.tick(6000); await tick();
   assert.equal(take().textContent, "Take control", "back after 10 s");
   // (a) the owner shows another step.

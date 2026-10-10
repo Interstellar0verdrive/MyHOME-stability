@@ -493,13 +493,16 @@ export class CalibrationWizard {
     // Why the name cannot be saved, under the field (Save stays disabled meanwhile).
     const nameError = root.querySelector(".wiz-name-error");
     if (nameError) { nameError.textContent = block?.error || ""; nameError.hidden = !block?.error; }
-    const actions = JSON.stringify([screen.actions.map((action) => [action.id, action.label, action.kind, action.note]), screen.readOnly]);
+    // L-58b: the countdown of an armed «Conferma presa di controllo» only rewrites the button's label below: redrawing
+    // the bar every second would hold the button back (the guard) and could swallow a tap.
+    const readOnlyKey = screen.readOnly && { ...screen.readOnly, left: undefined };
+    const actions = JSON.stringify([screen.actions.map((action) => [action.id, action.label, action.kind, action.note]), readOnlyKey]);
     const column = root.querySelector(".wiz-actions");
     if (actions !== this._actionsSignature) {
       // The hold protects a tap from landing on a button that just appeared or changed. A button that only goes away
       // (Stop when the motor stops by itself) holds nothing back: the end stop never flickers disabled.
       const ids = screen.actions.map((action) => `${action.id}|${action.label}|${action.kind}`);
-      const readOnly = JSON.stringify(screen.readOnly);
+      const readOnly = JSON.stringify(readOnlyKey);
       if (!this._actionIds || readOnly !== this._readOnlySignature || ids.some((id) => !this._actionIds.includes(id))) this._guard();
       this._actionIds = ids;
       this._readOnlySignature = readOnly;
@@ -507,7 +510,7 @@ export class CalibrationWizard {
       this._actionsSignature = actions;
       // L-58: a reader's bar: one warning note saying who guides the calibration, then «Prendi il controllo».
       column.innerHTML = `${screen.readOnly ? `<div class="wiz-readonly"><p class="cal-note is-warning wiz-readonly-note">${esc(screen.readOnly.text)}</p>
-          <button type="button" class="wiz-take ${screen.readOnly.primary || screen.readOnly.consequence ? "primary" : "secondary"}" data-wiz="take">${esc(screen.readOnly.take)}</button>
+          <button type="button" class="wiz-take ${screen.readOnly.primary || screen.readOnly.consequence ? "primary" : "secondary"}" data-wiz="take">${esc(takeLabel(screen.readOnly))}</button>
           ${screen.readOnly.consequence ? `<p class="muted">${esc(screen.readOnly.consequence)}</p>` : ""}</div>` : ""}
         ${(() => {
           const one = (action) => action.kind === "status" || action.kind === "state"
@@ -539,7 +542,11 @@ export class CalibrationWizard {
       if (action.disabled) button.setAttribute("aria-disabled", "true"); else button.removeAttribute("aria-disabled");
     }
     const take = column.querySelector('[data-wiz="take"]');
-    if (take) { take.disabled = !!this._gateway?.status.busy || guarded; take.classList.toggle("is-settling", take.disabled); }
+    if (take) {
+      take.disabled = !!this._gateway?.status.busy || guarded; take.classList.toggle("is-settling", take.disabled);
+      const label = takeLabel(screen.readOnly);
+      if (take.textContent !== label) take.textContent = label;
+    }
   }
 
   /** Hold the confirming buttons for CONFIRM_GUARD_MS, then draw them enabled again. */
@@ -1368,6 +1375,9 @@ export class CalibrationWizard {
     onClose?.();
   }
 }
+
+/** L-58b: «Conferma presa di controllo · 8 s» while armed, the plain label otherwise. */
+function takeLabel(readOnly) { return readOnly.left ? `${readOnly.take} · ${readOnly.left} s` : readOnly.take; }
 
 function key(item) { return JSON.stringify([item.entry.entry_id, item.cover.entity_id]); }
 
