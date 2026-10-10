@@ -741,12 +741,12 @@ test("L-57: a red button keeps its red border under the pointer, pressed and foc
   assert.match(css, /:focus-visible \{ outline-color: var\(--panel-error\); \}/);
 });
 
-test("L-59: the check note beside the «Precision» tile is as tall as the tile", async () => {
+test("L-59/L-81: the check note beside the «Precision» tile, about 280 px wide, centred on the tile at its own height", async () => {
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /\.wiz-result-row \{ display: flex; flex-wrap: wrap; gap: 12px; align-items: stretch;/);
-  assert.match(css, /\.wiz-result-note \{ flex: 0 1 280px; min-width: 200px; max-width: 280px; align-self: stretch; box-sizing: border-box; display: flex; align-items: center; \}/, "L-70/L-71");
+  assert.match(css, /\.wiz-result-note \{ flex: 0 1 280px; min-width: 200px; max-width: 280px; align-self: center; box-sizing: border-box; \}/, "L-81: its own height, centred on the tile");
   assert.match(css, /@container wiz-result-row \(max-width: 479px\) \{ \.wiz-result-note \{ flex: 1 1 100%; max-width: none; \} \}/, "stacked: full width");
-  assert.doesNotMatch(css, /\.wiz-result-note \{[^}]*align-self: center/);
+  assert.doesNotMatch(css, /\.wiz-result-note \{[^}]*align-self: stretch/);
 });
 
 const cascadeCss = readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8")
@@ -789,23 +789,6 @@ const winner = (element, property) => {
   }
   return best?.value ?? "";
 };
-
-test("L-60/L-74: each note keeps its own tint for text and bar, in the light and the dark theme", async () => {
-  const doc = dom.window.document;
-  for (const theme of ["light", "dark"]) {
-    const host = doc.createElement("div"); host.dataset.theme = theme; doc.body.append(host);
-    const note = (tone) => { const p = doc.createElement("p"); p.className = `cal-note${tone ? ` is-${tone}` : ""}`; host.append(p); return p; };
-    const success = note("success"), warning = note("warning"), info = note("");
-    for (const property of ["color", "border"]) {
-      assert.match(winner(success, property), /--panel-success/, `${theme}: success ${property}`);
-    }
-    assert.match(winner(warning, "border-color"), /--panel-warning/, `${theme}: warning bar`);
-    assert.match(winner(info, "border"), /--panel-accent/, `${theme}: info bar`);
-    assert.doesNotMatch(winner(success, "color") + winner(warning, "color"), /--panel-accent/, `${theme}: no accent text on a success or a warning note`);
-    if (theme === "dark") assert.match(winner(warning, "color"), /--panel-warning/, "dark: warning text in its tint");
-    host.remove();
-  }
-});
 
 test("L-62: the list follows Home Assistant's dark mode on every update, its dialogs too", async () => {
   const { backend, panel, root } = await mount();
@@ -980,34 +963,6 @@ test("L-73: the three status chips: grey, accent, and «Verified · N cm» green
   }
 });
 
-test("L-74: every note of the family is a quote: no fill, no radius, only its 3 px bar in its tone's colour, 4/0/4/12 padding", () => {
-  const doc = dom.window.document;
-  const notes = [["cal-note", "--panel-accent"], ["cal-note is-success", "--panel-success"], ["cal-note is-warning", "--panel-warning"],
-    ["cal-note cal-tab-help", "--panel-accent"], ["cal-note is-success wiz-result-note", "--panel-success"], ["cal-note is-warning wiz-result-note", "--panel-warning"],
-    ["cal-note is-warning wiz-readonly-note", "--panel-warning"], ["cal-note is-warning wiz-field-warning", "--panel-warning"],
-    ["cal-note is-warning wiz-radio-warning", "--panel-warning"], ["cal-note is-warning cal-batch-note", "--panel-warning"],
-    ["cal-note cal-assign-busy", "--panel-accent"], ["cal-note wiz-subline", "--panel-accent"],
-    ["notice cal-tab-busy", "--panel-warning"], ["notice cal-tab-done", "--panel-success"], ["notice error", "--panel-error"],
-    ["notice wiz-notice", "--panel-border"]];
-  for (const theme of ["light", "dark"]) {
-    const host = doc.createElement("div"); host.className = "cal-tab"; host.dataset.theme = theme; doc.body.append(host);
-    host.innerHTML = '<div class="wiz"><div class="wiz-readonly"></div></div>';
-    for (const [className, tone] of notes) {
-      const note = doc.createElement("p"); note.className = className; host.querySelector(".wiz-readonly").append(note);
-      const what = `${theme}: ${className}`;
-      assert.equal(winner(note, "background"), "none", `${what}: no fill`);
-      assert.equal(winner(note, "border-radius"), "0", `${what}: no radius`);
-      assert.equal(winner(note, "border-block-width"), "0", `${what}: no top or bottom`);
-      assert.equal(winner(note, "border-inline-end-width"), "0", `${what}: no right`);
-      assert.equal(winner(note, "border-inline-start-width"), "3px", `${what}: the 3 px bar`);
-      assert.equal(winner(note, "padding"), "4px 0 4px 12px", what);
-      const bar = [winner(note, "border-color"), winner(note, "border")].join(" ");
-      assert.ok(bar.includes(tone), `${what}: its bar in ${tone} (${bar})`);
-    }
-    host.remove();
-  }
-});
-
 test("L-77: the red Stop only while a movement is in progress, for the owner and the reader alike", () => {
   const t = (key) => translations.en[key] || key;
   const base = { mode: "geometry", values: {}, samples: {}, readings: {}, slats: true, sequence: 5, travel_cm: null };
@@ -1137,6 +1092,69 @@ test("L-78: «the measurement state changed» is not shown once the session has 
   assert.equal(wiz().querySelector(".wiz-notices").textContent.trim(), "", "a newer view: the refusal is gone");
   backend.hass.callWS = original;
   void panel;
+});
+
+test("L-80/L-82: notes by tone and theme: a 2 px solid bar, square; in light info and success are quotes with coloured text, warning and error boxed; in dark all quotes", () => {
+  const doc = dom.window.document;
+  // [classes, tone token, light box?, light text, dark text]
+  const notes = [
+    ["cal-note", "--panel-accent", false, "color-mix(in srgb, var(--panel-accent) 80%, #000)", "color-mix(in srgb, var(--panel-accent) 70%, var(--primary-text-color, #fff))"],
+    ["cal-note cal-tab-help", "--panel-accent", false, "color-mix(in srgb, var(--panel-accent) 80%, #000)", null],
+    ["cal-note wiz-subline", "--panel-accent", false, null, null],
+    ["cal-note is-success", "--panel-success", false, "var(--panel-success)", "color-mix(in srgb, var(--panel-success) 70%, var(--primary-text-color, #fff))"],
+    ["cal-note is-success wiz-result-note", "--panel-success", false, "var(--panel-success)", null],
+    ["notice cal-tab-done", "--panel-success", false, "var(--panel-success)", null],
+    ["cal-note is-warning", "--panel-warning", true, "var(--primary-text-color, #182b37)", "color-mix(in srgb, var(--panel-warning) 70%, var(--primary-text-color, #fff))"],
+    ["cal-note is-warning wiz-readonly-note", "--panel-warning", true, null, null],
+    ["cal-note is-warning wiz-field-warning", "--panel-warning", true, null, null],
+    ["cal-note is-warning wiz-radio-warning", "--panel-warning", true, null, null],
+    ["cal-note is-warning cal-batch-note", "--panel-warning", true, null, null],
+    ["notice cal-tab-busy", "--panel-warning", true, null, "color-mix(in srgb, var(--panel-warning) 70%, var(--primary-text-color, #fff))"],
+    ["notice wiz-notice|warning", "--panel-warning", true, null, null],
+    ["notice error", "--panel-error", true, "var(--panel-error)", "var(--panel-error)"],
+    ["notice wiz-notice|error", "--panel-error", true, "var(--panel-error)", null],
+  ];
+  for (const theme of ["light", "dark"]) {
+    const host = doc.createElement("div"); host.className = "cal-tab"; host.dataset.theme = theme; doc.body.append(host);
+    for (const [spec, tone, boxed, lightText, darkText] of notes) {
+      const [className, dataTone] = spec.split("|");
+      const note = doc.createElement("p"); note.className = className; if (dataTone) note.dataset.tone = dataTone; host.append(note);
+      const what = `${theme}: ${spec}`;
+      assert.equal(winner(note, "--note-tone"), `var(${tone})`, `${what}: its tone`);
+      assert.equal(winner(note, "border-inline-start"), "2px solid var(--note-tone)", `${what}: a 2 px solid bar`);
+      assert.equal(winner(note, "border-radius"), "0", `${what}: square`);
+      const box = theme === "light" && boxed;
+      if (box) {
+        assert.match(winner(note, "background"), new RegExp(`${tone}\\) \\d+%`), `${what}: tinted fill`);
+        assert.match(winner(note, "border"), new RegExp(`^1px solid color-mix\\(in srgb, var\\(${tone}\\)`), `${what}: a border all round`);
+      } else {
+        assert.equal(winner(note, "background"), "none", `${what}: no fill`);
+        assert.equal(winner(note, "border"), "0 solid transparent", `${what}: no other side`);
+      }
+      const text = theme === "light" ? lightText : darkText;
+      if (text) assert.equal(winner(note, "color"), text, `${what}: text colour`);
+    }
+    host.remove();
+  }
+  // No icon in a note: the tab draws none any more, and one left over is not shown.
+  const host = doc.createElement("div"); host.className = "cal-tab"; host.innerHTML = '<p class="notice cal-tab-busy"><ha-icon></ha-icon><span></span></p>'; doc.body.append(host);
+  assert.equal(winner(host.querySelector("ha-icon"), "display"), "none");
+  host.remove();
+});
+
+test("L-83: an open row's band in the accent at 20 %, its details at 10 %, both themes; a row in progress keeps its yellow", () => {
+  const doc = dom.window.document;
+  for (const theme of ["light", "dark"]) {
+    const host = doc.createElement("div"); host.className = "cal-tab"; host.dataset.theme = theme; doc.body.append(host);
+    host.innerHTML = `<div class="cal-row is-expanded"><div class="cal-row-main"></div><div class="cal-row-details"></div></div>
+      <div class="cal-row is-expanded is-running"><div class="cal-row-main"></div><div class="cal-row-details"></div></div>`;
+    const [open, running] = host.querySelectorAll(".cal-row");
+    assert.equal(winner(open.querySelector(".cal-row-main"), "background"), "color-mix(in srgb, var(--panel-accent) 20%, var(--panel-surface))", theme);
+    assert.equal(winner(open.querySelector(".cal-row-details"), "background"), "color-mix(in srgb, var(--panel-accent) 10%, var(--panel-surface))", theme);
+    assert.match(winner(running.querySelector(".cal-row-main"), "background"), /--panel-warning/, `${theme}: in progress stays yellow`);
+    assert.match(winner(running.querySelector(".cal-row-details"), "background"), /--panel-warning/);
+    host.remove();
+  }
 });
 
 test("L-18: a tap on the cover already chosen in A-01 un-chooses it", async () => {

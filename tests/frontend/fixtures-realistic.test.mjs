@@ -32,6 +32,8 @@ test("the realistic house lists every timed cover with its state, never the awni
 test("a session open in another tab puts its cover on top, in progress, and holds every new measurement", async () => {
   const { tab } = await mount(realisticFixture({ session: "running" }));
   await tick(8);
+  const busy = tab().querySelector(".cal-tab-busy");
+  assert.ok(busy && !busy.querySelector("ha-icon"), "L-80: the note «a calibration is in progress» has no icon");
   const first = rows(tab)[0];
   assert.equal(first.dataset.entity, "cover.bagno");
   assert.equal(first.querySelector(".cal-badge").dataset.status, "running");

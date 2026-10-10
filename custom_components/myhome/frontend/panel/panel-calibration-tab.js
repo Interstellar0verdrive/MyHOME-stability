@@ -544,8 +544,8 @@ export class CalibrationTab {
         ${unread ? "" : this._filterBar({ extra: " cal-tab-filters", select: this._filterSelect(counts, this._filter),
           count: this._countLine(counts),
           chips: FILTERS.map((filter) => `<button type="button" class="cal-chip" data-action="cal-tab-filter" data-id="${filter}" aria-pressed="${this._filter === filter}">${esc(t(`calTabFilter_${filter}`))} <span class="count">${counts[filter]}</span></button>`).join("") })}
-        ${this._done ? `<p class="notice cal-tab-done" role="status"><ha-icon icon="mdi:check-circle-outline" aria-hidden="true"></ha-icon><span>${esc(this._done)}</span></p>` : ""}
-        ${busy ? `<p class="notice cal-tab-busy" role="status"><ha-icon icon="mdi:information-outline" aria-hidden="true"></ha-icon><span>${esc(t(this._busyText(busy)))}</span></p>` : ""}
+        ${this._done ? `<p class="notice cal-tab-done" role="status"><span>${esc(this._done)}</span></p>` : ""}
+        ${busy ? `<p class="notice cal-tab-busy" role="status"><span>${esc(t(this._busyText(busy)))}</span></p>` : ""}
         ${this._filter === "to_measure" ? `<p class="cal-note cal-tab-help">${esc(t("calTabToMeasureHelp"))}</p>` : ""}
         ${failed.map((entry) => `<p class="notice error" role="alert">${esc(gateways.length > 1 ? `${entry.title}: ` : "")}${esc(t("calTabError"))}</p>`).join("")}
         ${failed.length ? `<button type="button" data-action="cal-tab-refresh">${esc(t("refresh"))}</button>` : ""}
