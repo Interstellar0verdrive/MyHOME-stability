@@ -58,6 +58,16 @@ export function dateText(value, language = "en") {
   catch { return new Date(value).toISOString().slice(0, 10); }
 }
 
+/** L-33: the date with its time («9 ott 2026 16:23»), for the details; the date alone when no time is known. */
+export function dateTimeText(value, language = "en") {
+  if (!value || Number.isNaN(Date.parse(value))) return "";
+  if (!/T\d{2}:\d{2}/.test(String(value))) return dateText(value, language);
+  try {
+    const date = new Date(value);
+    return `${new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(date)} ${new Intl.DateTimeFormat(language, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(date)}`;
+  } catch { return new Date(value).toISOString().slice(0, 16).replace("T", " "); }
+}
+
 /** Day and short month ("29 set", "Sep 29"), for compact labels. */
 export function shortDate(value, language = "en") {
   if (!value || Number.isNaN(Date.parse(value))) return "";

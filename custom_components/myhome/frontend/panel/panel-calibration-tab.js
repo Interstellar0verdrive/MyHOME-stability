@@ -835,7 +835,7 @@ export class CalibrationTab {
     const note = this._running(item) ? "cal-note is-warning" : "cal-note";
     return `<div class="cal-details-grid">
         <section><h4>${esc(t("calTabValues"))}</h4>${list(rows)}${this._originNote(item, language)}${action(refine)}</section>
-        <section><h4>${esc(t("calTabColLast"))}</h4>${list([[t("calTabDate"), item.last ? dateText(item.last, language).replace(/ /g, "\u00a0") : "—"],
+        <section><h4>${esc(t("calTabColLast"))}</h4>${list([[t("calTabDate"), item.last ? text.dateTimeText(item.last, language).replace(/ /g, "\u00a0") : "—"],
           [t("calTabMethod"), t(`calTabMethod_${item.method || "none"}`)]])}
           ${item.profile && scaled ? `<p class="${note}">${esc(fill(t("calTabInheritedNote"), { profile: item.profile.name }))}</p>` : ""}${action(measure)}</section>
         <section><h4>${esc(t("calTabColProfile"))}</h4>${item.profile ? `<p>${this._profileChip(item.profile.name, true)}</p>

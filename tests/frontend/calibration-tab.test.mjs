@@ -153,7 +153,9 @@ test("the chevron expands a row in place with the values in use, the last measur
   // D-04: values keep their unit and dates their year with no-break spaces.
   const nb = "\u00a0";
   assert.deepEqual(facts, { "Opening time": `22.4${nb}s`, "Closing time": `21.9${nb}s`, Slats: `Yes · 4.4${nb}s`, "Curtain travel": `196${nb}cm`,
-    "Roll on ascent": "1.83", "Roll on descent": "1.91", Date: `Sep${nb}29,${nb}2026`, Method: "From the profile" });
+    "Roll on ascent": "1.83", "Roll on descent": "1.91", Date: facts.Date, Method: "From the profile" });
+  // L-33: the date with its time (in the browser's time zone).
+  assert.match(facts.Date, new RegExp(`^Sep${nb}29,${nb}2026${nb}\\d{2}:\\d{2}$`));
   assert.match(details.textContent, /Also followed by Kitchen shutter\u00a02\./);
   assert.match(details.textContent, /adapted to the curtain travel of this cover/);
   const blockActions = (entity) => {
