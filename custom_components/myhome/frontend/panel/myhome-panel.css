@@ -703,7 +703,13 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-tab .notice:has(> ha-icon) { display: flex; gap: 10px; align-items: start; }
 .cal-tab .notice ha-icon { --mdc-icon-size: 18px; flex-shrink: 0; }
 .cal-tab-busy { border-color: color-mix(in srgb, var(--panel-warning) 45%, transparent); background: color-mix(in srgb, var(--panel-warning) 12%, var(--panel-surface)); }
-.cal-tab-done { border-color: color-mix(in srgb, var(--panel-success) 45%, transparent); background: color-mix(in srgb, var(--panel-success) 10%, var(--panel-surface)); }
+/* L-17: the «Successo» note (a profile assigned, a calibration saved): the success colour at 8 % behind, 20 % for the
+   border and its 3 px bar, text and icon in the full colour (a lighter tint on dark themes), as the other notes. */
+.cal-tab-done, .cal-note.is-success { border: 1px solid color-mix(in srgb, var(--panel-success) 20%, transparent); border-inline-start-width: 3px;
+  background: color-mix(in srgb, var(--panel-success) 8%, var(--panel-surface)); color: var(--panel-success); }
+.cal-tab-done ha-icon, .cal-note.is-success ha-icon { color: var(--panel-success); }
+[data-theme="dark"] .cal-tab-done, [data-theme="dark"] .cal-note.is-success { color: color-mix(in srgb, var(--panel-success) 70%, var(--primary-text-color, #fff)); }
+[data-theme="dark"] .cal-tab-done ha-icon, [data-theme="dark"] .cal-note.is-success ha-icon { color: inherit; }
 .cal-head-lead { display: flex; align-items: center; }
 .cal-expand-all { min-width: 32px; min-height: 32px; padding: 0 4px; margin-inline-start: -4px; }
 .cal-assign-busy { margin-bottom: 12px; }
