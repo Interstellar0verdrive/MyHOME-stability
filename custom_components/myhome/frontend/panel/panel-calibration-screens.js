@@ -992,7 +992,8 @@ function drawingFor(code, id, view, local) {
   if (!slats && /^[AC]-11$/.test(code)) return "ascent-sequence-no-slats";
   if (!slats && /^[AC]-14$/.test(code)) return "descent-sequence-no-slats";
   if (id !== "curtain-partial-tape") return id;
-  if (/^[AC]-23$/.test(code)) return "curtain-tape-quarter-ascent";
+  // L-12: every reading uses the drawing of its height without an arrow, A-23 too (the arrow added nothing).
+  if (/^[AC]-23$/.test(code)) return "curtain-tape-quarter";
   const range = view?.reading_range, travel = view?.travel_cm;
   const expected = view?.expected_cm ?? view?.check?.target_cm ?? (range ? (range.min_cm + range.max_cm) / 2 : null);
   if (!(expected > 0) || !(travel > 0)) return id;

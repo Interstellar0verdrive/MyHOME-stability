@@ -2956,7 +2956,7 @@ test("Z-14: each reading shows the drawing nearest its expected height; A-23 its
   assert.equal(id(live({ step: "half_open", phase: "reading", reading_range: { min_cm: 90, max_cm: 110 } })), "curtain-tape-half", "A-18: half");
   const preview = (view) => buildScreen({ t, stage: "session", path: "A", elapsed: 1, local: {}, cover: { name: "K" },
     view: { preview: true, path: "refine", phase: "reading", travel_cm: 200, values: {}, readings: {}, stages: [], ...view } });
-  assert.equal(id(preview({ step: "quarter_open", expected_cm: 50 })), "curtain-tape-quarter-ascent", "A-23: the quarter on the way up");
+  assert.equal(id(preview({ step: "quarter_open", expected_cm: 50 })), "curtain-tape-quarter", "A-23: the quarter, no arrow (L-12)");
   assert.equal(id(preview({ step: "quarter_close", expected_cm: 52 })), "curtain-tape-quarter", "a quarter");
   assert.equal(id(preview({ step: "three_quarter_close", expected_cm: 150 })), "curtain-tape-three-quarters", "three quarters");
 });
