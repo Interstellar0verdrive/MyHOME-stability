@@ -937,7 +937,10 @@ dialog.cal-dialog :is(button, select, input):focus:not(:focus-visible) { outline
   /* D-39: the cards are never wider than the list. */
   .cal-list-rows { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
   .cal-row, .cal-row:first-of-type, .cal-list-head + .cal-row { border: 1px solid var(--panel-border); border-radius: 12px; background: var(--panel-surface); }
-  .cal-row.is-running { border-color: color-mix(in srgb, var(--panel-warning) 60%, transparent); }
+  /* L-66: the card of a session in progress has the table row's warning fill too (the card's own surface, set above
+     with a heavier selector for the first card, hid it). */
+  .cal-row.is-running, .cal-row.is-running:first-of-type, .cal-list-head + .cal-row.is-running {
+    border-color: color-mix(in srgb, var(--panel-warning) 60%, transparent); background: color-mix(in srgb, var(--panel-warning) 7%, var(--panel-surface)); }
   /* M4-6 + P-4: the chips on the left, the action on the right and never wrapping, centred on the chips. Status and
      profile side by side while they fit the card, one under the other only when they do not. */
   .cal-row-main { grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "cover cover menu" "chips action action"; row-gap: 6px; border-radius: 11px; }

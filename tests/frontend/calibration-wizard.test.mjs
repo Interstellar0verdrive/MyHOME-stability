@@ -857,6 +857,16 @@ test("dark pass: no colour darkened towards black applies on a dark theme withou
   }
 });
 
+test("L-66: a card with a session in progress has the table row's warning fill, first card included", () => {
+  const row = /\.cal-row\.is-running \{ background: (color-mix\(in srgb, var\(--panel-warning\) 7%, var\(--panel-surface\)\)); \}/.exec(cascadeCss)?.[1];
+  assert.ok(row, "the table row's fill");
+  const cards = /@container caltab \(max-width: 1015px\) \{([\s\S]*?)\n\}/.exec(cascadeCss)?.[1] ?? "";
+  // Inside the card band, every selector that paints a card's surface is matched by one at least as heavy for a running card.
+  const card = /\.cal-row\.is-running, \.cal-row\.is-running:first-of-type, \.cal-list-head \+ \.cal-row\.is-running \{[^}]*background: ([^;]+);/.exec(cards)?.[1];
+  assert.equal(card, row, "same token and alpha as the row");
+  assert.ok(cards.indexOf(".cal-list-head + .cal-row.is-running") > cards.indexOf(".cal-list-head + .cal-row {"), "after the card's own surface");
+});
+
 test("L-18: a tap on the cover already chosen in A-01 un-chooses it", async () => {
   const { wiz, tab, pickCover, code } = await mount();
   tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
