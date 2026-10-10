@@ -1653,6 +1653,12 @@ dialog.cal-dialog .dialog-head { justify-content: space-between; padding-block: 
   dialog.cal-dialog .dialog-foot, .wiz-dialog .actions { flex-direction: row; flex-wrap: wrap; justify-content: end; }
   dialog.cal-dialog .dialog-foot button, .wiz-dialog .actions button { flex: 1 1 auto; width: auto; min-width: 0; white-space: nowrap; }
 }
+/* L-74: notes are quotes, not boxes: every note of the tab, the wizard and their dialogs (`.cal-note` in every tone, and
+   the tab's notices: in progress, done, error, the wizard's) has no fill, no radius and only its 3 px bar on the left, in
+   the colour its tone already had; text and icons keep their colours. The weight of `.cal-tab .notice` (through :is) and
+   the place after every tone's rule let it win over their borders and fills. */
+:is(.cal-note, .cal-tab .notice) { background: none; border-block-width: 0; border-inline-end-width: 0; border-inline-start-width: 3px;
+  border-inline-start-style: solid; border-radius: 0; padding: 4px 0 4px 12px; box-shadow: none; }
 /* L-72: one corner radius for the calibration tab, the wizard and their dialogs: the shell's 8 px (`--cal-btn-radius`)
    for notes, tiles, cards, boxes, menus, inputs, drop-downs and buttons. Chips and counts stay pills, marks and radios
    round; the dialogs' and sheets' own frames and the list and wizard frames keep Home Assistant's card radius. */

@@ -753,7 +753,13 @@ const cascadeCss = readFileSync(new URL("../../custom_components/myhome/frontend
 .replace(/\/\*[\s\S]*?\*\//g, "");
 /** L-60/L-62: the CSS cascade, resolved by hand (jsdom computes no styles): selector weight, then order. */
 const weight = (selector) => {
-  const flat = selector.replace(/:(?:not|is)\(([^,)]*)[^)]*\)/g, "$1").replace(/:where\([^)]*\)/g, "");
+  // :is() and :not() weigh as their heaviest argument, :where() nothing (innermost first, so nesting works too).
+  let flat = selector, inner;
+  const pattern = /:(is|not|where)\(([^()]*)\)/;
+  while ((inner = pattern.exec(flat))) {
+    const heaviest = inner[1] === "where" ? "" : topLevel(inner[2]).reduce((best, part) => (weight(part) > weight(best) ? part : best), "");
+    flat = flat.slice(0, inner.index) + (heaviest ? ` ${heaviest.replace(/^[\s>+~]+/, "")}` : "") + flat.slice(inner.index + inner[0].length);
+  }
   const ids = (flat.match(/#[\w-]+/g) || []).length;
   const classes = (flat.match(/\.[\w-]+|\[[^\]]+\]|:(?!:)[\w-]+/g) || []).length;
   const types = (flat.replace(/\[[^\]]+\]|[.#:][\w-]+/g, " ").match(/[a-z][\w-]*/gi) || []).length;
@@ -784,18 +790,17 @@ const winner = (element, property) => {
   return best?.value ?? "";
 };
 
-test("L-60: each note keeps its own tint for text, border and fill, in the light and the dark theme", async () => {
+test("L-60/L-74: each note keeps its own tint for text and bar, in the light and the dark theme", async () => {
   const doc = dom.window.document;
   for (const theme of ["light", "dark"]) {
     const host = doc.createElement("div"); host.dataset.theme = theme; doc.body.append(host);
     const note = (tone) => { const p = doc.createElement("p"); p.className = `cal-note${tone ? ` is-${tone}` : ""}`; host.append(p); return p; };
     const success = note("success"), warning = note("warning"), info = note("");
-    for (const property of ["color", "background", "border"]) {
+    for (const property of ["color", "border"]) {
       assert.match(winner(success, property), /--panel-success/, `${theme}: success ${property}`);
     }
-    assert.match(winner(warning, "background"), /--panel-warning/, `${theme}: warning background`);
-    assert.match(winner(warning, "border-color"), /--panel-warning/, `${theme}: warning border`);
-    assert.match(winner(info, "background"), /--panel-accent/, `${theme}: info background`);
+    assert.match(winner(warning, "border-color"), /--panel-warning/, `${theme}: warning bar`);
+    assert.match(winner(info, "border"), /--panel-accent/, `${theme}: info bar`);
     assert.doesNotMatch(winner(success, "color") + winner(warning, "color"), /--panel-accent/, `${theme}: no accent text on a success or a warning note`);
     if (theme === "dark") assert.match(winner(warning, "color"), /--panel-warning/, "dark: warning text in its tint");
     host.remove();
@@ -903,7 +908,7 @@ test("L-69: the «Precision» tile takes its note's colours, green within the th
       <div class="wiz-result is-warning"><span class="wiz-result-caption"></span></div><p class="cal-note is-warning"></p><div class="wiz-result"></div>`;
     const [good, goodNote, bad, badNote, plain] = host.children;
     for (const [tile, note, tone] of [[good, goodNote, "success"], [bad, badNote, "warning"]]) {
-      assert.equal(winner(tile, "background"), winner(note, "background"), `${theme}: ${tone} fill as its note`);
+      assert.match(winner(tile, "background"), new RegExp(`--panel-${tone}\\) 8%`), `${theme}: ${tone} fill (the note itself has none, L-74)`);
       assert.equal(winner(tile, "color"), winner(note, "color"), `${theme}: ${tone} text as its note`);
       assert.match(winner(tile, "box-shadow"), new RegExp(`--panel-${tone}`), `${theme}: ${tone} border`);
     }
@@ -930,7 +935,7 @@ test("L-72: one corner radius (the shell's 8 px) for notes, tiles, cards, boxes,
   const pills = all.filter((element) => element.matches(".cal-chip, .cal-badge, .cal-profile-chip"));
   // The list's and the wizard's own frames keep Home Assistant's card radius (none where they fill the screen).
   const frames = all.filter((element) => element.matches(".cal-list, .wiz, .cal-filterbar, .cal-filterbar-sort, .cal-filterbar-sort select"));
-  const rounded = ".cal-note, .cal-compact-sort, .cal-row, .cal-row-main, .cal-row-icon, .cal-menu, .cal-empty, .cal-empty-icon, .cal-batch-row, "
+  const rounded = ".cal-compact-sort, .cal-row, .cal-row-main, .cal-row-icon, .cal-menu, .cal-empty, .cal-empty-icon, .cal-batch-row, "
     + ".wiz-preview, .wiz-stopwatch, .wiz-wait, .wiz-result, .wiz-box, .wiz-accordion, .wiz-code, .wiz-profile-block, button, select, input";
   for (const element of all.filter((item) => item.matches(rounded) && !pills.includes(item) && !frames.includes(item) && !item.matches('input[type="checkbox"]'))) {
     // A card's inner band sits 1 px inside its border.
@@ -938,6 +943,7 @@ test("L-72: one corner radius (the shell's 8 px) for notes, tiles, cards, boxes,
   }
   for (const element of pills) assert.equal(winner(element, "border-radius"), "999px", `${element.className}: a pill`);
   assert.equal(winner(host.querySelector(".cal-filterbar-sort select"), "border-radius"), "inherit", "the sort chip's select follows its pill");
+  for (const note of host.querySelectorAll(".cal-note")) assert.equal(winner(note, "border-radius"), "0", "L-74: a note is a quote, not a box");
   host.remove();
   // No other fixed radius left in the calibration rules but pills, circles, none, the card radius and the dialogs' frames.
   const loose = [...cascadeCss.matchAll(/(?<=^|[{}])\s*([^{}@]*\.(?:cal|wiz)-[^{}@]*?)\s*\{[^{}]*border-radius: ([^;}]+)/g)]
@@ -970,6 +976,34 @@ test("L-73: the three status chips: grey, accent, and «Verified · N cm» green
       assert.equal(winner(chip, "border-radius"), "999px", `${theme}: a pill`);
     }
     assert.equal(winner(yellow, "color"), theme === "dark" ? "var(--panel-warning)" : "color-mix(in srgb, var(--panel-warning) 55%, #000)");
+    host.remove();
+  }
+});
+
+test("L-74: every note of the family is a quote: no fill, no radius, only its 3 px bar in its tone's colour, 4/0/4/12 padding", () => {
+  const doc = dom.window.document;
+  const notes = [["cal-note", "--panel-accent"], ["cal-note is-success", "--panel-success"], ["cal-note is-warning", "--panel-warning"],
+    ["cal-note cal-tab-help", "--panel-accent"], ["cal-note is-success wiz-result-note", "--panel-success"], ["cal-note is-warning wiz-result-note", "--panel-warning"],
+    ["cal-note is-warning wiz-readonly-note", "--panel-warning"], ["cal-note is-warning wiz-field-warning", "--panel-warning"],
+    ["cal-note is-warning wiz-radio-warning", "--panel-warning"], ["cal-note is-warning cal-batch-note", "--panel-warning"],
+    ["cal-note cal-assign-busy", "--panel-accent"], ["cal-note wiz-subline", "--panel-accent"],
+    ["notice cal-tab-busy", "--panel-warning"], ["notice cal-tab-done", "--panel-success"], ["notice error", "--panel-error"],
+    ["notice wiz-notice", "--panel-border"]];
+  for (const theme of ["light", "dark"]) {
+    const host = doc.createElement("div"); host.className = "cal-tab"; host.dataset.theme = theme; doc.body.append(host);
+    host.innerHTML = '<div class="wiz"><div class="wiz-readonly"></div></div>';
+    for (const [className, tone] of notes) {
+      const note = doc.createElement("p"); note.className = className; host.querySelector(".wiz-readonly").append(note);
+      const what = `${theme}: ${className}`;
+      assert.equal(winner(note, "background"), "none", `${what}: no fill`);
+      assert.equal(winner(note, "border-radius"), "0", `${what}: no radius`);
+      assert.equal(winner(note, "border-block-width"), "0", `${what}: no top or bottom`);
+      assert.equal(winner(note, "border-inline-end-width"), "0", `${what}: no right`);
+      assert.equal(winner(note, "border-inline-start-width"), "3px", `${what}: the 3 px bar`);
+      assert.equal(winner(note, "padding"), "4px 0 4px 12px", what);
+      const bar = [winner(note, "border-color"), winner(note, "border")].join(" ");
+      assert.ok(bar.includes(tone), `${what}: its bar in ${tone} (${bar})`);
+    }
     host.remove();
   }
 });
