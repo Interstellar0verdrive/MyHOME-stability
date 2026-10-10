@@ -1182,6 +1182,17 @@ test("R-8: what the tab hangs on the window is removed when it is cleared, and a
   }
 });
 
+test("R-10: closing the wizard gives the focus back to what opened it", async () => {
+  const { tab, wiz, panel } = await mount();
+  const opener = tab().querySelector('[data-action="cal-tab-measure"]');
+  opener.focus(); opener.click(); await tick();
+  assert.ok(wiz());
+  panel._calibrationTab._wizard._act("close"); await tick(6);
+  assert.equal(wiz(), null);
+  const active = tab().getRootNode().activeElement;
+  assert.equal(active?.dataset.action, "cal-tab-measure", "the header's «Calibrate a cover» has the focus again");
+});
+
 test("L-18: a tap on the cover already chosen in A-01 un-chooses it", async () => {
   const { wiz, tab, pickCover, code } = await mount();
   tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();

@@ -1036,7 +1036,18 @@ export class CalibrationTab {
     this._context.host.innerHTML = "";
     this._render();
     if (show && !this._phone()) [...this._context.host.querySelectorAll(".cal-row")].find((row) => row.dataset.entity === JSON.parse(show)[1])?.scrollIntoView?.({ block: "start" });
+    this._focusOpener();
     this.refresh();
+  }
+
+  /** R-10: back on the list, the focus returns to the control that opened the wizard (a menu item: its row's ⋮). */
+  _focusOpener() {
+    const opener = this._opener, host = this._context?.host;
+    this._opener = null;
+    if (!opener || !host) return;
+    const match = (action) => [...host.querySelectorAll(`[data-action="${action}"]`)].find((element) => (element.dataset.id ?? null) === opener.id
+      && !element.closest("[hidden]"));
+    (match(opener.action) || (opener.id != null ? match("cal-tab-menu") : null))?.focus?.({ preventScroll: true });
   }
 
   /** L-16: the cover's details from the wizard: its row opened in place, or its page on a phone (never the maintainer's dialog). */
@@ -1051,6 +1062,9 @@ export class CalibrationTab {
 
   _openWizard(options) {
     if (!this._wizard || !this._context) return;
+    // R-10: what opened the wizard, to give it the focus back when the list returns.
+    const opener = this._context.host.getRootNode?.()?.activeElement;
+    this._opener = opener?.dataset?.action ? { action: opener.dataset.action, id: opener.dataset.id ?? null } : null;
     this._done = "";
     this._mode = { kind: "wizard" };
     const { host, hass, t } = this._context;
