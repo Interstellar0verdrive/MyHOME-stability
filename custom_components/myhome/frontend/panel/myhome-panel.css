@@ -1223,6 +1223,11 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-wait p { margin: 0; }
 .wiz-wait-stages { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; font-size: 13px; }
 .wiz-wait-stages li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+/* L-53: a leg's label on one line beside its circle; in a box under 480 px its «— circa N s» goes (the time left is
+   under the active bar), and only then does it ellipsize. */
+.wiz-wait { container: wizwait / inline-size; }
+.wiz-stage-label { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@container wizwait (max-width: 479px) { .wiz-stage-time { display: none; } }
 .wiz-wait-meter { display: grid; gap: 6px; }
 .wiz-wait-stages .wiz-wait-meter { flex-basis: 100%; padding-inline-start: 24px; }
 .wiz-wait-stages ha-icon { --mdc-icon-size: 16px; flex-shrink: 0; }

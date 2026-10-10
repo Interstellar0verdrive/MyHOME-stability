@@ -686,6 +686,14 @@ test("L-51: a state line under the actions is a caption the whole width of the b
   assert.match(css, /\.wiz-actions \.wiz-action\.status \{ width: 100%; max-width: none; min-height: 0; padding: 6px 0; font-size: 13px; line-height: 18px; text-align: center; \}/);
 });
 
+test("L-53: a leg's label stays on one line; its «— about N s» goes in a narrow box", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.wiz-stage-label \{ flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; \}/);
+  assert.match(css, /@container wizwait \(max-width: 479px\) \{ \.wiz-stage-time \{ display: none; \} \}/);
+  const source = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/panel-calibration-wizard.js", import.meta.url), "utf8");
+  assert.match(source, /<span class="wiz-stage-time"> — \$\{esc\(value\.slice\(at \+ 3\)\)\}<\/span>/);
+});
+
 test("L-18: a tap on the cover already chosen in A-01 un-chooses it", async () => {
   const { wiz, tab, pickCover, code } = await mount();
   tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();

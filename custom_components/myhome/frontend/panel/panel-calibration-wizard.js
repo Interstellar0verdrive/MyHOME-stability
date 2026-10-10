@@ -426,7 +426,11 @@ export class CalibrationWizard {
       // Stages done carry ✓, the current one ◐, the next ones an empty circle.
       // The bar and the time left sit under the stage in progress (after the text when there are no stages).
       const current = screen.wait.stages.findIndex((stage) => stage.state === "current");
-      const stages = screen.wait.stages.map((stage, index) => `<li data-step-state="${stage.state}"><ha-icon icon="${STAGE_ICON[stage.state]}" aria-hidden="true"></ha-icon><span>${text.units(esc(stage.text))}</span>${index === current ? '<div class="wiz-wait-slot"></div>' : ""}</li>`).join("");
+      // L-53: a leg's label stays on one line beside its circle: its «— circa N s» is a part of its own, dropped in a
+      // narrow box (the time left is under the active bar anyway); the label ellipsizes only as a last resort.
+      const label = (value) => { const at = value.indexOf(" — "); return at < 0 ? `<span class="wiz-stage-label">${esc(value)}</span>`
+        : `<span class="wiz-stage-label">${esc(value.slice(0, at))}<span class="wiz-stage-time"> — ${esc(value.slice(at + 3))}</span></span>`; };
+      const stages = screen.wait.stages.map((stage, index) => `<li data-step-state="${stage.state}"><ha-icon icon="${STAGE_ICON[stage.state]}" aria-hidden="true"></ha-icon>${label(stage.text)}${index === current ? '<div class="wiz-wait-slot"></div>' : ""}</li>`).join("");
       const list = wait.querySelector(".wiz-wait-stages"), meter = wait.querySelector(".wiz-wait-meter");
       if (list.dataset.stages !== stages) {
         wait.append(meter);
