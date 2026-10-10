@@ -196,7 +196,7 @@ test("L-4: a «solo tempi» session the wizard started opens in the wizard's rea
   assert.equal(second.root.querySelector("#dialog-host dialog.cal-dialog"), null, "not the maintainer's dialog");
   assert.equal(second.code(), "C-11");
   assert.ok(second.wiz().querySelector(".wiz-readonly"), "the reader view");
-  assert.deepEqual([...second.wiz().querySelectorAll(".wiz-actions .wiz-action")].map((button) => button.dataset.wiz), ["stop"], "with its Stop");
+  assert.deepEqual([...second.wiz().querySelectorAll(".wiz-actions .wiz-action")].map((button) => button.dataset.wiz).at(-1), "stop", "with its Stop (L-23: after the step's own buttons, off)");
   assert.deepEqual(second.wiz().querySelector(".wiz-steps") && [...second.wiz().querySelectorAll(".wiz-steps > ol > li")].length, 5, "the «solo tempi» steps");
   reset();
   const devices = await mount({ session: guided({}), owner: false });

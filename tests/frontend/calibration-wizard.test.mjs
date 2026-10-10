@@ -407,8 +407,10 @@ test("a reader sees the step read-only and takes control in two taps while the o
     ["Control: another device", "Another device is guiding this calibration."]);
   assert.equal(wiz().querySelector(".wiz-readonly .notice"), null);
   assert.equal(wiz().querySelector('[data-wiz="take"]').className, "wiz-take secondary");
-  assert.deepEqual([...wiz().querySelectorAll(".wiz-action")].map((button) => button.dataset.wiz), [], "nothing moves: no Stop to offer");
-  assert.equal(wiz().querySelector('.wiz-frame [name="reading_cm"]'), null, "a reader has no reading field (S-07)");
+  // L-23: the whole step, its buttons off; no Stop while nothing moves; the field read only.
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-action")].map((button) => [button.dataset.wiz, button.disabled]), [["reading", true], ["repeat", true]]);
+  assert.equal(wiz().querySelector('.wiz-frame [name="reading_cm"]').disabled, true, "the field is there, read only");
+  assert.ok(wiz().querySelector(".wiz-body").textContent.length > 0, "and the step's text");
   assert.equal(wiz().querySelector(".wiz-stopwatch").hidden, true, "who guides it is no longer in the stopwatch box");
   wiz().querySelector('[data-wiz="take"]').click(); await tick();
   assert.equal(wiz().querySelector('[data-wiz="take"]').textContent, "Confirm take control");
@@ -678,12 +680,12 @@ test("the profile dialog offers the new wizard next to the existing measurement"
   assert.equal(wiz().querySelector(".wiz-cover").textContent, "Living room shutter 1");
 });
 
-test("a reader keeps Stop while the cover may move, and nothing else", () => {
+test("a reader keeps Stop while the cover may move; the step's other buttons are there, off (L-23)", () => {
   const t = (key) => translations.en[key] || key;
   const view = { mode: "geometry", phase: "opening", step: "opening", values: {}, samples: {}, readings: {}, slats: true, read_only: true, owner: false, owner_present: true };
   const screen = buildScreen({ t, stage: "session", path: "A", view, cover: { name: "Kitchen shutter 2" } });
   assert.equal(screen.code, "A-11");
-  assert.deepEqual(screen.actions.map((action) => action.id), ["stop"]);
+  assert.deepEqual(screen.actions.map((action) => [action.id, !!action.disabled]), [["next", true], ["endpoint", true], ["stop", false]]);
   assert.equal(screen.readOnly.take, "Take control");
   assert.equal(screen.readOnly.primary, false, "the owner is present: taking control is not the first choice");
 });
@@ -1554,8 +1556,9 @@ test("A-04 lasts the whole positioning; A-05 then offers the end stop and T033 a
   assert.deepEqual(run("reset", "A", { motor_stopped: true }, 3).actions.map((action) => action.id), ["endpoint", "stopped"], "Stop only while moving");
   assert.deepEqual([run("home", "C", {}, 22.5).code, run("home", "C", {}, 22.5).actions.map((action) => [action.id, !!action.disabled])],
     ["C-05", [["endpoint", false], ["misbehaved", false], ["stop", false]]], "the C clone too");
-  // A reader sees Stop only while it moves.
-  assert.deepEqual(run("home", "C", { read_only: true, owner: false, owner_present: true, motor_stopped: true }).actions, []);
+  // A reader sees Stop only while it moves; the step's own buttons are there, off (L-23).
+  const reader = run("home", "C", { read_only: true, owner: false, owner_present: true, motor_stopped: true }).actions;
+  assert.deepEqual(reader.map((action) => [action.id, action.disabled]), [["endpoint", true], ["misbehaved", true], ["stopped", true]]);
 });
 
 test("a positioning lasts the share of the travel still ahead, from the cover's estimated position", async () => {
@@ -1921,7 +1924,7 @@ test("S-01 says what happened when the panel knows more: It did not do what it s
   assert.equal(buildScreen({ t, stage: "session", path: "A", view, local: {}, cover: { name: "K" } }).body, translations.en.wiz_T524, "N-15: a Stop not sent from here came from elsewhere");
   const reader = buildScreen({ t, stage: "session", path: "A", cover: { name: "K" }, local: {},
     view: { mode: "geometry", phase: "briefing", step: "half_open", values: { closing_time: 21 }, samples: {}, readings: {}, read_only: true, owner: false, sequence: 4 } });
-  assert.equal(reader.body, "", "N-15: a reader is not told to press what it does not have");
+  assert.ok(reader.body.length > 0, "L-23 (decided 10 Oct): a reader sees the whole step, its text too");
   const { backend, wiz, code, press, startFor } = await mount();
   await startFor("cover.living_one");
   await press("begin"); await move(backend);

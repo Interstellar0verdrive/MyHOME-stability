@@ -1024,17 +1024,17 @@ function finalize(screen, ctx) {
         : index < current ? "done" : index === current ? "current" : "future",
       substeps: index <= current ? (sub[key] || []).map(([label, value]) => ({ label, value })) : [] })),
   };
-  // A reader sees the step and Stop only; another tab or device guides it.
+  // L-23/L-23b: a reader (another tab or device guides it, or this one handed control over) sees the whole step: its
+  // texts, results, notes and field (read only), its buttons off, and the Take control block; Stop stays usable while
+  // something may move (L1: a safety control).
   if (view?.read_only && !ENDED.includes(view.phase)) {
-    // As S-07: the actions column says who guides it (T262, plain text) above the explanation and Take control;
-    // a reader has no reading field to fill.
-    // N-15: the step's own text addresses whoever guides it («premi ②», «se hai premuto…»): a reader has the box below.
-    screen.body = "";
     screen.readOnly = { status: t("wiz_T262"), text: t("wiz_T263"), take: t(status.confirmTake ? "calConfirmTakeControl" : "wiz_T264"),
       consequence: status.confirmTake ? t("wiz_T265") : null, primary: view.owner_present === false };
-    // Stop stays available to every reader while something may move (L1: a safety control).
-    screen.actions = MOVING(view) ? [{ id: "stop", label: t("wiz_T028"), kind: "stop" }] : [];
-    screen.field = null;
+    const stopAction = { id: "stop", label: t("wiz_T028"), kind: "stop" };
+    screen.actions = screen.actions.filter((action) => action.id !== "stop").map((action) => ({ ...action, disabled: true, settling: false }));
+    if (MOVING(view)) screen.actions.push(stopAction);
+    screen.links = [];
+    if (screen.field) screen.field = { ...screen.field, disabled: true };
   }
   // Alone in a wait, Stop is the red filled button of the mockups; beside a step's buttons it stays a red link.
   if (screen.wait && screen.actions.length === 1 && screen.actions[0].id === "stop") screen.actions[0] = { ...screen.actions[0], kind: "danger" };
