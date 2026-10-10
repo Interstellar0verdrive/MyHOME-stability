@@ -35,7 +35,8 @@ test("C-01 shows what the cover uses now and C-02 preselects its first case, as 
   await press("current");
   const options = [...wiz().querySelectorAll('input[name="case"]')];
   assert.deepEqual(options.map((input) => [input.value, input.checked]), [["points_only", true], ["times_only", false], ["times_and_rolls", false]]);
-  assert.match(options[0].closest("label").innerHTML, /^<input[^>]*><span class="wiz-radio-text"><span class="wiz-radio-label"><strong>When sent halfway, it stops too high or too low; at the end stop it works correctly<\/strong><\/span><span class="wiz-radio-explain">We will remeasure only/, "title and explanation apart, 4 px between them (G4-3)");
+  assert.match(options[0].closest("label").innerHTML, /^<input[^>]*><span class="wiz-radio-text"><span class="wiz-radio-label"><strong>When sent halfway, it stops too high or too low; at the end stop it works correctly<\/strong> <span class="badge wiz-recommended">Recommended<\/span><\/span><span class="wiz-radio-explain">We will remeasure only/, "title and explanation apart, 4 px between them (G4-3); L-34: recommended");
+  assert.match(wiz().querySelector(".wiz-body").textContent, /This cover has only its base calibration: fine-tuning adds the readings/, "L-34: why");
 });
 
 test("times only runs the existing guided measurement and saves on this cover only", async () => {
@@ -250,9 +251,9 @@ test("D-21: before a case or path is confirmed the stepper follows the one chose
   const cover = { name: "Studio", profile: { name: "standard_3ante" }, travel_cm: 150, effective: { opening: { value: 20 }, closing: { value: 19 } } };
   const at = (stage, scope = null, local = {}) => buildScreen({ t, stage, path: "C", scope, cover, local });
   const keys = (screen) => screen.stepper.phases.map((phase) => phase.key);
-  assert.deepEqual(keys(at("current")), ["intro"], "C-01: the case is not chosen yet: only the introduction, not path A's seven steps");
-  assert.doesNotMatch(at("current").stepper.line, / of \d/, "no «1 of N» before the case");
-  assert.equal(at("current").stepper.phases[0].substeps[0].value, t("wiz_T114"), "under «Fine-tuning»");
+  // L-11: C-01 shows the steps of the case preselected on C-02 (the tape readings only) at once.
+  assert.deepEqual(keys(at("current")), ["intro", "prep", "readings", "summary"], "C-01: the preselected case's steps, not path A's seven");
+  assert.match(at("current").stepper.line, / of 4/);
   assert.deepEqual(keys(at("case")), ["intro", "prep", "readings", "summary"]);
   assert.equal(at("case").stepper.phases[0].substeps[0].value, t("wiz_T236"), "its caption too");
   assert.deepEqual(keys(at("case", "times_only")), ["intro", "prep", "ascent", "descent", "summary"], "the case just ticked");

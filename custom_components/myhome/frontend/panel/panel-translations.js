@@ -470,6 +470,7 @@ export const translations = {
     wiz_T545: "Last step, optional: the cover goes to the top, then descends to half its travel with the values just measured; read on the tape where the bottom edge stopped. The gap tells how precise the calibration is, and Home Assistant's position estimate starts again from there.",
     wiz_T546: "Start the check",
     wiz_T547: "Skip the check",
+    wiz_T548: "This cover has only its base calibration: fine-tuning adds the readings at a quarter and three quarters of the travel.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1404,6 +1405,7 @@ export const translations = {
     wiz_T545: "Ultimo passo, facoltativo: la tapparella va in alto e poi scende fino a metà corsa con i valori appena misurati; leggi col metro dove si è fermato il bordo. Lo scarto dice quanto è precisa la calibrazione, e la posizione stimata da Home Assistant riparte da lì.",
     wiz_T546: "Avvia la verifica",
     wiz_T547: "Salta la verifica",
+    wiz_T548: "Questa tapparella ha solo la calibrazione di base: il perfezionamento aggiunge le letture a un quarto e a tre quarti della corsa.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

@@ -217,10 +217,12 @@ export function buildScreen(ctx) {
     return finish();
   }
   if (stage === "case") {
-    // As in the mockup, the first case (tape readings only) is preselected.
-    Object.assign(screen, { code: "C-02", phase: "intro", title: t("wiz_T189"), body: t("wiz_T190"),
+    // L-34: the tape readings only (the fine-tuning offered at the end of a base calibration) are recommended and
+    // preselected, with a line saying why. No cover is fine-tuned yet (fine-tuning is a preview until its backend lot),
+    // so the line always applies.
+    Object.assign(screen, { code: "C-02", phase: "intro", title: t("wiz_T189"), body: `${t("wiz_T190")}\n\n${t("wiz_T548")}`,
       choice: { name: "case", kind: "radio", label: t("wiz_T191"), value: local.scope || "points_only",
-        options: [{ value: "points_only", label: t("wiz_T193") }, { value: "times_only", label: t("wiz_T194") }, { value: "times_and_rolls", label: t("wiz_T196") }] },
+        options: [{ value: "points_only", label: t("wiz_T193"), badge: t("wiz_T400") }, { value: "times_only", label: t("wiz_T194") }, { value: "times_and_rolls", label: t("wiz_T196") }] },
       actions: [{ id: "case", label: t("wiz_T006"), kind: "primary" }] });
     return finish();
   }
@@ -1016,8 +1018,11 @@ function finalize(screen, ctx) {
   const refining = (view?.preview && view.path === "refine") || local.refining;
   if (["choose", "path"].includes(ctx.stage)) screen.caption = "";
   // D-21: fine-tuning before its case is chosen (A-02 with it ticked, C-01): only the introduction, no count.
-  const unknownCase = (screen.stepPath || path) === "C" && !(screen.stepScope ?? scope) && !refining && ["path", "current"].includes(ctx.stage);
-  const phases = unknownCase ? ["intro"] : phasesFor(screen.stepPath || path, screen.stepScope ?? scope, refining);
+  // L-11: on C-01 and C-02 the steps of the case preselected (the tape readings only) are shown at once, and follow the
+  // choice; only A-02 with fine-tuning ticked, before any case, shows the introduction alone (D-21).
+  const presetCase = (screen.stepPath || path) === "C" && ["current", "case"].includes(ctx.stage) ? (screen.stepScope ?? scope ?? "points_only") : null;
+  const unknownCase = (screen.stepPath || path) === "C" && !(screen.stepScope ?? scope) && !presetCase && !refining && ["path", "current"].includes(ctx.stage);
+  const phases = unknownCase ? ["intro"] : phasesFor(screen.stepPath || path, presetCase ?? screen.stepScope ?? scope, refining);
   let current = phases.indexOf(screen.phase);
   if (refining && screen.phase === "summary") current = phases.length - 1;
   // Y-d: the end of a preview saved nothing: its summary step stays the current one, not ticked as done.
