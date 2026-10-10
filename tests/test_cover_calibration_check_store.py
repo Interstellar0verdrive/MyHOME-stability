@@ -195,3 +195,23 @@ async def test_an_assignment_in_bulk_clears_the_checks_of_the_covers_that_change
     preview = await manage_profile(hass, msg)
     await manage_profile(hass, {**msg, "action": "assign", "confirmation": preview["confirmation"]})
     assert all(kept(cat.store, unique) == dict.fromkeys(CHECK_FIELDS) for unique in targets)
+
+
+# ---------------------------------------------------------------------------------
+# R-4: a times-only save on the cover or on its shared profile re-anchors like a new profile (L-36).
+# ---------------------------------------------------------------------------------
+@pytest.mark.parametrize("mode", ["cover", "shared"])
+async def test_a_times_only_save_applies_the_new_times_at_once_and_keeps_the_end_stop(hass, quick, mode):
+    from tests.test_cover_calibration_direction import measure
+
+    await measure(quick)
+    cover = quick.cover
+    position = cover._attr_current_cover_position
+    assert position in (0, 100)
+    extra = {"save_mode": mode}
+    if mode == "shared":
+        extra["confirmation"] = (await act(quick, "preview_save", save_mode="shared"))["save_preview"]["confirmation"]
+    await act(quick, "save", **extra)
+    assert cover._pending_profile is None, "the new times apply now"
+    assert cover.current_cover_position == position, "anchored at the end stop it stands at"
+    assert cover._motion.position is not None and cover._motion.position.height == position / 100, "in the new model too"

@@ -586,7 +586,10 @@ class CalibrationSession:
     async def save_profiles(self, msg: dict[str, Any]) -> Any:
         if msg.get("save_mode", "new") != "new":
             from .cover_calibration_save import save_measurement
-            return await save_measurement(self, msg)
+            revision = await save_measurement(self, msg)
+            # R-4: saved on the cover («solo tempi») or on its shared profile, the same re-anchoring as a new profile.
+            self._apply_saved_times()
+            return revision
         travel = self.store.data["covers"].get(self.cover.unique_id, {}).get("travel_cm")
         result = await write_profile(self.hass, {
             "entry_id": self.entry_id, "entity_id": self.cover.entity_id,
@@ -594,15 +597,18 @@ class CalibrationSession:
             "profile": {"name": msg.get("name", ""), **self.values,
                         **({"reference_travel_cm": travel} if travel is not None else {})},
         }, calibration=self)
-        # L-36: as the geometry session: in review the motor is still at the end stop the operator confirmed, so the
-        # new times apply now and that end stop stays the anchor.
+        self._apply_saved_times()
+        return result["revision"]
+
+    def _apply_saved_times(self) -> None:
+        """L-36: as the geometry session: in review the motor is still at the end stop the operator confirmed, so the
+        new times apply now and that end stop stays the anchor."""
         position = self.cover._attr_current_cover_position
         self.cover._attr_is_opening = self.cover._attr_is_closing = False
         self.cover._move_start_time = None
         self.cover._apply_pending_cover_profile()
         if position in (0, 100):
             self.confirm_position(position)
-        return result["revision"]
 
 
 def ready_cover(hass: Any, store: Any, entry_id: str, entity_id: str) -> Any:
