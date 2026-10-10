@@ -391,6 +391,7 @@ test("a wide gap asks before moving on and a reading out of range stays in the f
   await type("12");
   assert.equal(code(), "A-08");
   assert.match(wiz().querySelector(".wiz-result-notices").textContent, /10 cm or more/, "under the result, before the text (G2-11)");
+  assert.equal(wiz().querySelector('[name="reading_cm"]')?.hasAttribute("aria-invalid") ?? false, false, "the refusal gone, the field is no longer marked invalid");
   assert.equal(actions().at(-1), "reading", "no movement starts before the choice");
   await press("repeat");
   assert.equal(actions().at(-1), "next", "Repeat returns to the rest by itself");
@@ -1386,6 +1387,7 @@ test("L-61: a reader's header says «Stop following» (secondary) and leaves wit
   tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
   const head = () => [...wiz().querySelectorAll(".wiz-head button:not(.icon-button)")].map((button) => [button.className, button.textContent]);
   assert.deepEqual(head(), [["wiz-unfollow", "Stop following"]], "reader: secondary, no red");
+  assert.equal(wiz().querySelector(".wiz-x").getAttribute("aria-label"), "Stop following", "the phone's ✕ says the same");
   assert.equal(panel._beforeLeave?.(), null, "no exit guard armed for a reader");
   // Taken: the owner's red button; taken back by the other device: the reader's again.
   wiz().querySelector('[data-wiz="take"]').click(); await tick();

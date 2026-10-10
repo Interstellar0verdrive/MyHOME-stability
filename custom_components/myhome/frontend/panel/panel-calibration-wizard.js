@@ -245,6 +245,8 @@ export class CalibrationWizard {
       this._renderedCode = screen.code;
       this._root.dataset.code = screen.code;
       this._root.toggleAttribute("data-preview", screen.preview);
+      // L-61 (review nit): a reader's ✕ only stops following, and says so.
+      const xLabel = !screen.discard ? t("wiz_T158") : screen.readOnly ? t("wiz_T573") : t("wizDiscard");
       this._frame.innerHTML = `
         <header class="wiz-head">
           ${screen.back ? `<button type="button" class="icon-button wiz-back" data-wiz="back" aria-label="${esc(t("wiz_T403"))}" title="${esc(t("wiz_T403"))}"><ha-icon icon="mdi:arrow-left" aria-hidden="true"></ha-icon></button>` : ""}
@@ -253,7 +255,7 @@ export class CalibrationWizard {
             // L-61: a reader only stops following (the calibration goes on elsewhere): secondary, no dialog.
             ? `<button type="button" class="wiz-unfollow" data-wiz="exit">${esc(t("wiz_T573"))}</button>`
             : `<button type="button" class="wiz-discard" data-wiz="exit">${esc(t("wizDiscard"))}</button>`) : ""}
-          <button type="button" class="icon-button wiz-x" data-wiz="${screen.discard ? "exit" : "close"}" aria-label="${esc(screen.discard ? t("wizDiscard") : t("wiz_T158"))}" title="${esc(screen.discard ? t("wizDiscard") : t("wiz_T158"))}"><ha-icon icon="mdi:close" aria-hidden="true"></ha-icon></button>
+          <button type="button" class="icon-button wiz-x" data-wiz="${screen.discard ? "exit" : "close"}" aria-label="${esc(xLabel)}" title="${esc(xLabel)}"><ha-icon icon="mdi:close" aria-hidden="true"></ha-icon></button>
         </header>
         <div class="wiz-compact"><span class="wiz-dot" aria-hidden="true"></span><span class="wiz-compact-line"></span>
           <button type="button" class="wiz-steps-button" data-wiz="steps" aria-haspopup="dialog">${esc(t("wiz_T274"))}</button></div>
@@ -475,7 +477,8 @@ export class CalibrationWizard {
       const message = screen.field?.error || "";
       if (fieldError.textContent !== message) fieldError.textContent = message;
       fieldError.hidden = !message;
-      if (message) field?.setAttribute("aria-invalid", "true");
+      // Review nit: a field whose refusal is gone (a new step, a new value) is no longer marked invalid.
+      if (message) field?.setAttribute("aria-invalid", "true"); else field?.removeAttribute("aria-invalid");
     }
     // L-9: a reading the field accepts but far from the model: a yellow warning under it, never a refusal.
     const warning = root.querySelector("#wiz-field-warning");
