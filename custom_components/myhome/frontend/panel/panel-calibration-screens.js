@@ -452,7 +452,9 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
         actions: [{ id: "ack:ascent", label: t("wiz_T060"), kind: "primary" }, { id: "repeat", label: t("wiz_T061"), kind: "secondary" }] });
       return Object.assign(screen, { code: p("13"), title: t("wiz_T062"), body: t("wiz_T063"),
         // Z-11: one pattern for every reading's hint: the expected value when known, the field's limits otherwise.
-        field: { label: t("wiz_T064"), hint: view.saved_travel_cm != null ? tx("wiz_T527", { cm: n(view.saved_travel_cm, 0) }) : t("wiz_T066"), min: 20, max: 500, kind: "travel", value: view.saved_travel_cm ?? null },
+        // L-31: a travel offered from before says where it comes from; otherwise only the accepted range.
+        field: { label: t("wiz_T064"), hint: (local.keptTravel ?? view.saved_travel_cm) != null ? tx("wiz_T549", { cm: n(local.keptTravel ?? view.saved_travel_cm, 0) }) : t("wiz_T066"),
+          min: 20, max: 500, kind: "travel", value: local.keptTravel ?? view.saved_travel_cm ?? null },
         actions: [{ id: "reading", label: t("wiz_T051"), kind: "primary" }] });
     }
     Object.assign(screen, { code: p("11"), title: slats ? t("wiz_T055") : t("wiz_T040"),
@@ -544,7 +546,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     screen.phase = "readings";
     // L-9: the final check says which reading was kept far from the model.
     if (phase === "reading") return Object.assign(screen, { code: p("31"), title: t("wiz_T138"), body: t("wiz_T139"), notices: [...screen.notices, ...discrepancyNotes(ctx, tx, n)],
-      field: { label: t("wiz_T064"), hint: view.check?.target_cm != null ? tx("wiz_T527", { cm: n(view.check.target_cm, 0) }) : t("wiz_T491"), min: 0.1, max: view.travel_cm ?? 10000, kind: "height" },
+      field: { label: t("wiz_T064"), hint: expectedHint(t, tx, n, view.check?.target_cm, view.travel_cm), min: 0.1, max: view.travel_cm ?? 10000, kind: "height" },
       actions: [{ id: "reading", label: t("wiz_T051"), kind: "primary" }, { id: "repeat", label: t("wiz_T033"), kind: "secondary" }] });
     positioning("30", t("wiz_T086"));
     if (phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
@@ -634,11 +636,11 @@ function previewScreen(screen, ctx, tx, n, values, stop) {
       actions: [{ id: "reading", label: t("wiz_T051"), kind: "primary" }] });
     if (profile) return Object.assign(screen, { code: "B-06", title: t("wiz_T138"),
       body: tx("wiz_T509", { expected: n(view.expected_cm, 0), travel: n(view.travel_cm, 0) }),
-      field: { label: t("wiz_T064"), hint: view.expected_cm != null ? tx("wiz_T527", { cm: n(view.expected_cm, 0) }) : t("wiz_T491"), min: 0, max: 10000, kind: "height" },
+      field: { label: t("wiz_T064"), hint: expectedHint(t, tx, n, view.expected_cm, view.travel_cm), min: 0, max: 10000, kind: "height" },
       actions: [{ id: "reading", label: t("wiz_T051"), kind: "primary" }, { id: "repeat", label: t("wiz_T033"), kind: "secondary" }] });
     const [, number, title] = readingCodes[view.step];
     return Object.assign(screen, { code: p(number), title: t(title), body: view.step === "check" ? t("wiz_T139") : t("wiz_T082"),
-      field: { label: t("wiz_T064"), hint: view.expected_cm != null ? tx("wiz_T527", { cm: n(view.expected_cm, 0) }) : t("wiz_T491"), min: 0, max: 10000, kind: "height" },
+      field: { label: t("wiz_T064"), hint: expectedHint(t, tx, n, view.expected_cm, view.travel_cm), min: 0, max: 10000, kind: "height" },
       actions: [{ id: "reading", label: t("wiz_T051"), kind: "primary" }, { id: "repeat", label: t("wiz_T033"), kind: "secondary" }] });
   }
   if (view.phase === "check_result") {
@@ -647,7 +649,10 @@ function previewScreen(screen, ctx, tx, n, values, stop) {
       body: tx(passed ? "wiz_T175" : "wiz_T176", { ...values, profile: ctx.cover?.followProfile ?? values.profile, gap: check.gap_cm,
         expected: n(check.predicted_cm, 0), measured: n(check.measured_cm, 0) }),
       actions: passed ? [{ id: "accept", label: t("wiz_T060"), kind: "primary" }, { id: "repeat_check", label: t("wiz_T143"), kind: "secondary" }]
-        : [{ id: "correct", label: t("wiz_T177"), kind: "primary" }, { id: "repeat_check", label: t("wiz_T143"), kind: "secondary" }] });
+        // L-21: no fine-tuning from here: start this cover from scratch (path A, the travel typed kept), another profile,
+        // or the check again.
+        : [{ id: "restart-a", label: t("wiz_T551"), kind: "primary" }, { id: "other-profile", label: t("wiz_T552"), kind: "secondary" },
+          { id: "repeat_check", label: t("wiz_T143"), kind: "secondary" }] });
     const verdict = { gap: check.gap_cm, seconds: n(check.check_seconds) };
     return Object.assign(screen, { code: p(passed ? "32" : "32b"), title: t(passed ? "wiz_T141" : "wiz_T144"),
       body: tx(passed ? "wiz_T142" : "wiz_T145", verdict),
@@ -905,11 +910,20 @@ function halfField(ctx, tx, n) {
   const { t, view } = ctx, span = view.reading_range, band = view.reading_band;
   // L-9: the field refuses only what cannot be physical (more than the travel plus the tape's error); a reading far
   // from the model is accepted with a warning under the field (`band`, drawn by the wizard while typing).
-  const expected = band?.expected_cm ?? view.expected_cm;
-  const hint = expected != null ? tx("wiz_T527", { cm: n(expected, 0) }) : t("wiz_T491");
+  // L-30: a range, never a single number that sounds exact: the heights the model explains (or the expected height
+  // with 7 % of the travel either side), whole centimetres.
+  const hint = band?.model_min_cm != null ? tx("wiz_T550", { min: n(Math.floor(band.model_min_cm), 0), max: n(Math.ceil(band.model_max_cm), 0) })
+    : expectedHint(t, tx, n, view.expected_cm, view.travel_cm);
   if (!span) return { label: t("wiz_T064"), hint, min: 0.1, max: 10000, kind: "height" };
   return { label: t("wiz_T064"), hint, min: span.min_cm - RANGE_SLACK_CM, max: span.max_cm + RANGE_SLACK_CM, kind: "height",
     travel: view.travel_cm, band: band ? { min: band.min_cm, max: band.max_cm, warning: tx("wiz_T530", { expected: n(band.expected_cm, 0) }) } : null };
+}
+
+/** L-30: the hint of a reading with one expected height: «usually between» it ± 7 % of the travel (whole cm). */
+function expectedHint(t, tx, n, expected, travel) {
+  if (expected == null) return t("wiz_T491");
+  const spread = (travel > 0 ? travel : expected * 2) * 0.07;
+  return tx("wiz_T550", { min: n(Math.max(0, Math.floor(expected - spread)), 0), max: n(Math.ceil(travel > 0 ? Math.min(travel, expected + spread) : expected + spread), 0) });
 }
 
 /** L-9: the intermediate readings kept although far from the model, as notes (summary, final check). */

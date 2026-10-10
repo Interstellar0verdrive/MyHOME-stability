@@ -109,7 +109,8 @@ test("tape readings only run as a preview with four readings and the check, save
     await type(reading); await settle();
     assert.equal(code(), next);
   }
-  const expected = Number(wiz().querySelector("#wiz-field-hint").textContent.match(/About (\d+) cm/)[1]);
+  // L-30: the hint gives a range; the expected height is the preview's own.
+  const expected = Math.round(document.querySelector("myhome-panel")._calibrationTab._wizard._gateway.view.expected_cm);
   await type(String(expected));
   assert.equal(code(), "C-32");
   assert.match(wiz().querySelector(".wiz-body").textContent, /Gap of about 0 cm after 4\.8 s of descent/);

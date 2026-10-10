@@ -304,8 +304,8 @@ test("path A runs the live geometry session from the first close to Save, one me
   assert.equal(code(), "A-17");
   await move(backend, { auto: true, stop: true });
   assert.equal(code(), "A-18");
-  // L-9: the hint names the expected height; only a reading above the travel (+3 cm) is refused.
-  assert.equal(wiz().querySelector("#wiz-field-hint").textContent, "About 91 cm are expected. Enter what the tape says; a comma or a point is fine.");
+  // L-30: the hint names the heights the model explains; L-9: only a reading above the travel (+3 cm) is refused.
+  assert.equal(wiz().querySelector("#wiz-field-hint").textContent, "Usually between 73 and 110 cm: a few centimetres of difference is normal. Enter what the tape says; a comma or a point is fine.");
   const sentBefore = actions().length;
   await type("205");
   assert.equal(actions().length, sentBefore, "a reading above the travel is not sent");
@@ -657,7 +657,8 @@ test("A-34 offers fine-tuning once the calibration is saved: path C on the same 
   assert.equal(code(), "A-23");
   for (const reading of ["52", "141", "146", "48"]) { await type(reading); await settle(); }
   assert.equal(code(), "A-31");
-  const expected = Number(wiz().querySelector("#wiz-field-hint").textContent.match(/About (\d+) cm/)[1]);
+  // L-30: the hint gives a range; the expected height is the preview's own.
+  const expected = Math.round(document.querySelector("myhome-panel")._calibrationTab._wizard._gateway.view.expected_cm);
   await type(String(expected + 6));
   assert.equal(code(), "A-32b");
   assert.equal(wiz().querySelector('[data-wiz="continue_anyway"]').classList.contains("link"), true);
@@ -750,7 +751,7 @@ test("a check run is shown like an intermediate run, without elapsed time, then 
   assert.equal(reading.code, "A-31");
   assert.equal(reading.title, "Check the cover");
   assert.deepEqual([reading.field.min, reading.field.max], [0.1, 110]);
-  assert.match(reading.field.hint, /^About 83 cm are expected\. Enter what the tape says/);
+  assert.match(reading.field.hint, /^Usually between 74 and 91 cm: a few centimetres of difference is normal\./, "L-30: 82.5 cm ± 7 % of 110 cm");
   assert.deepEqual(reading.actions.map((action) => action.id), ["reading", "repeat"]);
 });
 
@@ -758,11 +759,11 @@ test("L-9: an intermediate reading names the expected height in Italian, refuses
   const t = (key) => translations.it[key] || key;
   const view = { mode: "geometry", phase: "reading", step: "half_close", values: { opening_time: 22, closing_time: 21 }, samples: { lift: 4 },
     readings: { gap: 3 }, geometry: { slat_time_s: 4 }, travel_cm: 198, slats: true, owner: true, sequence: 3,
-    reading_range: { min_cm: 0.1, max_cm: 201 }, reading_band: { min_cm: 46.3, max_cm: 118.8, expected_cm: 82.55 } };
+    reading_range: { min_cm: 0.1, max_cm: 201 }, reading_band: { min_cm: 46.3, max_cm: 118.8, expected_cm: 82.55, model_min_cm: 66.1, model_max_cm: 99.1 } };
   const screen = buildScreen({ t, language: "it", stage: "session", path: "A", view, cover: { name: "Cucina 2" },
     status: { error: { code: "reading_over_travel", reading: 205.5 } } });
   assert.equal(screen.code, "A-20");
-  assert.equal(screen.field.hint, "Sono attesi circa 83 cm. Scrivi quello che dice il metro; virgola o punto vanno bene.");
+  assert.equal(screen.field.hint, "Di solito fra 66 e 100 cm: qualche centimetro di differenza è normale. Scrivi quello che dice il metro; virgola o punto vanno bene.", "L-30");
   assert.deepEqual([screen.field.min > 0, screen.field.max > 201, screen.field.max < 201.001], [true, true, true], "the physical limits");
   assert.equal(screen.field.band.warning, "La lettura è lontana da quella attesa, circa 83 cm: ricontrolla il riferimento. Se è giusta, continua.");
   assert.equal(screen.notices[0].text, "La lettura (205,5 cm) è più della corsa del telo (198 cm): ricontrolla il metro e il punto da cui misuri.");

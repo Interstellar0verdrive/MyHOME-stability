@@ -67,12 +67,12 @@ test("path B runs as a preview from the travel to the check and the summary, wit
   assert.equal(wiz().querySelector(".wiz-wait-stages ha-icon").getAttribute("icon"), "mdi:check-circle");
   await waitFor(() => code() === "B-06", "B-06");
   assert.equal(title(), "Check the cover");
-  assert.match(wiz().querySelector(".wiz-body").textContent, /The expected height is 98 cm, half of its 196 cm travel/);
+  assert.match(wiz().querySelector(".wiz-body").textContent, /The expected height is about 98 cm, half of its 196 cm travel/);
   assert.match(wiz().querySelector(".wiz-body").textContent, /^Live, the cover would stop at half its curtain travel/, "D-46: not «is at half»");
   await type("99");
   assert.equal(code(), "B-07");
   assert.match(wiz().querySelector(".wiz-body").textContent, /^Gap of about 1 cm at half travel: profile "tall_two_leaf" describes this cover well\./);
-  assert.match(wiz().querySelector(".wiz-body").innerHTML, /The edge should have stopped at <span class="cal-nb">98 cm<\/span> and stopped at <span class="cal-nb">99 cm<\/span>\./,
+  assert.match(wiz().querySelector(".wiz-body").innerHTML, /The edge should have stopped at about <span class="cal-nb">98 cm<\/span> and stopped at <span class="cal-nb">99 cm<\/span>\./,
     "D-36: each value held with its unit");
   await press("accept");
   assert.equal(code(), "B-08");
@@ -96,7 +96,7 @@ test("path B runs as a preview from the travel to the check and the summary, wit
   assert.deepEqual(calibrationTraffic(backend), [], "the preview sends nothing to Home Assistant");
 });
 
-test("a failed check offers to correct the cover with its own measurements, which opens path C", async () => {
+test("L-21: a failed check of path B offers this cover from scratch, another profile or the check again, never fine-tuning", async () => {
   const { wiz, code, press, type, startFor, title } = await mount({ language: "it" });
   await startFor("cover.living_one", "B");
   // The saved travel (195 cm) is used: the check comes first, expected at 97.5 cm.
@@ -107,13 +107,16 @@ test("a failed check offers to correct the cover with its own measurements, whic
   assert.match(wiz().querySelector(".wiz-body").textContent, /^Scarto di circa 7 cm a metà della corsa: più di quanto atteso\./);
   assert.match(wiz().querySelector(".wiz-body").innerHTML, /<strong>niente è ancora stato salvato<\/strong>/);
   assert.equal(wiz().querySelector('[data-wiz="continue_anyway"]'), null, "B has no Continue anyway");
+  // L-21: three ways on, none into fine-tuning.
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => item.dataset.wiz), ["restart-a", "other-profile", "repeat_check"]);
+  assert.doesNotMatch(wiz().querySelector(".wiz-body").textContent, /Correggendo/);
   await press("repeat_check"); await settle();
   assert.equal(code(), "B-06");
   await type("105");
-  await press("correct");
-  assert.equal(code(), "C-01");
-  assert.equal(wiz().querySelector(".wiz-preview"), null, "path C starts from the cover, outside the preview");
-  assert.equal(wiz().querySelector(".wiz-cover").textContent, "Living room shutter 1");
+  await press("restart-a");
+  assert.equal(code(), "A-03", "path A from the start, outside the preview");
+  assert.equal(wiz().querySelector(".wiz-preview"), null);
+  assert.equal(document.querySelector("myhome-panel")._calibrationTab._wizard._local.keptTravel, 195, "the travel typed is kept for A-13");
 });
 
 test("without a profile on the gateway, B is disabled and the screen says why", async () => {

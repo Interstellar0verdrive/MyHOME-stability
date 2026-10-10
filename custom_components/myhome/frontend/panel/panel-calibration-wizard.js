@@ -790,6 +790,18 @@ export class CalibrationWizard {
     }
     if (id === "another") { this._dropGateway(); Object.assign(local, freshFlags(), { stage: "choose", entry: "choose", path: "A", scope: null, saved: null, refining: false, base: null, baseSaved: false, coverKey: "", coverPicked: false }); return this._render(); }
     if (id === "open-cover") { const entityId = this._item()?.cover.entity_id; const { onOpenCover } = this._context; this._finish(); onOpenCover?.(entityId); return; }
+    // L-21: after a failed check of path B: this cover from scratch (path A), keeping the travel typed; or another profile.
+    if (id === "restart-a") {
+      const travel = gateway?.view?.travel_cm ?? null;
+      this._dropGateway();
+      Object.assign(local, freshFlags(), { path: "A", scope: null, stage: "before", keptTravel: travel });
+      return this._render();
+    }
+    if (id === "other-profile") {
+      this._dropGateway();
+      Object.assign(local, freshFlags(), { path: "B", stage: "profile" });
+      return this._render();
+    }
     if (id === "correct") {
       // B → C: the cover is measured on its own; nothing of the preview was written.
       this._dropGateway();

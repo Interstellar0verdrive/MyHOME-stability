@@ -695,7 +695,8 @@ async def test_intermediate_readings_accept_every_physical_height_and_report_tho
     low, high = opening_range(22, LIFT, GAP, 200, cal.session.samples["half_open"], 20)
     assert view["reading_range"] == {"min_cm": .1, "max_cm": 200 + READING_TOLERANCE_CM}
     assert view["reading_band"] == {"min_cm": pytest.approx(low - 20), "max_cm": pytest.approx(min(200, high + 20)),
-                                    "expected_cm": pytest.approx((low + high) / 2)}
+                                    "expected_cm": pytest.approx((low + high) / 2),
+                                    "model_min_cm": pytest.approx(low), "model_max_cm": pytest.approx(high)}
     with pytest.raises(ProfileError, match="reading_over_travel"):
         await act(cal, "reading", reading_cm=200 + READING_TOLERANCE_CM + .1)
     assert cal.session.phase == "reading" and cal.session.step == "half_open" and not cal.session.geometry

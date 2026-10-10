@@ -100,7 +100,8 @@ export function createFakeBackend({ language = "en", inventory = coverInventory(
     // travel plus 3 cm), and the band near the model (the heights of rolls 1-5 widened by 10 % of the travel).
     const half = session.phase === "reading" && session.step?.startsWith("half_") && session.travel_cm;
     session.reading_range = half ? { min_cm: 0.1, max_cm: session.travel_cm + 3 } : null;
-    session.reading_band = half ? { min_cm: session.travel_cm * 0.2712345, max_cm: session.travel_cm * 0.6512345, expected_cm: session.travel_cm * 0.4612345 } : null;
+    session.reading_band = half ? { min_cm: session.travel_cm * 0.2712345, max_cm: session.travel_cm * 0.6512345, expected_cm: session.travel_cm * 0.4612345,
+      model_min_cm: session.travel_cm * 0.3712345, model_max_cm: session.travel_cm * 0.5512345 } : null;
     session.reading_discrepancy ??= {};
   };
 

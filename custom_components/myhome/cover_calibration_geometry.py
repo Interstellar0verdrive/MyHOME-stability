@@ -312,7 +312,9 @@ class GeometryCalibrationSession(guided.CalibrationSession):
         if span is None:
             return None
         travel, slack = cast(float, self.measured_travel), READING_WARN_SHARE * cast(float, self.measured_travel)
-        return {"min_cm": max(0.0, span[0] - slack), "max_cm": min(travel, span[1] + slack), "expected_cm": (span[0] + span[1]) / 2}
+        return {"min_cm": max(0.0, span[0] - slack), "max_cm": min(travel, span[1] + slack), "expected_cm": (span[0] + span[1]) / 2,
+                # L-30: the heights the rolls 1-5 explain, the «usually between» of the field's hint.
+                "model_min_cm": span[0], "model_max_cm": span[1]}
 
     def _model_span(self) -> tuple[float, float] | None:
         """The heights the rolls 1-5 explain for this intermediate stop, or None if no roll gives one."""
