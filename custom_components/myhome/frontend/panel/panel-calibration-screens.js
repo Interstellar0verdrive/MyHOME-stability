@@ -1157,14 +1157,15 @@ function finalize(screen, ctx) {
       substeps: index <= current ? (sub[key] || []).map(([label, value]) => ({ label, value })) : [] })),
   };
   // L-23/L-23b: a reader (another tab or device guides it, or this one handed control over) sees the whole step: its
-  // texts, results, notes and field (read only), its buttons off, and the Take control block; Stop stays usable while
-  // something may move (L1: a safety control).
+  // texts, results, notes and field (read only). L-58: its bar holds only what it can do: the note saying who guides
+  // it, «Prendi il controllo» and, while the cover moves, «Ferma la tapparella» (a safety control for every device).
+  // The owner's buttons are not drawn; where the step waits for the owner's confirmation or choice, the text says so.
   if (view?.read_only && !ENDED.includes(view.phase)) {
-    screen.readOnly = { status: t("wiz_T262"), text: t("wiz_T263"), take: t(status.confirmTake ? "calConfirmTakeControl" : "wiz_T264"),
+    screen.readOnly = { text: t("wiz_T263"), take: t(status.confirmTake ? "calConfirmTakeControl" : "wiz_T264"),
       consequence: status.confirmTake ? t("wiz_T265") : null, primary: view.owner_present === false };
-    const stopAction = { id: "stop", label: t("wiz_T028"), kind: "stop" };
-    screen.actions = screen.actions.filter((action) => action.id !== "stop").map((action) => ({ ...action, disabled: true, settling: false }));
-    if (MOVING(view)) screen.actions.push(stopAction);
+    const decides = screen.actions.some((action) => action.kind === "primary" && !action.disabled && action.id !== "stop");
+    if (decides) screen.body = [screen.body, t("wiz_T572")].filter(Boolean).join("\n\n");
+    screen.actions = MOVING(view) ? [{ id: "stop", label: t("wiz_T028"), kind: "stop" }] : [];
     screen.links = [];
     if (screen.field) screen.field = { ...screen.field, disabled: true };
   }

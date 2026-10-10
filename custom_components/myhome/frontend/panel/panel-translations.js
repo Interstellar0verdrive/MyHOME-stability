@@ -494,6 +494,7 @@ export const translations = {
     wiz_T569: "The calibration has been saved. If the other device goes on with fine-tuning, there is nothing more to follow here.",
     wiz_T570: "Precision",
     wiz_T571: "gap at half travel",
+    wiz_T572: "The other device confirms this step.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1452,6 +1453,7 @@ export const translations = {
     wiz_T569: "La calibrazione è stata salvata. Se l'altro dispositivo prosegue con il perfezionamento, qui non c'è altro da seguire.",
     wiz_T570: "Precisione",
     wiz_T571: "scarto a metà corsa",
+    wiz_T572: "La conferma di questo passo spetta all'altro dispositivo.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

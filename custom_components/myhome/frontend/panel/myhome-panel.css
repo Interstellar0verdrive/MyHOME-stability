@@ -1413,7 +1413,9 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-action.text { min-height: 44px; border: 0; background: transparent; box-shadow: none; color: var(--panel-accent); }
 @media (hover: hover) { :is(.wiz-action.text, .wiz-link, .wiz-more-toggle, .cal-disclosure-toggle):hover:not(:disabled) { background: transparent; text-decoration: underline; color: color-mix(in srgb, var(--panel-accent) 80%, #000); } }
 /* S-07: plain text at the top of the actions column, then Take control (outlined while the owner is present). */
-.wiz-readonly { display: grid; gap: 16px; }
+.wiz-readonly { display: grid; gap: 12px; }
+/* L-58: the reader's note fills the width of the column or bar (the Nota «Avviso»). */
+.wiz-readonly .wiz-readonly-note { width: 100%; box-sizing: border-box; }
 .wiz-readonly p { margin: 0; font-size: 14px; line-height: 1.5; }
 .wiz-take { width: 100%; min-height: 44px; border-radius: var(--cal-btn-radius); font-size: 15px; }
 .wiz-take.secondary { border-color: var(--panel-accent); color: var(--panel-accent); background: transparent; }

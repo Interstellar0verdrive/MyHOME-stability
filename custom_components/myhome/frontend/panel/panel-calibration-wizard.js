@@ -502,7 +502,8 @@ export class CalibrationWizard {
       this._readOnlySignature = readOnly;
       const focused = column.contains(root.getRootNode().activeElement) ? root.getRootNode().activeElement.dataset.wiz : null;
       this._actionsSignature = actions;
-      column.innerHTML = `${screen.readOnly ? `<div class="wiz-readonly"><p class="wiz-readonly-status">${esc(screen.readOnly.status)}</p><p>${esc(screen.readOnly.text)}</p>
+      // L-58: a reader's bar: one warning note saying who guides the calibration, then «Prendi il controllo».
+      column.innerHTML = `${screen.readOnly ? `<div class="wiz-readonly"><p class="cal-note is-warning wiz-readonly-note">${esc(screen.readOnly.text)}</p>
           <button type="button" class="wiz-take ${screen.readOnly.primary || screen.readOnly.consequence ? "primary" : "secondary"}" data-wiz="take">${esc(screen.readOnly.take)}</button>
           ${screen.readOnly.consequence ? `<p class="muted">${esc(screen.readOnly.consequence)}</p>` : ""}</div>` : ""}
         ${(() => {
