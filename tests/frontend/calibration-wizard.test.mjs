@@ -737,6 +737,13 @@ test("L-57: a red button keeps its red border under the pointer, pressed and foc
   assert.match(css, /:focus-visible \{ outline-color: var\(--panel-error\); \}/);
 });
 
+test("L-59: the check note beside the «Precision» tile is as tall as the tile", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.wiz-result-row \{ display: flex; flex-wrap: wrap; gap: 12px; align-items: stretch;/);
+  assert.match(css, /\.wiz-result-note \{ flex: 1 1 260px; align-self: stretch; box-sizing: border-box; \}/);
+  assert.doesNotMatch(css, /\.wiz-result-note \{[^}]*align-self: center/);
+});
+
 test("L-18: a tap on the cover already chosen in A-01 un-chooses it", async () => {
   const { wiz, tab, pickCover, code } = await mount();
   tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
