@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import collections
 import copy
+import json
 import logging
 import time
 from dataclasses import dataclass, field
@@ -724,7 +725,6 @@ def send_error(connection: Any, msg: dict[str, Any], error: Any) -> None:
 
 def shown_screen(value: dict[str, Any]) -> dict[str, Any]:
     """L-25: a panel's screen description: plain data, small (it travels with every view)."""
-    import json
     if len(json.dumps(value)) > 2048:
         raise vol.Invalid("screen too large")
     return value
