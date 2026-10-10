@@ -338,6 +338,13 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
   const ranOut = (seconds) => MOTOR_STOPPED(view) || (seconds > 0 && (elapsed ?? 0) >= seconds + Math.max(2, seconds * 0.15));
   const stopOrState = (seconds) => ranOut(seconds) ? [{ id: "stopped", label: t("wiz_T498"), kind: "state" }] : [stop];
   const toEndStop = (label, running) => [{ id: "endpoint", label: t(label), kind: "primary", disabled: phase !== running }, ...whileRunning(view, stop)];
+  // L-14: a return before a tape reading (the user is there to read the tape) never goes on by itself: its end stop is
+  // confirmed by the user, enabled once the motor stopped by itself or its estimated time has run; the run to the next
+  // reading then starts from that press.
+  const returnEnd = (label, running, seconds) => {
+    const ready = MOTOR_STOPPED(view) || !(seconds > 0) || (elapsed ?? 0) >= seconds;
+    return [{ id: "endpoint", label: t(label), kind: "primary", disabled: phase !== running || !ready, settling: phase === running && !ready }, ...whileRunning(view, stop)];
+  };
   if (phase === "review" || phase === "saving") return summaryScreen(screen, ctx, tx, n, values);
   if (step === "home") {
     screen.phase = "prep";
@@ -353,7 +360,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
       return screen;
     }
     positioning("04", tx("wiz_T029", values), closingTime);
-    if (["starting_close", "closing"].includes(phase)) screen.actions = toEndStop("wiz_T032", "closing");
+    if (["starting_close", "closing"].includes(phase)) screen.actions = local.ackReadings ? returnEnd("wiz_T032", "closing", closingTime) : toEndStop("wiz_T032", "closing");
     return screen;
   }
   if (["lift", "reset", "opening"].includes(step)) screen.phase = "ascent";
@@ -395,7 +402,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
       return screen;
     }
     positioning("09", tx(path === "C" ? "wiz_T203" : "wiz_T052", values), closingTime);
-    if (["starting_close", "closing"].includes(phase)) screen.actions = toEndStop("wiz_T032", "closing");
+    if (["starting_close", "closing"].includes(phase)) screen.actions = local.ackReadings ? returnEnd("wiz_T032", "closing", closingTime) : toEndStop("wiz_T032", "closing");
     if (phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }];
     if (resting || view.still_resting) screen.notices.push(liftRepeated());
     return screen;
@@ -501,7 +508,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
         { text: tx("wiz_T085", { seconds: n(Math.ceil(down - 0.001), 0) }), state: first ? "future" : "current" }],
       progress: waitBar(view, elapsed, first ? topTime : down) }, actions: phase === "geometry_wait_stop" ? [{ id: "stopping", label: t("wiz_T459"), kind: "status" }] : [stop] });
     // The return to the top is a positioning run: Home Assistant needs its end stop confirmed.
-    if (first && ["starting_open", "opening"].includes(phase)) screen.actions = toEndStop("wiz_T432", "opening");
+    if (first && ["starting_open", "opening"].includes(phase)) screen.actions = returnEnd("wiz_T432", "opening", topTime);
     if (first && phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
     if (!first && phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
     return screen;
