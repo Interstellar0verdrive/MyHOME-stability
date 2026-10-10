@@ -681,6 +681,11 @@ test("L-44b: a check stopped is done again: A-21v with its notice, Stop in both 
   }
 });
 
+test("L-51: a state line under the actions is a caption the whole width of the bar", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.wiz-actions \.wiz-action\.status \{ width: 100%; max-width: none; min-height: 0; padding: 6px 0; font-size: 13px; line-height: 18px; text-align: center; \}/);
+});
+
 test("L-18: a tap on the cover already chosen in A-01 un-chooses it", async () => {
   const { wiz, tab, pickCover, code } = await mount();
   tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
