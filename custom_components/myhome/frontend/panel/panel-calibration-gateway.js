@@ -19,6 +19,8 @@ const { CoverCalibration, calibrationClient, checkedCalibrationClient } = await 
 const RESUME = "myhome/cover_calibration/resume", ACTION = "myhome/cover_calibration/action";
 /** L-58b: how long «Conferma presa di controllo» waits before it goes back to «Prendi il controllo». */
 export const CONFIRM_TAKE_MS = 10000;
+/** L-77: the verbs that start a movement (Stop is shown from the moment one is sent). */
+const STARTS = ["next", "lift", "run", "open", "close", "repeat", "check", "restart"];
 /** The step a reader is looking at: what the owner shows (its screen) and Home Assistant's step and phase. */
 const armKey = (state) => JSON.stringify([state?.step ?? null, state?.phase ?? null, state?.screen?.code ?? null]);
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -164,7 +166,8 @@ export class LiveCalibrationGateway {
     const engine = this._engine;
     return { busy: !!engine._busy, lost: !!engine._lost, expired: !!engine._expired, error: engine.error, notice: engine.notice, connection: engine.connection,
       confirmLeft: this._armed && engine._confirmTake ? Math.max(1, Math.ceil((this._armed.until - Date.now()) / 1000)) : null,
-      cancelPending: !!engine._cancelPending, confirmTake: !!engine._confirmTake, locked: !!engine._state && engine._locked() };
+      cancelPending: !!engine._cancelPending, confirmTake: !!engine._confirmTake, locked: !!engine._state && engine._locked(),
+      starting: !!this._starting && !!engine._busy };
   }
 
   elapsed() {
@@ -198,7 +201,14 @@ export class LiveCalibrationGateway {
     return engine.open({ ...this._base, claim: true, resume: engine._state });
   }
 
-  act(action, extra = {}) { return this._engine._perform(action, extra); }
+  act(action, extra = {}) {
+    // L-77: a start just sent shows Stop at once, before the session's answer (cleared with the answer or the refusal).
+    const starting = STARTS.includes(action);
+    if (starting) this._starting = true;
+    const sent = this._engine._perform(action, extra);
+    if (starting) this._onChange?.("view");
+    return Promise.resolve(sent).finally(() => { if (starting && this._starting) { this._starting = false; this._onChange?.("view"); } });
+  }
 
   /**
    * L-25: publish this tab's screen to the session's readers (Home Assistant's `show`): outside the engine's queue of

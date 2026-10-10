@@ -60,9 +60,10 @@ test("times only runs the existing guided measurement and saves on this cover on
   assert.equal(title(), "Full ascent");
   assert.match(wiz().querySelector(".wiz-body").textContent, /Get ready to press button ② when the motor stops by itself at the top: you can hear it\./);
   assert.doesNotMatch(wiz().textContent, /Confirm that the cover is fully closed and stopped before starting/);
-  assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => [item.dataset.wiz, item.disabled]), [["run:open", false], ["endpoint", true], ["stop", false]]);
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => [item.dataset.wiz, item.disabled]), [["run:open", false], ["endpoint", true]], "L-77: at rest, no Stop");
   await press("run:open");
   await move(backend, { seconds: 12.6 });
+  assert.ok(wiz().querySelector('.wiz-actions [data-wiz="stop"]'), "L-77: Stop while it runs");
   assert.equal(code(), "C-11");
   assert.equal(wiz().querySelector(".wiz-stopwatch").hidden, false);
   await press("endpoint");
@@ -73,9 +74,10 @@ test("times only runs the existing guided measurement and saves on this cover on
   await press("ack:ascent");
   assert.equal(code(), "C-14");
   assert.equal(title(), "Full descent");
-  assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => item.textContent), ["①  Start movement", "②  Stopped at the bottom", "Stop the cover"]);
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => item.textContent), ["①  Start movement", "②  Stopped at the bottom"], "L-77: at rest, no Stop");
   await press("run:close");
   await move(backend, { seconds: 12.2 });
+  assert.ok(wiz().querySelector('.wiz-actions [data-wiz="stop"]'), "L-77: Stop while it runs");
   assert.equal(code(), "C-14");
   await press("endpoint");
   assert.equal(code(), "C-15");

@@ -1008,6 +1008,57 @@ test("L-74: every note of the family is a quote: no fill, no radius, only its 3 
   }
 });
 
+test("L-77: the red Stop only while a movement is in progress, for the owner and the reader alike", () => {
+  const t = (key) => translations.en[key] || key;
+  const base = { mode: "geometry", values: {}, samples: {}, readings: {}, slats: true, sequence: 5, travel_cm: null };
+  const reader = { read_only: true, owner: false, owner_present: true };
+  const screen = (view, { local = { ackLift: true }, status = {}, elapsed = null } = {}) =>
+    buildScreen({ t, stage: "session", path: "A", view: { ...base, ...view }, local, status, elapsed, cover: { name: "Kitchen shutter 2" } });
+  const stops = (built) => built.actions.filter((action) => action.id === "stop").length;
+  for (const role of [{ owner: true }, reader]) {
+    const who = role.owner ? "owner" : "reader";
+    // A-07 «First run: slats» at rest, before ①: no Stop.
+    const before = screen({ phase: "briefing", step: "lift", ...role });
+    assert.equal(before.code, "A-07");
+    assert.equal(stops(before), 0, `${who}: at rest before ①`);
+    // ① sent, the session's answer not back yet: Stop at once.
+    assert.equal(stops(screen({ phase: "briefing", step: "lift", ...role }, { status: { starting: true } })), 1, `${who}: ① sent`);
+    // The run under way.
+    assert.equal(stops(screen({ phase: "opening", step: "lift", ...role }, { elapsed: 2 })), 1, `${who}: running`);
+    // «Back to the base» (A-10): Stop while it closes; gone the moment the session reports the motor stopped.
+    const back = { phase: "closing", step: "reset", samples: { lift: 4 }, readings: { gap: 3 }, values: { opening_time: 22, closing_time: 21 }, ...role };
+    const running = screen(back, { elapsed: 3 });
+    assert.equal(running.code, "A-10");
+    assert.equal(stops(running), 1, `${who}: back to the base, still running`);
+    assert.equal(stops(screen({ ...back, motor_stopped: true, stopped_elapsed: 19 }, { elapsed: 19 })), 0, `${who}: back to the base, stop frame received`);
+    // Readings with the tape, review: at rest.
+    assert.equal(stops(screen({ phase: "reading", step: "lift", reading_kind: "lift", ...role })), 0, `${who}: a tape reading`);
+    assert.equal(stops(screen({ phase: "review", step: "half_close", travel_cm: 198, values: { opening_time: 22, closing_time: 21 }, ...role }, { local: { ackLift: true, ackAscent: true, ackDescent: true, ackReadings: true } })), 0, `${who}: review`);
+  }
+  // The reader shows exactly the owner's decision within a movement, the run-out state included (U-9).
+  const ranOut = { ...base, phase: "closing", step: "reset", samples: { lift: 4 }, readings: { gap: 3 }, values: { opening_time: 22, closing_time: 21 } };
+  const owner = buildScreen({ t, stage: "session", path: "A", view: { ...ranOut, owner: true }, local: { ackLift: true }, elapsed: 60, cover: { name: "K" } });
+  const follower = buildScreen({ t, stage: "session", path: "A", view: { ...ranOut, ...reader }, local: { ackLift: true }, elapsed: 60, cover: { name: "K" } });
+  assert.equal(stops(owner), stops(follower), "one rule for both roles");
+});
+
+test("L-77: Stop shows the moment ① is sent, before the session answers, and the 700 ms hold keeps ② safe", async () => {
+  const view = { phase: "briefing", step: "lift", values: {}, screen: { code: "A-07", path: "A", scope: null, local: { ackLift: true } } };
+  const { backend, tab, wiz, code } = await mount({ session: resumed(view), guardMs: 700 });
+  tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
+  assert.equal(code(), "A-07");
+  await new Promise((resolve) => setTimeout(resolve, 720));
+  assert.equal(wiz().querySelector('.wiz-actions [data-wiz="stop"]'), null, "at rest: no Stop");
+  const original = backend.hass.callWS;
+  let release;
+  backend.hass.callWS = (message) => message.action === "next" ? new Promise((resolve) => { release = () => resolve(original(message)); }) : original(message);
+  wiz().querySelector('.wiz-actions [data-wiz="next"]').click(); await tick(4);
+  assert.ok(wiz().querySelector('.wiz-actions [data-wiz="stop"]'), "① sent: Stop already there");
+  assert.equal(wiz().querySelector('.wiz-actions [data-wiz="lift"]').disabled, true, "② held back meanwhile");
+  release(); await tick(8);
+  backend.hass.callWS = original;
+});
+
 test("L-18: a tap on the cover already chosen in A-01 un-chooses it", async () => {
   const { wiz, tab, pickCover, code } = await mount();
   tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
@@ -1632,7 +1683,7 @@ test("a half run that did not start by itself can be started from its screen, an
     readings: { gap: 3 }, geometry: {}, travel_cm: 198, slats: true, owner: true, sequence: 4 };
   const screen = buildScreen({ t, stage: "session", path: "A", view, local: { ackDescent: true, ackReadings: true }, cover: { name: "Living room shutter 1" } });
   assert.equal(screen.code, "A-17");
-  assert.deepEqual(screen.actions.map((action) => action.id), ["next", "stop"]);
+  assert.deepEqual(screen.actions.map((action) => action.id), ["next"], "L-77: at rest before the run, no Stop");
   const context = await mount({ stageMs: 30 });
   const { wiz, code, press, backend } = context;
   await runToSaved(context);

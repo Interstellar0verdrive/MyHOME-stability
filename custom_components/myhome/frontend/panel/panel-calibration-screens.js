@@ -54,6 +54,15 @@ export const clock = (ms) => { const total = Math.max(0, Math.ceil(ms / 1000)); 
 /** Movements in progress or about to start: Stop is the action that matters. */
 export const MOVING = (view) => !!view && !MOTOR_STOPPED(view)
   && (["opening", "closing", "geometry_wait_stop", "positioning"].includes(view.phase) || view.phase?.startsWith("starting_"));
+/**
+ * L-77: THE rule for the red Stop, for the owner and the reader alike: a movement is in progress (the session's run
+ * phase, until the bus reports the motor stopped), one has just been asked for (`status.starting`: ① or another start
+ * sent, the session's answer not back yet), or an automatic cycle goes on by itself. At rest (briefings before ①,
+ * readings with the tape, confirmations after the stop, choices, summaries) there is none: pressed there it would only
+ * discard the run.
+ */
+export const IN_MOTION = (view, status = {}) => MOVING(view) || !!status.starting
+  || (!!view && ["settling", "between_covers"].includes(view.phase));
 
 const ENDED = ["interrupted", "cancelled", "expired"];
 /** How long before the session's idle expiry the wizard warns (M3). */
@@ -1160,11 +1169,15 @@ function finalize(screen, ctx) {
   // texts, results, notes and field (read only). L-58: its bar holds only what it can do: the note saying who guides
   // it, «Prendi il controllo» and, while the cover moves, «Ferma la tapparella» (a safety control for every device).
   // The owner's buttons are not drawn; the reader's note says who guides and confirms the steps (L-75: once, there).
+  // L-77: no Stop at rest, whoever looks. Within a movement each step still decides (U-9: once a run to an end stop has
+  // run out, its state replaces Stop), and the reader keeps exactly the owner's decision.
+  // The close Home Assistant makes before a session (L-38, no session yet) is a movement too.
+  if (!IN_MOTION(view, status) && !(local.homing && !view)) screen.actions = screen.actions.filter((action) => action.id !== "stop");
   if (view?.read_only && !ENDED.includes(view.phase)) {
     // L-58b: the armed confirmation counts its seconds down (`left`) before it goes back.
     screen.readOnly = { text: t("wiz_T263"), take: status.confirmTake ? t("calConfirmTakeControl") : t("wiz_T264"),
       left: status.confirmTake && status.confirmLeft ? status.confirmLeft : null, consequence: status.confirmTake ? t("wiz_T265") : null };
-    screen.actions = MOVING(view) ? [{ id: "stop", label: t("wiz_T028"), kind: "stop" }] : [];
+    screen.actions = screen.actions.filter((action) => action.id === "stop");
     screen.links = [];
     if (screen.field) screen.field = { ...screen.field, disabled: true };
   }
