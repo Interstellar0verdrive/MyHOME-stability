@@ -410,7 +410,7 @@ test("a reader sees the step read-only and takes control in two taps while the o
   assert.equal(code(), "A-18");
   // L-58: the reader's bar: one warning note, then Take control; none of the owner's buttons; no Stop at rest.
   assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-readonly > p")].map((line) => [line.className, line.textContent]),
-    [["cal-note is-warning wiz-readonly-note", "Another device is guiding the calibration and confirms the steps."]], "L-75: one sentence says both");
+    [["cal-note is-warning wiz-readonly-note", "Another device is guiding the calibration."]], "L-79: one short sentence");
   assert.equal(wiz().querySelector('[data-wiz="take"]').className, "wiz-take primary", "L-67: the reader's only action is its primary");
   assert.deepEqual([...wiz().querySelectorAll(".wiz-action")].map((button) => button.dataset.wiz), [], "no owner's buttons, not even greyed");
   assert.doesNotMatch(wiz().querySelector(".wiz-body").textContent, /other device/, "L-75: the step's text stays the step's");
@@ -1376,7 +1376,7 @@ test("L-58: a reader's bar while the cover moves: the note, Take control and Sto
   const screen = buildScreen({ t, stage: "session", path: "A", view, cover: { name: "Kitchen shutter 2" } });
   assert.equal(screen.code, "A-11");
   assert.deepEqual(screen.actions.map((action) => [action.id, action.kind, !!action.disabled]), [["stop", "stop", false]]);
-  assert.equal(screen.readOnly.text, "Another device is guiding the calibration and confirms the steps.");
+  assert.equal(screen.readOnly.text, "Another device is guiding the calibration.");
   assert.equal(screen.readOnly.take, "Take control");
 });
 
@@ -2283,7 +2283,7 @@ test("A-04 lasts the whole positioning; A-05 then offers the end stop and T033 a
   const reader = run("home", "C", { read_only: true, owner: false, owner_present: true, motor_stopped: true });
   assert.deepEqual(reader.actions, []);
   assert.doesNotMatch(reader.body, /altro dispositivo/);
-  assert.equal(reader.readOnly.text, "Un altro dispositivo guida la calibrazione e conferma i passi.");
+  assert.equal(reader.readOnly.text, "Un altro dispositivo guida la calibrazione.");
 });
 
 test("a positioning lasts the share of the travel still ahead, from the cover's estimated position", async () => {
