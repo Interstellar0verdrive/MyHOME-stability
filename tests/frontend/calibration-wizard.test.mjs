@@ -842,6 +842,21 @@ test("L-65: every button that cannot be pressed shows the same «not allowed» c
   host.remove();
 });
 
+test("dark pass: no colour darkened towards black applies on a dark theme without a lighter override", () => {
+  // Every rule that mixes a colour with #000 must have a [data-theme="dark"] counterpart mixing it the other way.
+  const darkened = [...cascadeCss.matchAll(/(?<=^|[{}])\s*([^{}@]+?)\s*\{[^{}]*color-mix\([^;{}]*#000\)/g)].map((match) => match[1]);
+  assert.ok(darkened.length >= 3);
+  for (const selectors of darkened) {
+    for (const selector of selectors.split(/,(?![^(]*\))/).map((part) => part.trim())) {
+      const base = selector.replace(/:hover|:not\(:disabled\)/g, "");
+      const covered = [...cascadeCss.matchAll(/(?<=^|[{}])\s*(\[data-theme="dark"\][^{}@]+?)\s*\{([^{}]*)\}/g)]
+        .some(([, dark, body]) => /color: (?:var\(--panel-warning\)|color-mix\([^;]*(?:#fff|--primary-text-color))/.test(body)
+          && dark.replace(/\[data-theme="dark"\] ?/g, "").replace(/:hover|:not\(:disabled\)/g, "").includes(base.replace(/^:is\(([^)]*)\)$/, "$1").split(",")[0].trim()));
+      assert.ok(covered, `no dark counterpart for ${selector}`);
+    }
+  }
+});
+
 test("L-18: a tap on the cover already chosen in A-01 un-chooses it", async () => {
   const { wiz, tab, pickCover, code } = await mount();
   tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
