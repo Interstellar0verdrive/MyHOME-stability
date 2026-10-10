@@ -579,7 +579,8 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     // L-9: the final check says which reading was kept far from the model. L-44: its hint gives the height expected
     // (the check is the comparison with it), not a range.
     const expectedCheck = view.check?.expected_cm ?? view.check?.target_cm;
-    if (phase === "reading") return Object.assign(screen, { code: p("31"), title: t("wiz_T138"), body: t("wiz_T139"), notices: [...screen.notices, ...discrepancyNotes(ctx, tx, n)],
+    // L-87: the check is about to answer: the far readings wait for its result, in the summary.
+    if (phase === "reading") return Object.assign(screen, { code: p("31"), title: t("wiz_T138"), body: t("wiz_T139"), notices: [...screen.notices],
       field: { label: t("wiz_T064"), hint: expectedCheck != null ? tx("wiz_T558", { cm: n(expectedCheck, 0) }) : t("wiz_T491"), min: 0.1, max: view.travel_cm ?? 10000, kind: "height" },
       actions: [{ id: "reading", label: t("wiz_T051"), kind: "primary" }, { id: "repeat", label: t("wiz_T033"), kind: "secondary" }] });
     // L-44: the second leg, the timed run to the target: its own bar; Stop only while it moves.
@@ -1016,11 +1017,18 @@ function expectedHint(t, tx, n, expected, travel) {
   return tx("wiz_T550", { min: n(Math.max(0, Math.floor(expected - spread)), 0), max: n(Math.ceil(travel > 0 ? Math.min(travel, expected + spread) : expected + spread), 0) });
 }
 
-/** L-9: the intermediate readings kept although far from the model, as notes (summary, final check). */
+/**
+ * L-9: the intermediate readings kept although far from the model, as notes in the summary. L-87: a check that passed
+ * has already answered (no note); one beyond its threshold may be explained by them (T532); without a check result
+ * nothing can say whether the positions are right (T578).
+ */
 function discrepancyNotes(ctx, tx, n) {
   const { t, view } = ctx, items = view?.reading_discrepancy || {};
+  const check = view?.check, gap = check && (check.measured_cm != null || check.gap_cm != null) ? checkGap(check) : null;
+  if (gap != null && Number(gap) <= (view.check_threshold_cm ?? 4)) return [];
+  const key = gap != null ? "wiz_T532" : "wiz_T578";
   return ["half_open", "half_close"].filter((step) => items[step]).map((step) => ({ tone: "warning", result: true,
-    text: tx("wiz_T532", { which: t(step === "half_open" ? "wiz_T077" : "wiz_T078"), reading: n(items[step].reading_cm), expected: n(items[step].expected_cm, 0) }) }));
+    text: tx(key, { which: t(step === "half_open" ? "wiz_T077" : "wiz_T078"), reading: n(items[step].reading_cm), expected: n(items[step].expected_cm, 0) }) }));
 }
 
 function runWatch(t, n, view, elapsed) {

@@ -1475,12 +1475,16 @@ test("L-9: an intermediate reading names the expected height in Italian, refuses
   assert.equal(screen.stopwatch, null, "no time is shown for a reading");
   const typed = buildScreen({ t, language: "it", stage: "session", path: "A", view, local: { fieldError: 230 }, cover: { name: "Kitchen 2" } });
   assert.equal(typed.field.error, "La lettura (230 cm) è più della corsa del telo (198 cm): ricontrolla il metro e il punto da cui misuri.");
-  // Kept although far: the summary says so, as the final check does.
-  const review = buildScreen({ t, language: "it", stage: "session", path: "A", cover: { name: "Kitchen 2" }, view: { ...view, phase: "review", reading_range: null, reading_band: null,
+  // Kept although far: L-87, the summary says so only when the check did not answer for it.
+  const summary = (check) => buildScreen({ t, language: "it", stage: "session", path: "A", cover: { name: "Kitchen 2" }, local: { checkSkipped: !check }, view: { ...view, phase: "review", reading_range: null, reading_band: null,
     geometry: { slat_time_s: 4, opening_roll: 5, closing_roll: 1.9 }, readings: { gap: 3, half_open: 40, half_close: 97 },
-    reading_discrepancy: { half_open: { reading_cm: 40, expected_cm: 82.55, min_cm: 46.3, max_cm: 118.8 } }, check: { gap_cm: 1, passed: true, check_seconds: 10.5 } } });
-  assert.deepEqual(review.notices.filter((notice) => notice.tone === "warning").map((notice) => [notice.tone, notice.text]), [["warning",
-    "Metà tempo salita: la lettura (40 cm) era lontana da quella attesa (circa 83 cm). È stata tenuta e il modello si è fermato al suo limite: la verifica finale dirà se le posizioni sono giuste."]]);
+    reading_discrepancy: { half_open: { reading_cm: 40, expected_cm: 82.55, min_cm: 46.3, max_cm: 118.8 } }, check } })
+    .notices.filter((notice) => notice.tone === "warning").map((notice) => notice.text);
+  assert.deepEqual(summary({ gap_cm: 1, passed: true, check_seconds: 10.5 }), [], "a check that passed has answered");
+  assert.deepEqual(summary({ gap_cm: 6, passed: false, check_seconds: 10.5 }),
+    ["Metà tempo salita: la lettura (40 cm) era lontana da quella attesa (circa 83 cm) e questo potrebbe spiegare lo scarto della verifica."]);
+  assert.deepEqual(summary(null), // saved without the check (L-78)
+    ["Metà tempo salita: la lettura (40 cm) era lontana da quella attesa (circa 83 cm): senza verifica non è possibile dire se le posizioni sono giuste."]);
   const running = buildScreen({ t, language: "it", stage: "session", path: "A", view: { ...view, phase: "closing", reading_range: null, reading_band: null }, elapsed: 3.2,
     local: { ackReadings: true }, cover: { name: "Kitchen 2" } });
   assert.equal(running.code, "A-19");
