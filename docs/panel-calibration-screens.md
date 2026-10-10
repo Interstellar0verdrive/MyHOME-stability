@@ -109,15 +109,16 @@ verb or a view this tab does not own. When it does not happen, the screen offers
 | A-17 / A-18 | `opening` · `half_open`; `reading` | T027, T079, T080; T081, T082, `calReadingRange`, T051, T033 | `reading`, `repeat` |
 | A-19 | `top`, then `closing` · `half_close` | T086, T084, T085, T432 (primary from the start) | `next` (auto), `endpoint` (auto on `motor_stopped` or after the measured opening time + 3 s; the button is a shortcut), `next` (auto) |
 | A-20 | `reading` · `half_close` | T087, T088, `calReadingRange` | `reading`, `repeat` |
-| A-30 / A-31 | `check`: briefing, run, `reading` (only if a session reaches a check; the wizard offers none) | T027, T086; T138, T139, T123, T051, T033 | `next`, Stop; `reading` (0.1 cm to the travel), `repeat` |
+| A-30 / A-31 | `check`: briefing, run, `reading` (the step «Verifica», started from A-21v with `direction: "closing"` and half the travel) | T027, T086; T138, T139, T123, T051, T033 | `next`, Stop; `reading` (0.1 cm to the travel), `repeat` |
 | A-21 / A-21c / A-21d | `review` | T091, T092/T107, T093–T106, T108–T112, T280, T281/T289, `wizTable*`, `wizTechnical` | `save` (`save_mode: "new"`, `name`) |
 | A-22…A-33 | preview `refine`, opened by A-34's *Continue with fine-tuning* on the values just saved (the tab's *Fine-tune* opens C-01, C-02 instead) | T113–T152 | nothing (preview) |
 | A-34 | after `saved` | T153–T158; after a real save the body adds T319 as its second paragraph and *Continue with fine-tuning* (T103) is the primary action, then *Assign this profile to other covers* (T426, outlined, when a profile was created or updated: the maintainer's Assign dialog, `ProfileCatalogueEditor` action `assign`, on that profile), then *Calibrate another*, *Open the roller shutter page*, *Close* (red text); the stepper leaves *Fine-tuning (optional)* unticked | nothing; *Continue with fine-tuning* opens A-22 at once (same wizard, stepper at Fine-tuning) |
 
-The intermediate readings (A-18, A-20) use the session's `reading_range`: the hint gives the heights the fit
-accepts, shown inside their true ends (`calReadingRange`, the text of the profile dialog), a value outside it is
-refused in the field with `profileError_reading_out_of_range` before anything is sent, and the mockups' rough
-expectation (T083) is shown only when the view carries no range. As in the profile dialog, the intermediate runs show
+The intermediate readings (A-18, A-20) use the session's `reading_band` and `reading_range` (0.43.0, L-9/L-30): the
+hint gives the heights the model explains («di solito fra … e … cm», `model_min_cm`–`model_max_cm`); a value above
+`reading_range` (the travel plus 3 cm) is refused in the field (T531, Home Assistant's `reading_over_travel`) before
+anything is sent; a value outside `reading_band` is accepted with a warning under the field (T530) and reported in the
+summary (`reading_discrepancy`). The mockups' rough expectation (T083) is shown only when the view carries no band. As in the profile dialog, the intermediate runs show
 no elapsed time (Home Assistant stops them); their wait card keeps the stages and a progress bar. A check run, which
 Home Assistant stops in the same way, is shown alike.
 
