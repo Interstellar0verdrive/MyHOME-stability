@@ -8,8 +8,10 @@ from custom_components.myhome.cover_profiles import get_store, write_profile
 from custom_components.myhome.cover_settings import CHECK_FIELDS, COVER_RECORD
 from custom_components.myhome.cover_settings_api import overview
 from tests.test_cover_calibration_check import verdict
+from tests.test_cover_calibration_direction import quick as quick_fixture
 from tests.test_cover_calibration_geometry import geometry as geometry_fixture
 from tests.test_cover_calibration_geometry import review
+from tests.test_cover_profile_catalogue import catalogue as catalogue_fixture
 from tests.test_cover_profiles import message
 from tests.test_cover_profiles import plant as plant_fixture
 from tests.test_panel_cover_calibration import act, measured
@@ -18,6 +20,8 @@ from tests.test_panel_cover_calibration import calibration as calibration_fixtur
 geometry = geometry_fixture
 plant = plant_fixture
 calibration = calibration_fixture
+quick = quick_fixture
+catalogue = catalogue_fixture
 
 CLOCK = "custom_components.myhome.cover_settings.dt_util.utcnow"
 SAVED = datetime(2026, 10, 10, 12, tzinfo=UTC)
@@ -126,3 +130,68 @@ async def test_an_old_record_without_the_fields_has_no_check(hass, plant):
 def test_the_stored_check_is_validated(bad):
     with pytest.raises(Exception):
         COVER_RECORD({"overrides": {}, **OLD, **bad})
+
+
+# ---------------------------------------------------------------------------------
+# R-3: every cover whose times change through its profile loses its check.
+# ---------------------------------------------------------------------------------
+def followers(store, profile_id):
+    return [unique for unique, assigned in store.data["assignments"].items() if assigned == profile_id]
+
+
+def seed_unique(store, unique, check=OLD):
+    store.data["covers"].setdefault(unique, {"overrides": {}}).update(check)
+
+
+def kept(store, unique):
+    return {key: store.data["covers"].get(unique, {}).get(key) for key in CHECK_FIELDS}
+
+
+async def test_a_shared_save_clears_the_checks_of_every_follower(hass, quick):
+    from tests.test_cover_calibration_direction import measure
+
+    await measure(quick)
+    store = quick.session.store
+    group = followers(store, quick.original_id)
+    assert len(group) == 2
+    for unique in group:
+        seed_unique(store, unique)
+    preview = (await act(quick, "preview_save", save_mode="shared"))["save_preview"]
+    await act(quick, "save", save_mode="shared", confirmation=preview["confirmation"])
+    for unique in group:
+        assert kept(store, unique) == dict.fromkeys(CHECK_FIELDS), unique
+
+
+async def test_an_update_of_a_shared_profile_clears_its_followers_checks_only_when_their_times_change(hass, catalogue):
+    from custom_components.myhome.cover_profile_catalogue import manage_profile
+    from tests.test_cover_profile_catalogue import request
+
+    cat = catalogue
+    group = followers(cat.store, cat.profile_id)
+    for unique in group:
+        seed_unique(cat.store, unique)
+    profile = cat.store.data["profiles"][cat.profile_id]
+    # A rename: the same times, the checks stay.
+    same = {"name": "Renamed", "opening_time": profile["opening_time"], "closing_time": profile["closing_time"]}
+    preview = await manage_profile(hass, request(cat, "preview", profile=same))
+    await manage_profile(hass, request(cat, "update", profile=same, confirmation=preview["confirmation"]))
+    assert all(kept(cat.store, unique) == OLD for unique in group)
+    # Other times: every follower's check goes.
+    other = {**same, "opening_time": profile["opening_time"] + 3}
+    preview = await manage_profile(hass, request(cat, "preview", profile=other))
+    await manage_profile(hass, request(cat, "update", profile=other, confirmation=preview["confirmation"]))
+    assert all(kept(cat.store, unique) == dict.fromkeys(CHECK_FIELDS) for unique in group)
+
+
+async def test_an_assignment_in_bulk_clears_the_checks_of_the_covers_that_change_profile(hass, catalogue):
+    from custom_components.myhome.cover_profile_catalogue import manage_profile
+    from tests.test_cover_profile_assignment import proposal
+
+    cat = catalogue
+    msg = await proposal(hass, cat)
+    targets = [cat.plant.covers[index].unique_id for index in (0, 1)]
+    for unique in targets:
+        seed_unique(cat.store, unique)
+    preview = await manage_profile(hass, msg)
+    await manage_profile(hass, {**msg, "action": "assign", "confirmation": preview["confirmation"]})
+    assert all(kept(cat.store, unique) == dict.fromkeys(CHECK_FIELDS) for unique in targets)

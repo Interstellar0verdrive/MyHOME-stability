@@ -68,6 +68,15 @@ def record_check(data: dict[str, Any], unique: str, check: Any) -> None:
         "check_expected_cm": float(check.expected_cm), "check_at": dt_util.utcnow().isoformat()})
 
 
+# What a profile gives its followers' times: an edit of any of these gives them other times (and their checks go).
+PROFILE_TIMING = ("opening_time", "closing_time", "geometry", "reference_travel_cm")
+
+
+def profile_times_changed(before: dict[str, Any] | None, after: dict[str, Any] | None) -> bool:
+    """R-3: whether a profile write changes the times of the covers that follow it."""
+    return any((before or {}).get(key) != (after or {}).get(key) for key in PROFILE_TIMING)
+
+
 def clear_check(data: dict[str, Any], unique: str) -> None:
     """New times without a check of their own: the stored check no longer describes this cover."""
     record = data["covers"].get(unique)
