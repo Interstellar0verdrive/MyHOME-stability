@@ -75,7 +75,8 @@ button, a.button {
 button ha-icon, a.button ha-icon { --mdc-icon-size: 18px; flex-shrink: 0; }
 button:hover, a.button:hover { border-color: var(--panel-accent); background: var(--panel-accent-soft); }
 button:active, a.button:active { transform: translateY(1px); }
-button:disabled { opacity: .55; cursor: wait; transform: none; }
+/* L-65: one cursor wherever a button cannot be pressed, the passing state (`is-settling`) included. */
+button:disabled { opacity: .55; cursor: not-allowed; transform: none; }
 button.primary { background: var(--panel-accent); color: var(--text-primary-color, #fff); border-color: var(--panel-accent); box-shadow: 0 4px 12px -5px color-mix(in srgb, var(--panel-accent) 70%, transparent); }
 button.primary:hover { background: var(--panel-accent-strong); border-color: var(--panel-accent-strong); }
 button.ghost { background: transparent; border-color: transparent; }
@@ -1402,7 +1403,7 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
   color: color-mix(in srgb, var(--primary-text-color, #182b37) 45%, transparent); box-shadow: none; opacity: 1; cursor: not-allowed; }
 :is(.wiz-action.primary, button.primary).is-settling:disabled, :is(.wiz-action.primary, button.primary).is-settling:disabled:hover {
   background: color-mix(in srgb, var(--panel-accent) 38%, var(--panel-surface)); border-color: transparent;
-  color: color-mix(in srgb, var(--panel-accent) 40%, var(--primary-text-color, #182b37)); box-shadow: none; opacity: 1; cursor: wait; }
+  color: color-mix(in srgb, var(--panel-accent) 40%, var(--primary-text-color, #182b37)); box-shadow: none; opacity: 1; cursor: not-allowed; }
 /* Z-7: on a dark theme the passing state read as an enabled tonal button: there it is a faint accent tint with the
    neutral disabled label, clearly off beside an enabled primary and close to the neutral one. */
 [data-theme="dark"] :is(.wiz-action.primary, button.primary).is-settling:disabled, [data-theme="dark"] :is(.wiz-action.primary, button.primary).is-settling:disabled:hover {

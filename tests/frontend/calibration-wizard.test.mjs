@@ -830,6 +830,18 @@ test("L-63/L-64: dark «In corso» chip in the full warning colour; a disabled b
   }
 });
 
+test("L-65: every button that cannot be pressed shows the same «not allowed» cursor, the passing state included", async () => {
+  const doc = dom.window.document;
+  const host = doc.createElement("div"); host.className = "cal-tab"; doc.body.append(host);
+  host.innerHTML = `<div class="cal-list"><button class="is-settling" disabled></button><button disabled></button></div>
+    <div class="cal-tab-top"><button class="primary is-settling" disabled></button></div>
+    <div class="wiz"><div class="wiz-actions"><button class="wiz-action primary" disabled></button><button class="wiz-action primary is-settling" disabled></button><button class="wiz-action secondary" disabled></button></div></div>
+    <button class="icon-button" disabled></button>`;
+  for (const button of host.querySelectorAll("button")) assert.equal(winner(button, "cursor"), "not-allowed", button.outerHTML);
+  assert.doesNotMatch(cascadeCss, /cursor: (?:wait|progress)/, "no other cursor for a button that waits");
+  host.remove();
+});
+
 test("L-18: a tap on the cover already chosen in A-01 un-chooses it", async () => {
   const { wiz, tab, pickCover, code } = await mount();
   tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
