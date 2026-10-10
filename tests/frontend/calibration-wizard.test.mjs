@@ -1518,6 +1518,15 @@ test("L-26: the A-34 of a reader is the owner's (what was saved, the old profile
   assert.match(screen.note.text, /old_one/, "the note on the old profile, as the owner sees it");
 });
 
+test("L-40: a reader whose session is cancelled where it is guided ends on its own screen, Close only, and stops talking to the session", async () => {
+  const { backend, tab, wiz, title, panel } = await mount({ session: resumed({ phase: "briefing", step: "half_open", reading_kind: "half_open" }), owner: false });
+  tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
+  Object.assign(backend.session, { phase: "cancelled", reason: "cancelled" }); backend.emit(); await tick(6);
+  assert.equal(title(), "The measurement was cancelled from another device");
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((button) => [button.dataset.wiz, button.disabled]), [["close", false]], "no Start over for a reader");
+  assert.equal(panel._calibrationTab._wizard._gateway, null, "the session is let go: no heartbeat, no «expired», no flicker");
+});
+
 test("A-03 and A-16 have no Cancel of their own: the header's Abandon the calibration does the same", () => {
   const t = (key) => translations.it[key] || key;
   const a03 = buildScreen({ t, language: "it", stage: "before", path: "A", cover: { name: "Cucina 2" } });

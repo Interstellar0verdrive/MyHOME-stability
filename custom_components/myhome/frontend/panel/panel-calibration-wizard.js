@@ -966,6 +966,14 @@ export class CalibrationWizard {
 
   _viewChanged() {
     const view = this._gateway?.view, local = this._local;
+    // L-40: the session was cancelled by the tab or device that guided it: for a reader it is over, said as such, once.
+    // The gateway is closed (no more heartbeats against a session that is gone, so no «expired» and no flicker).
+    if (view && !view.preview && view.read_only && view.phase === "cancelled") {
+      this._dropGateway();
+      local.stage = "cancelled";
+      this._render();
+      return;
+    }
     // A refused value belongs to the step it was typed for; a refusal from Home Assistant to the phase it came in.
     if (view?.sequence !== local.fieldSequence) { local.fieldError = null; local.fieldSequence = view?.sequence; }
     if (view && view.phase !== local.errorPhase) { if (local.errorPhase !== undefined) this._gateway.clearError?.(); local.errorPhase = view.phase; }

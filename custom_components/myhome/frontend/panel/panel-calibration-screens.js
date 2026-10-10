@@ -253,6 +253,9 @@ export function buildScreen(ctx) {
     return finish();
   }
   if (stage === "saved") return finish(savedScreen(screen, ctx, tx, values));
+  // L-40: a reader whose session was cancelled where it was guided: its own end, with «Chiudi» only.
+  if (stage === "cancelled") return finish(Object.assign(screen, { code: "S-01", phase: screen.phase, title: t("wiz_T542"), body: t("wiz_T543"),
+    discard: false, actions: [{ id: "close", label: t("wiz_T158"), kind: "secondary" }] }));
 
   // ---- A session (live or preview). ----
   if (!view) {
