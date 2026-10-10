@@ -48,8 +48,10 @@ from .cover_settings import (
     MODEL,
     NATIVE,
     centimetres,
+    clear_check,
     migrate,
     native_provenance,
+    record_check,
     reference_profile,
     resolve,
     seconds,
@@ -319,6 +321,7 @@ async def write_profile(hass: Any, msg: dict[str, Any], *, calibration: Any=None
         profile_id = msg.get("profile_id")
         if profile_id is not None and profile_id not in data["profiles"]:
             raise ProfileError("profile_not_found")
+        times_changed = False
         if msg["action"] == "save":
             profile = PROFILE(msg["profile"])
             source_id = msg.get("copy_from_profile_id")
@@ -346,6 +349,7 @@ async def write_profile(hass: Any, msg: dict[str, Any], *, calibration: Any=None
                     for direction in DIRECTIONS
                 }
             stamp_geometry(profile, previous, entity.unique_id)
+            times_changed = previous is None or any(previous.get(key) != profile.get(key) for key in ("opening_time", "closing_time", "geometry"))
             if calibration is not None and calibration.geometry_provenance is not None:
                 profile["geometry_provenance"] = copy.deepcopy(GEOMETRY_PROVENANCE(calibration.geometry_provenance))
                 data["covers"].setdefault(entity.unique_id, {})["travel_cm"] = calibration.measured_travel
@@ -354,6 +358,8 @@ async def write_profile(hass: Any, msg: dict[str, Any], *, calibration: Any=None
                 # The measured cover follows the new profile; old overrides must
                 # not silently mask the measurement just accepted in review.
                 set_overrides(data, entity.unique_id, {})
+                # L-73: a completed check is kept with the cover; times saved without one clear the old check.
+                record_check(data, entity.unique_id, getattr(calibration, "check", None))
         elif "copy_from_profile_id" in msg:
             raise ProfileError("invalid_profile")
         if msg["action"] == "delete":
@@ -366,6 +372,11 @@ async def write_profile(hass: Any, msg: dict[str, Any], *, calibration: Any=None
             data["assignments"].pop(entity.unique_id, None)
         else:
             data["assignments"][entity.unique_id] = profile_id
+        # L-73: other times for this cover without a calibration (an assigned or copied profile, an edit): its stored
+        # check no longer applies, and an assigned profile never carries another cover's check.
+        if calibration is None and msg["action"] != "delete" and (
+                times_changed or store.data["assignments"].get(entity.unique_id) != data["assignments"].get(entity.unique_id)):
+            clear_check(data, entity.unique_id)
         await commit_profiles(hass, store, entry_id, data,
                               [entity.unique_id] if msg["action"] != "delete" else [])
         return snapshot(hass, store, entry, entity)

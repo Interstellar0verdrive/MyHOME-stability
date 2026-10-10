@@ -13,7 +13,15 @@ from .const import DOMAIN
 from .cover_geometry import geometry_impact, stamp_geometry
 from .cover_profile_provenance import DIRECTIONS, evidence
 from .cover_profiles import PROFILE, ProfileError, commit_profiles, snapshot
-from .cover_settings import KEYS, centimetres, reference_profile, resolve, seconds, set_overrides
+from .cover_settings import (
+    KEYS,
+    centimetres,
+    clear_check,
+    reference_profile,
+    resolve,
+    seconds,
+    set_overrides,
+)
 
 OVERRIDE_PATCH = vol.All({vol.In(KEYS): vol.Any(None, seconds)}, vol.Length(min=1))
 
@@ -85,6 +93,9 @@ async def mutate_settings(hass: Any, store: Any, entry: Any, entity: Any, msg: d
             elif direction not in overrides or overrides[direction]["value"] != value:
                 overrides[direction] = {"value": value, "provenance": evidence("manual", entity.unique_id)}
         set_overrides(data, entity.unique_id, overrides)
+        # L-73: times entered by hand: the stored check described other times.
+        if patch:
+            clear_check(data, entity.unique_id)
         affected = [entity.unique_id]
     else:
         profile_id = msg.get("profile_id")
@@ -109,5 +120,9 @@ async def mutate_settings(hass: Any, store: Any, entry: Any, entity: Any, msg: d
         }
         stamp_geometry(profile, previous, entity.unique_id)
         data["profiles"][profile_id] = profile
+        # L-73: new times for every cover that follows the profile: their stored checks no longer apply.
+        if any(previous.get(key) != profile.get(key) for key in ("opening_time", "closing_time", "geometry")):
+            for unique in affected:
+                clear_check(data, unique)
     await commit_profiles(hass, store, entry.entry_id, data, affected)
     return snapshot(hass, store, entry, entity)

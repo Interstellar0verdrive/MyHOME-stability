@@ -16,7 +16,7 @@ from .const import DOMAIN
 from .cover_calibration import ready_cover, replay, send_error
 from .cover_calibration_automatic import SETTLE_SECONDS, AutomaticCalibrationSession
 from .cover_profile_provenance import PROVENANCE
-from .cover_settings import set_overrides
+from .cover_settings import clear_check, set_overrides
 from .typing_compat import as_any
 
 WS_TARGETS = "myhome/cover_calibration/targets"
@@ -162,6 +162,8 @@ class BatchCalibrationSession(AutomaticCalibrationSession):
                 data["profiles"][profile_id] = profile
                 data["assignments"][cover.unique_id] = profile_id
                 set_overrides(data, cover.unique_id, {})
+                # L-73: a batch measures times only: an older check of these covers no longer applies.
+                clear_check(data, cover.unique_id)
             await profiles.commit_profiles(self.hass, self.store, self.entry_id, data,
                                            [cover.unique_id for cover in self.covers])
         return data["revision"]

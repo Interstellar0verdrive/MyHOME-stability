@@ -329,6 +329,28 @@ the backend, never recalculated from the displayed profile. Missing runtime valu
 are shown as unknown. No new endpoint, persisted field or write operation is added.
 See [behavior and scope](sidepanel.md#shared-profile-view-0250).
 
+## Verified precision in the overview
+
+Each entry of `covers` in the `myhome/cover_profiles/overview` response carries
+the check kept at the cover's last calibration save:
+
+| Field | Meaning |
+| --- | --- |
+| `check_cm` | The gap at the check, in whole centimetres, absolute (the session's `deviation_cm` without its sign); `null` without a check |
+| `check_measured_cm` | The height read with the tape at the check, in cm |
+| `check_expected_cm` | The height the model expected there, in cm |
+| `check_at` | When the calibration with that check was saved (ISO 8601, UTC) |
+
+They are stored in the cover's record (`covers.<cover>` in the profile store)
+only when a geometry session is saved after a completed check (a reading at the
+check, whatever the verdict). Every other write that gives the cover other
+times removes them: a calibration saved without a completed check (times only,
+a check cut short or never made, a batch), an assigned or copied profile, times
+typed by hand, an edit of the profile it follows. A rename or a new travel keeps
+them; a cancelled session changes nothing. Records written before have none of
+the fields and read as no check. The threshold is the session's
+`check_threshold_cm` (4 cm).
+
 ## Session recovery (0.24.0) and ownership per tab (0.39.0)
 
 `start` and `batch_start` accept optional `client_id` (nonempty string, at most
