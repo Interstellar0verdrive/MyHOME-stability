@@ -741,7 +741,7 @@ dialog.cal-dialog .cal-resume-entity { display: none; }
 /* M2-2: on dark themes the info notes take a light accent for their text, as the warning ones take their own tint. */
 /* L-60: the success note keeps its own green tint (it lost it to this rule, same weight and later). */
 [data-theme="dark"] .cal-note:not(.is-warning, .is-success) { color: color-mix(in srgb, var(--panel-accent) 70%, var(--primary-text-color, #fff)); }
-[data-theme="dark"] .cal-note.is-warning, [data-theme="dark"] .wiz-notice[data-tone="warning"], [data-theme="dark"] .cal-tab-busy, [data-theme="dark"] .cal-badge[data-status="running"] { color: color-mix(in srgb, var(--panel-warning) 70%, var(--primary-text-color, #fff)); }
+[data-theme="dark"] .cal-note.is-warning, [data-theme="dark"] .wiz-notice[data-tone="warning"], [data-theme="dark"] .cal-tab-busy { color: color-mix(in srgb, var(--panel-warning) 70%, var(--primary-text-color, #fff)); }
 .cal-list { border: 1px solid var(--panel-border); border-radius: var(--panel-radius); background: var(--panel-surface); overflow: visible; }
 .cal-list-head { display: none; }
 .cal-list-rows { display: contents; }
@@ -878,6 +878,8 @@ dialog.cal-dialog :is(button, select, input):focus:not(:focus-visible) { outline
 /* D-19: «In corso · …» on one line like every chip (Q-12), its text the warning colour darkened to read on its light fill
    (the dark theme lightens it instead, below). */
 .cal-badge[data-status="running"] { --cal-chip: var(--panel-warning); white-space: nowrap; color: color-mix(in srgb, var(--panel-warning) 55%, #000); }
+/* L-63: on dark themes its text and border are the full warning colour (the 12 % fill stays): the tint read faint. */
+[data-theme="dark"] .cal-badge[data-status="running"] { color: var(--panel-warning); border-color: var(--panel-warning); }
 /* Q-22: in rows, cards and headers a profile's name is cut at 180 px («…», whole in the tooltip); the details'
    «Profilo» block shows it whole. */
 .cal-profile-chip { --cal-chip: var(--panel-accent); max-width: 180px; }
@@ -917,6 +919,13 @@ dialog.cal-dialog :is(button, select, input):focus:not(:focus-visible) { outline
 .cal-block-action button:not(.primary):hover { background: var(--panel-accent-soft); }
 /* As in the design, the action spans the whole width of its block. */
 .cal-block-action > button { width: 100%; justify-content: center; }
+/* L-64: in the list (head, rows, details) a button that cannot be pressed is outlined only, never filled: no fill, a
+   border and its label in the text colour at 24 % and 45 %, the same in both themes. The passing state of a primary
+   (`is-settling`) keeps its own look. */
+:is(.cal-tab-top, .cal-list, .cal-block-action) button:disabled:not(.is-settling),
+:is(.cal-tab-top, .cal-list, .cal-block-action) button:disabled:not(.is-settling):hover {
+  background: transparent; border-color: color-mix(in srgb, var(--primary-text-color, #182b37) 24%, transparent);
+  color: color-mix(in srgb, var(--primary-text-color, #182b37) 45%, transparent); box-shadow: none; opacity: 1; cursor: not-allowed; }
 /* Q-3, the list by the tab's content width (container `caltab`; `LIST_BANDS` in panel-calibration-layout.js):
    table with the actions column from 1200 px; table over three full-width columns 1016–1199; cards below, their three
    detail blocks in one row from 700 px, one under the other below. The phone (window under 720 px) opens a page. */

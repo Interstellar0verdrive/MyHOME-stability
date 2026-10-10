@@ -143,11 +143,7 @@ export class CalibrationTab {
     }
     this._context = context;
     this._key = key;
-    // The tab's notes follow Home Assistant's dark mode like the wizard does; without theme data, the system's preference.
-    const darkMode = context.hass?.themes?.darkMode;
-    context.host.dataset.theme = (typeof darkMode === "boolean" ? darkMode : !!globalThis.matchMedia?.("(prefers-color-scheme: dark)")?.matches) ? "dark" : "light";
-    // D-13: the tab's dialogs (profile, sessions) follow it too.
-    if (context.dialogHost) context.dialogHost.dataset.theme = context.host.dataset.theme;
+    this._theme();
     // Leaving the tab with a live calibration open asks first (the wizard's "Calibration in progress").
     context.setBeforeLeave?.(() => (this._mode.kind === "wizard" ? this._wizard?.beforeLeave?.() : null) || null);
     if (!this._hosts.has(context.host)) {
@@ -215,7 +211,22 @@ export class CalibrationTab {
   updateHass(hass) {
     if (!this._context) return;
     this._context.hass = hass;
+    this._theme();
     this._wizard?.updateHass?.(hass);
+  }
+
+  /**
+   * The tab's notes and chips follow Home Assistant's dark mode like the wizard does, on every update (L-62: set only
+   * when the tab was shown, a list could keep the light rules under a dark Home Assistant: white warning text, a faint
+   * «In corso» chip); without theme data, the system's preference. D-13: the tab's dialogs follow it too.
+   */
+  _theme() {
+    const context = this._context;
+    if (!context?.host) return;
+    const darkMode = context.hass?.themes?.darkMode;
+    const theme = (typeof darkMode === "boolean" ? darkMode : !!globalThis.matchMedia?.("(prefers-color-scheme: dark)")?.matches) ? "dark" : "light";
+    if (context.host.dataset.theme !== theme) context.host.dataset.theme = theme;
+    if (context.dialogHost && context.dialogHost.dataset.theme !== theme) context.dialogHost.dataset.theme = theme;
   }
 
   /** Session state is transient (no revision): the panel's periodic refresh reads it again. */

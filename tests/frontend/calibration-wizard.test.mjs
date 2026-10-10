@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { after, afterEach, test } from "node:test";
 
 import { translations } from "../../custom_components/myhome/frontend/panel/panel-translations.js";
@@ -744,32 +745,34 @@ test("L-59: the check note beside the «Precision» tile is as tall as the tile"
   assert.doesNotMatch(css, /\.wiz-result-note \{[^}]*align-self: center/);
 });
 
-test("L-60: each note keeps its own tint for text, border and fill, in the light and the dark theme", async () => {
-  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8")
-    .replace(/\/\*[\s\S]*?\*\//g, "");
-  const doc = dom.window.document;
-  const weight = (selector) => {
-    const flat = selector.replace(/:(?:not|is)\(([^,)]*)[^)]*\)/g, "$1").replace(/:where\([^)]*\)/g, "");
-    const ids = (flat.match(/#[\w-]+/g) || []).length;
-    const classes = (flat.match(/\.[\w-]+|\[[^\]]+\]|:(?!:)[\w-]+/g) || []).length;
-    const types = (flat.replace(/\[[^\]]+\]|[.#:][\w-]+/g, " ").match(/[a-z][\w-]*/gi) || []).length;
-    return ids * 10000 + classes * 100 + types;
-  };
-  // The declaration of `property` that wins for `element`: highest weight, then the later rule.
-  const winner = (element, property) => {
-    let best = null, order = 0;
-    for (const [, selectors, body] of css.matchAll(/(?<=^|[{}])\s*([^{}@]+?)\s*\{([^{}]*)\}/g)) {
-      order += 1;
-      const value = body.match(new RegExp(`(?:^|;)\\s*${property}\\s*:\\s*([^;]+)`))?.[1]?.trim();
-      if (!value) continue;
-      for (const selector of selectors.split(/,(?![^(]*\))/).map((part) => part.trim())) {
-        let hit = false; try { hit = element.matches(selector); } catch { /* selectors jsdom does not know */ }
-        const w = weight(selector);
-        if (hit && (!best || w > best.w || (w === best.w && order >= best.order))) best = { w, order, value, selector };
-      }
+const cascadeCss = readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8")
+.replace(/\/\*[\s\S]*?\*\//g, "");
+/** L-60/L-62: the CSS cascade, resolved by hand (jsdom computes no styles): selector weight, then order. */
+const weight = (selector) => {
+  const flat = selector.replace(/:(?:not|is)\(([^,)]*)[^)]*\)/g, "$1").replace(/:where\([^)]*\)/g, "");
+  const ids = (flat.match(/#[\w-]+/g) || []).length;
+  const classes = (flat.match(/\.[\w-]+|\[[^\]]+\]|:(?!:)[\w-]+/g) || []).length;
+  const types = (flat.replace(/\[[^\]]+\]|[.#:][\w-]+/g, " ").match(/[a-z][\w-]*/gi) || []).length;
+  return ids * 10000 + classes * 100 + types;
+};
+// The declaration of `property` that wins for `element`: highest weight, then the later rule.
+const winner = (element, property) => {
+  let best = null, order = 0;
+  for (const [, selectors, body] of cascadeCss.matchAll(/(?<=^|[{}])\s*([^{}@]+?)\s*\{([^{}]*)\}/g)) {
+    order += 1;
+    const value = body.match(new RegExp(`(?:^|;)\\s*${property}\\s*:\\s*([^;]+)`))?.[1]?.trim();
+    if (!value) continue;
+    for (const selector of selectors.split(/,(?![^(]*\))/).map((part) => part.trim())) {
+      let hit = false; try { hit = element.matches(selector); } catch { /* selectors jsdom does not know */ }
+      const w = weight(selector);
+      if (hit && (!best || w > best.w || (w === best.w && order >= best.order))) best = { w, order, value, selector };
     }
-    return best?.value ?? "";
-  };
+  }
+  return best?.value ?? "";
+};
+
+test("L-60: each note keeps its own tint for text, border and fill, in the light and the dark theme", async () => {
+  const doc = dom.window.document;
   for (const theme of ["light", "dark"]) {
     const host = doc.createElement("div"); host.dataset.theme = theme; doc.body.append(host);
     const note = (tone) => { const p = doc.createElement("p"); p.className = `cal-note${tone ? ` is-${tone}` : ""}`; host.append(p); return p; };
@@ -782,6 +785,47 @@ test("L-60: each note keeps its own tint for text, border and fill, in the light
     assert.match(winner(info, "background"), /--panel-accent/, `${theme}: info background`);
     assert.doesNotMatch(winner(success, "color") + winner(warning, "color"), /--panel-accent/, `${theme}: no accent text on a success or a warning note`);
     if (theme === "dark") assert.match(winner(warning, "color"), /--panel-warning/, "dark: warning text in its tint");
+    host.remove();
+  }
+});
+
+test("L-62: the list follows Home Assistant's dark mode on every update, its dialogs too", async () => {
+  const { backend, panel, root } = await mount();
+  const host = root.querySelector("#cover-calibration-tab");
+  assert.equal(host.dataset.theme, "light");
+  backend.hass = { ...backend.hass, themes: { ...(backend.hass.themes || {}), darkMode: true } };
+  panel.hass = backend.hass; await tick();
+  assert.equal(host.dataset.theme, "dark", "switched without leaving the tab");
+  const dialogHost = root.getElementById("dialog-host");
+  if (dialogHost) assert.equal(dialogHost.dataset.theme, "dark");
+  backend.hass = { ...backend.hass, themes: { ...backend.hass.themes, darkMode: false } };
+  panel.hass = backend.hass; await tick();
+  assert.equal(host.dataset.theme, "light");
+});
+
+test("L-63/L-64: dark «In corso» chip in the full warning colour; a disabled button of the list is outlined in both themes", async () => {
+  const doc = dom.window.document;
+  for (const theme of ["light", "dark"]) {
+    const host = doc.createElement("div"); host.dataset.theme = theme; host.className = "cal-tab"; doc.body.append(host);
+    host.innerHTML = `<span class="badge cal-badge" data-status="running"></span>
+      <div class="cal-tab-top"><button class="primary" disabled></button></div>
+      <div class="cal-list"><div class="cal-row"><button disabled></button><button class="primary is-settling" disabled></button></div>
+        <div class="cal-block-action"><button class="primary" disabled></button></div><div class="cal-block-action"><button disabled></button></div></div>
+      <div class="wiz"><div class="wiz-actions"><button class="wiz-action primary" disabled></button></div></div>`;
+    const chip = host.querySelector(".cal-badge");
+    if (theme === "dark") {
+      assert.equal(winner(chip, "color"), "var(--panel-warning)", "dark: chip text");
+      assert.equal(winner(chip, "border-color"), "var(--panel-warning)", "dark: chip border");
+    }
+    assert.match(winner(chip, "background"), /--cal-chip\) 12%/, `${theme}: the chip's 12 % fill`);
+    const [head, rowButton, settling, cta, secondary] = host.querySelectorAll(".cal-tab-top button, .cal-list button");
+    for (const button of [head, rowButton, cta, secondary]) {
+      assert.equal(winner(button, "background"), "transparent", `${theme}: ${button.outerHTML} not filled`);
+      assert.match(winner(button, "border-color"), /--primary-text-color[^)]*\) 24%/, `${theme}: outlined`);
+      assert.equal(winner(button, "opacity"), "1");
+    }
+    assert.match(winner(settling, "background"), /--panel-accent/, `${theme}: the passing state keeps its look`);
+    assert.match(winner(host.querySelector(".wiz-action"), "background"), /--primary-text-color[^)]*\) 12%/, `${theme}: the wizard's D-13 disabled primary unchanged`);
     host.remove();
   }
 });
