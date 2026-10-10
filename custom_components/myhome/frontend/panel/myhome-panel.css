@@ -1186,7 +1186,9 @@ dialog.cal-dialog :is(button, select, input):focus:not(:focus-visible) { outline
 .wiz-back { flex: none; margin: -2px 0 0 -8px; }
 .wiz-cover { margin: 0; font-size: 20px; font-weight: 600; overflow-wrap: anywhere; }
 .wiz-head .muted { margin-top: 2px; }
-.wiz-discard { min-height: 32px; padding: 4px 12px; border: 1px solid var(--panel-error); border-radius: var(--cal-btn-radius); background: transparent; color: var(--panel-error); font-weight: 500; }
+/* L-56: 44 px high, its label centred, centred in the header band. */
+.wiz-discard { display: inline-flex; align-items: center; justify-content: center; align-self: center; box-sizing: border-box; min-height: 44px; padding: 0 16px;
+  border: 1px solid var(--panel-error); border-radius: var(--cal-btn-radius); background: transparent; color: var(--panel-error); font-weight: 500; }
 @media (hover: hover) { .wiz-discard:hover { background: color-mix(in srgb, var(--panel-error) 8%, transparent); } }
 /* L-47: the row menu's cancel confirmation, outlined red as every action that discards now. */
 .cal-abort-actions button.danger { border-color: var(--panel-error); }
