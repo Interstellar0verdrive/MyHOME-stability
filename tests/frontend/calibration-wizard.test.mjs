@@ -668,8 +668,8 @@ test("L-46: the base summary's «What happens when I save?» says exactly what S
   const view = { mode: "geometry", phase: "review", values: { opening_time: 22, closing_time: 21 }, geometry: {}, travel_cm: 110, owner: true, sequence: 2,
     check: { gap_cm: 1, passed: true, check_seconds: 10.5 } };
   const at = (cover, local) => buildScreen({ t, language: "it", stage: "session", path: "A", cover, view, local: { saveProfile: true, ...local }, supports: () => true });
-  const fresh = at({ name: "Kitchen 2", entity_id: "cover.kitchen_two", followers: [], effective: {} }, { profileName: "cucina_2" });
-  assert.match(fresh.saveInfo.body, /^\*\*Salva:\*\* i valori misurati diventano un profilo nuovo, «cucina_2», che Kitchen 2 segue da subito/);
+  const fresh = at({ name: "Kitchen 2", entity_id: "cover.kitchen_two", followers: [], effective: {} }, { profileName: "kitchen_2" });
+  assert.match(fresh.saveInfo.body, /^\*\*Salva:\*\* i valori misurati diventano un profilo nuovo, «kitchen_2», che Kitchen 2 segue da subito/);
   const follows = { name: "Kitchen 2", entity_id: "cover.kitchen_two", profile: { name: "alte", provenance: { opening: { origin_entity_id: "cover.kitchen_two" } } }, followers: [], effective: {} };
   assert.match(at(follows, {}).saveInfo.body, /^\*\*Salva:\*\* il profilo «alte» viene aggiornato con i valori misurati/);
 });
@@ -2852,9 +2852,9 @@ test("the preview is announced before it starts and its end never says that some
   const review = buildScreen({ t, language: "it", stage: "session", path: "A", cover: { name: "Kitchen 2" },
     view: { mode: "geometry", phase: "review", values: { opening_time: 22, closing_time: 21 }, geometry: {}, travel_cm: 198, owner: true, sequence: 2, check: { gap_cm: 1, passed: true, check_seconds: 10.5 } } });
   assert.deepEqual(review.actions.map((action) => action.id), ["save"], "the summary only saves");
-  const real = buildScreen({ t, language: "it", stage: "saved", path: "A", cover: { name: "Kitchen 2" }, local: { saved: { target: "profile_new", name: "cucina_2" } } });
+  const real = buildScreen({ t, language: "it", stage: "saved", path: "A", cover: { name: "Kitchen 2" }, local: { saved: { target: "profile_new", name: "kitchen_2" } } });
   assert.equal(real.actions.find((action) => action.id === "refine").note, undefined, "no note under the button");
-  assert.equal(real.body, `${translations.it.wiz_T155.replace("{name}", "cucina_2")}\n\n**Vuoi perfezionare la calibrazione?** Quattro letture col metro a un quarto e a tre quarti della corsa, più una verifica finale, renderanno la stima della posizione più precisa lungo tutta la corsa. Qualche minuto; la tapparella si muoverà.`,
+  assert.equal(real.body, `${translations.it.wiz_T155.replace("{name}", "kitchen_2")}\n\n**Vuoi perfezionare la calibrazione?** Quattro letture col metro a un quarto e a tre quarti della corsa, più una verifica finale, renderanno la stima della posizione più precisa lungo tutta la corsa. Qualche minuto; la tapparella si muoverà.`,
     "T319 is the body's second paragraph");
   assert.deepEqual(real.actions.map((action) => [action.id, action.kind]), [["refine", "primary"], ["assign-profile", "secondary"], ["another", "secondary"],
     ["open-cover", "secondary"], ["close", "secondary"]], "L-28/L-47");

@@ -1670,8 +1670,8 @@ dialog.cal-dialog .dialog-head { justify-content: space-between; padding-block: 
 :is(.cal-tab .notice.error, .cal-tab .notice[data-tone="error"]) { --note-tone: var(--panel-error); }
 .cal-tab .notice ha-icon { display: none; }
 /* Light (L-89): an info note's text in the accent itself. L-88: where the text has the tone's
-   colour (info, success, error) the bar takes exactly the text's colour, one token for both; a warning's text stays
-   the text colour, its bar yellow. */
+   colour (info, success, error) the bar takes exactly the text's colour, one token for both; a warning's text is its
+   colour darkened (L-90, below), its bar the solid yellow. */
 .cal-note:not(.is-warning, .is-success) { color: var(--panel-accent); border-inline-start-color: var(--panel-accent); }
 /* L-90: on the light theme a warning's text is its own colour darkened to read on its tint; the bar stays solid. */
 :is(.cal-note.is-warning, .cal-tab .notice.cal-tab-busy, .cal-tab .notice[data-tone="warning"]) { color: color-mix(in srgb, var(--panel-warning) 60%, #000); }
