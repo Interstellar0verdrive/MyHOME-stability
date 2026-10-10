@@ -100,8 +100,8 @@ async def test_batch_sequences_selected_covers_and_saves_one_atomic_revision(has
     from custom_components.myhome.cover_profile_export import export_profiles
 
     session = batch.session
-    hass.states.async_set(batch.plant.covers[0].entity_id, "open", {"friendly_name": "Portafinestra Cucina"})
-    assert session.view()["targets"][0]["name"] == "Portafinestra Cucina", "L-5: the dialog's rows name the cover"
+    hass.states.async_set(batch.plant.covers[0].entity_id, "open", {"friendly_name": "Garden Door"})
+    assert session.view()["targets"][0]["name"] == "Garden Door", "L-5: the dialog's rows name the cover"
     hass.states.async_remove(batch.plant.covers[0].entity_id)
     before = copy.deepcopy(session.store.data)
     assert batch.queue == []
@@ -314,8 +314,8 @@ async def test_targets_gateway_scope_unavailable_entries_and_removed_during_load
     assert data["targets"][0]["name"] == "Kitchen"
     assert data["targets"][1]["reason"] == "advanced_cover"
     # L-5: no registry name: the name Home Assistant shows (the friendly name from the device), never the entity id.
-    hass.states.async_set(plant.covers[1].entity_id, "open", {"friendly_name": "Portafinestra Cucina"})
-    assert (await read_targets(hass, entry_id))["targets"][1]["name"] == "Portafinestra Cucina"
+    hass.states.async_set(plant.covers[1].entity_id, "open", {"friendly_name": "Garden Door"})
+    assert (await read_targets(hass, entry_id))["targets"][1]["name"] == "Garden Door"
     hass.states.async_remove(plant.covers[1].entity_id)
     assert (await read_targets(hass, entry_id))["targets"][1]["name"] == plant.covers[1].entity_id
     alien = MockConfigEntry(domain="other", data={})

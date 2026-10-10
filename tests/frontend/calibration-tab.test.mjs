@@ -1565,14 +1565,14 @@ test("D-05/D-06: a long profile name stays inside its note, and the details' chi
   assert.match(css, /\.cal-note \{ overflow-wrap: anywhere; \}/);
   assert.match(css, /\.cal-details-grid \.cal-chip-text \{ white-space: normal; overflow-wrap: break-word; \}/);
   const data = overview();
-  data.profiles[0].name = "profilo_lato_giardino-nord.v2";
+  data.profiles[0].name = "garden_side_profile-north.v2";
   const { tab } = await mount({ data });
-  const chip = [...tab.querySelectorAll(".cal-row-profile .cal-chip-text")].find((item) => item.textContent === "profilo_lato_giardino-nord.v2");
+  const chip = [...tab.querySelectorAll(".cal-row-profile .cal-chip-text")].find((item) => item.textContent === "garden_side_profile-north.v2");
   assert.ok(chip, "in the row the name is one run, cut with «…»");
   assert.equal(chip.querySelector("wbr"), null);
   const toggle = chip.closest(".cal-row").querySelector('[data-action="cal-tab-toggle"]'); toggle.click(); await tick();
   const whole = chip.closest(".cal-row").querySelector(".cal-details-grid .cal-chip-text");
-  assert.equal(whole.innerHTML, "profilo_<wbr>lato_<wbr>giardino-<wbr>nord.<wbr>v2");
+  assert.equal(whole.innerHTML, "garden_<wbr>side_<wbr>profile-<wbr>north.<wbr>v2");
 });
 
 test("D-19: «In corso · …» is one line like every chip, its text darkened to read on its fill", async () => {
@@ -1626,7 +1626,7 @@ test("D-40: a wizard list's chips sit beside the name while it keeps 200 px, sid
   assert.deepEqual(at(500), ["is-beside", "is-stacked"], "stacked: 180 leave the name 224 px");
   assert.deepEqual(at(400), [], "under the name");
   // D-40 (Y): the name's line (room, address) keeps one line beside the chips: a 400 px line needs 400 px.
-  const name = document.createElement("span"); name.className = "cal-row-name"; name.innerHTML = '<span class="muted">Camera matrimoniale · Indirizzo: 32</span>';
+  const name = document.createElement("span"); name.className = "cal-row-name"; name.innerHTML = '<span class="muted">Main bedroom · Indirizzo: 32</span>';
   row.querySelector(".cal-row-name").replaceWith(name);
   const createRange = document.createRange.bind(document);
   document.createRange = () => { const range = createRange(); range.getBoundingClientRect = () => rect(400); return range; };

@@ -18,7 +18,7 @@ test("bold spans, paragraphs and line breaks are rendered from escaped text only
   assert.equal(rich("**Done.\n**Gap <b>1</b> cm\n\nNext"), "<p><strong>Done.</strong><br>Gap &lt;b&gt;1&lt;/b&gt; cm</p><p>Next</p>");
   assert.equal(parseReading("2,8"), 2.8);
   assert.ok(Number.isNaN(parseReading("")));
-  assert.equal(slug("Tapparella Sala 1"), "tapparella_sala_1");
+  assert.equal(slug("Hall Shutter 1"), "hall_shutter_1");
   assert.deepEqual(phasesFor("A", null, false), ["intro", "prep", "ascent", "descent", "readings", "check", "summary", "finetune"], "L-43: the check is a step");
   assert.deepEqual(phasesFor("A", null, true), ["intro", "prep", "ascent", "descent", "readings", "summary", "finetune"], "fine-tuning has its own check");
   assert.deepEqual(phasesFor("A", null, true).length, 7, "N-10: fine-tuning's summary is part of its step");
@@ -667,9 +667,9 @@ test("L-46: the base summary's «What happens when I save?» says exactly what S
   const view = { mode: "geometry", phase: "review", values: { opening_time: 22, closing_time: 21 }, geometry: {}, travel_cm: 110, owner: true, sequence: 2,
     check: { gap_cm: 1, passed: true, check_seconds: 10.5 } };
   const at = (cover, local) => buildScreen({ t, language: "it", stage: "session", path: "A", cover, view, local: { saveProfile: true, ...local }, supports: () => true });
-  const fresh = at({ name: "Cucina 2", entity_id: "cover.kitchen_two", followers: [], effective: {} }, { profileName: "cucina_2" });
-  assert.match(fresh.saveInfo.body, /^\*\*Salva:\*\* i valori misurati diventano un profilo nuovo, «cucina_2», che Cucina 2 segue da subito/);
-  const follows = { name: "Cucina 2", entity_id: "cover.kitchen_two", profile: { name: "alte", provenance: { opening: { origin_entity_id: "cover.kitchen_two" } } }, followers: [], effective: {} };
+  const fresh = at({ name: "Kitchen 2", entity_id: "cover.kitchen_two", followers: [], effective: {} }, { profileName: "cucina_2" });
+  assert.match(fresh.saveInfo.body, /^\*\*Salva:\*\* i valori misurati diventano un profilo nuovo, «cucina_2», che Kitchen 2 segue da subito/);
+  const follows = { name: "Kitchen 2", entity_id: "cover.kitchen_two", profile: { name: "alte", provenance: { opening: { origin_entity_id: "cover.kitchen_two" } } }, followers: [], effective: {} };
   assert.match(at(follows, {}).saveInfo.body, /^\*\*Salva:\*\* il profilo «alte» viene aggiornato con i valori misurati/);
 });
 
@@ -1461,7 +1461,7 @@ test("L-9: an intermediate reading names the expected height in Italian, refuses
   const view = { mode: "geometry", phase: "reading", step: "half_close", values: { opening_time: 22, closing_time: 21 }, samples: { lift: 4 },
     readings: { gap: 3 }, geometry: { slat_time_s: 4 }, travel_cm: 198, slats: true, owner: true, sequence: 3,
     reading_range: { min_cm: 0.1, max_cm: 201 }, reading_band: { min_cm: 46.3, max_cm: 118.8, expected_cm: 82.55, model_min_cm: 66.1, model_max_cm: 99.1 } };
-  const screen = buildScreen({ t, language: "it", stage: "session", path: "A", view, cover: { name: "Cucina 2" },
+  const screen = buildScreen({ t, language: "it", stage: "session", path: "A", view, cover: { name: "Kitchen 2" },
     status: { error: { code: "reading_over_travel", reading: 205.5 } } });
   assert.equal(screen.code, "A-20");
   assert.equal(screen.field.hint, "Di solito fra 66 e 100 cm: qualche centimetro di differenza è normale. Scrivi quello che dice il metro; virgola o punto vanno bene.", "L-30");
@@ -1469,16 +1469,16 @@ test("L-9: an intermediate reading names the expected height in Italian, refuses
   assert.equal(screen.field.band.warning, "La lettura è lontana da quella attesa, circa 83 cm: ricontrolla il riferimento. Se è giusta, continua.");
   assert.equal(screen.notices[0].text, "La lettura (205,5 cm) è più della corsa del telo (198 cm): ricontrolla il metro e il punto da cui misuri.");
   assert.equal(screen.stopwatch, null, "no time is shown for a reading");
-  const typed = buildScreen({ t, language: "it", stage: "session", path: "A", view, local: { fieldError: 230 }, cover: { name: "Cucina 2" } });
+  const typed = buildScreen({ t, language: "it", stage: "session", path: "A", view, local: { fieldError: 230 }, cover: { name: "Kitchen 2" } });
   assert.equal(typed.field.error, "La lettura (230 cm) è più della corsa del telo (198 cm): ricontrolla il metro e il punto da cui misuri.");
   // Kept although far: the summary says so, as the final check does.
-  const review = buildScreen({ t, language: "it", stage: "session", path: "A", cover: { name: "Cucina 2" }, view: { ...view, phase: "review", reading_range: null, reading_band: null,
+  const review = buildScreen({ t, language: "it", stage: "session", path: "A", cover: { name: "Kitchen 2" }, view: { ...view, phase: "review", reading_range: null, reading_band: null,
     geometry: { slat_time_s: 4, opening_roll: 5, closing_roll: 1.9 }, readings: { gap: 3, half_open: 40, half_close: 97 },
     reading_discrepancy: { half_open: { reading_cm: 40, expected_cm: 82.55, min_cm: 46.3, max_cm: 118.8 } }, check: { gap_cm: 1, passed: true, check_seconds: 10.5 } } });
   assert.deepEqual(review.notices.filter((notice) => notice.tone === "warning").map((notice) => [notice.tone, notice.text]), [["warning",
     "Metà tempo salita: la lettura (40 cm) era lontana da quella attesa (circa 83 cm). È stata tenuta e il modello si è fermato al suo limite: la verifica finale dirà se le posizioni sono giuste."]]);
   const running = buildScreen({ t, language: "it", stage: "session", path: "A", view: { ...view, phase: "closing", reading_range: null, reading_band: null }, elapsed: 3.2,
-    local: { ackReadings: true }, cover: { name: "Cucina 2" } });
+    local: { ackReadings: true }, cover: { name: "Kitchen 2" } });
   assert.equal(running.code, "A-19");
   assert.equal(running.stopwatch, null, "an intermediate run shows no elapsed time: Home Assistant stops it");
 });
@@ -1676,7 +1676,7 @@ test("every wait has its bar: the time left when the duration is known, moving b
   const t = (key) => translations.it[key] || key;
   const view = { mode: "geometry", step: "home", phase: "starting_close", values: {}, samples: {}, readings: {}, slats: true, owner: true, sequence: 1 };
   const wait = (cover, extra = {}, elapsed = null, local = {}) => buildScreen({ t, language: "it", stage: "session", path: "A", view: { ...view, ...extra },
-    elapsed, local, cover: { name: "Cucina 2", ...cover } }).wait;
+    elapsed, local, cover: { name: "Kitchen 2", ...cover } }).wait;
   // A positioning lasts the full time in use, the integration's default too (R3-11); without any time it is indeterminate.
   const fallback = wait({ effective: { closing: { value: 30, origin: "default" } } });
   assert.deepEqual(fallback.progress, { value: 0, remaining: 30 }, "the default time counts for a positioning");
@@ -1746,7 +1746,7 @@ test("a step's problem says the motor's state as plain lines under the text, S-0
   const t = (key) => translations.it[key] || key;
   const view = { mode: "geometry", phase: "opening", step: "opening", values: {}, samples: {}, readings: {}, slats: true, owner: true, sequence: 5 };
   const problem = (reason, extra = {}) => buildScreen({ t, language: "it", stage: "session", path: "A", view: { ...view, problem: { reason, ...extra } },
-    cover: { name: "Cucina 2" } });
+    cover: { name: "Kitchen 2" } });
   const s05 = problem("travel_timeout", { elapsed_s: 92 });
   assert.equal(s05.code, "S-05");
   assert.equal(s05.stopwatch, null, "no light-blue box");
@@ -1892,13 +1892,13 @@ test("L-47: a completed flow ends on «Back to the list», the primary (a second
   const t = (key) => translations.it[key] || key;
   const close = (screen) => [screen.code, screen.actions.find((action) => action.id === "close")?.kind ?? (screen.links.some((link) => link.id === "close") ? "link" : null)];
   const saved = (path, preview = false) => buildScreen({ t, language: "it", stage: "saved", path, scope: path === "C" ? "times_only" : null,
-    cover: { name: "Cucina 2", followProfile: "alta" }, local: { saved: { target: path === "B" ? "follow_profile" : "cover_only", preview } } });
+    cover: { name: "Kitchen 2", followProfile: "alta" }, local: { saved: { target: path === "B" ? "follow_profile" : "cover_only", preview } } });
   assert.deepEqual(close(saved("B")), ["B-09", "primary"]);
   assert.deepEqual(close(saved("A")), ["A-34", "secondary"], "after fine-tuning is offered");
   assert.deepEqual(close(saved("C")), ["C-34", "primary"]);
   assert.deepEqual([close(saved("B", true)), close(saved("A", true)), close(saved("C", true))],
     [["B-09", "primary"], ["A-34", "primary"], ["C-34", "primary"]], "U-8: at the end of a preview it is the primary");
-  const expired = buildScreen({ t, language: "it", stage: "session", path: "A", cover: { name: "Cucina 2" }, status: { expired: true },
+  const expired = buildScreen({ t, language: "it", stage: "session", path: "A", cover: { name: "Kitchen 2" }, status: { expired: true },
     view: { mode: "geometry", phase: "briefing", step: "lift", values: {}, samples: {}, readings: {}, owner: true, sequence: 3 } });
   assert.deepEqual(close(expired), ["S-06", "secondary"]);
 });
@@ -2294,8 +2294,8 @@ test("L-40: a reader whose session is cancelled where it is guided ends on its o
 
 test("A-03 and A-16 have no Cancel of their own: the header's Abandon the calibration does the same", () => {
   const t = (key) => translations.it[key] || key;
-  const a03 = buildScreen({ t, language: "it", stage: "before", path: "A", cover: { name: "Cucina 2" } });
-  const a16 = buildScreen({ t, language: "it", stage: "session", path: "A", cover: { name: "Cucina 2" },
+  const a03 = buildScreen({ t, language: "it", stage: "before", path: "A", cover: { name: "Kitchen 2" } });
+  const a16 = buildScreen({ t, language: "it", stage: "session", path: "A", cover: { name: "Kitchen 2" },
     view: { mode: "geometry", step: "half_open", phase: "briefing", values: { closing_time: 21 }, samples: {}, readings: {}, slats: true, owner: true, sequence: 9 },
     local: { ackDescent: true } });
   for (const screen of [a03, a16]) {
@@ -2339,7 +2339,7 @@ test("A-04 lasts the whole positioning; A-05 then offers the end stop and T033 a
   const t = (key) => translations.it[key] || key;
   const closing = { effective: { closing: { value: 21.7, origin: "native_fallback" } } };
   const run = (step, path, extra = {}, elapsed = 25) => buildScreen({ t, language: "it", stage: "session", path, scope: path === "C" ? "times_and_rolls" : null,
-    cover: { name: "Cucina 2", ...closing }, elapsed,
+    cover: { name: "Kitchen 2", ...closing }, elapsed,
     view: { mode: "geometry", step, phase: "closing", values: {}, samples: { lift: 4 }, readings: { gap: 3 }, slats: true, owner: true, sequence: 5, ...extra } });
   // The motor stopping ends the positioning before its time.
   assert.equal(run("home", "A", { motor_stopped: true }, 3).code, "A-05");
@@ -2762,25 +2762,25 @@ test("a reopened slat and roll session of a cover that follows a profile is show
 test("the preview is announced before it starts and its end never says that something was saved", async () => {
   const t = (key) => translations.it[key] || key;
   // Under Ⓑ on A-02 the note now counts the profiles (R4-8); the preview is said where Ⓑ starts (B-02).
-  assert.equal(buildScreen({ t, stage: "before", path: "B", cover: { name: "Cucina 2" } }).actions[0].note, translations.it.wiz_T318);
-  assert.equal(buildScreen({ t, stage: "before", path: "C", scope: "points_only", cover: { name: "Cucina 2" } }).actions[0].note, translations.it.wiz_T318);
-  assert.equal(buildScreen({ t, stage: "before", path: "C", scope: "times_only", cover: { name: "Cucina 2" } }).actions[0].note, undefined, "times only is live");
-  const review = buildScreen({ t, language: "it", stage: "session", path: "A", cover: { name: "Cucina 2" },
+  assert.equal(buildScreen({ t, stage: "before", path: "B", cover: { name: "Kitchen 2" } }).actions[0].note, translations.it.wiz_T318);
+  assert.equal(buildScreen({ t, stage: "before", path: "C", scope: "points_only", cover: { name: "Kitchen 2" } }).actions[0].note, translations.it.wiz_T318);
+  assert.equal(buildScreen({ t, stage: "before", path: "C", scope: "times_only", cover: { name: "Kitchen 2" } }).actions[0].note, undefined, "times only is live");
+  const review = buildScreen({ t, language: "it", stage: "session", path: "A", cover: { name: "Kitchen 2" },
     view: { mode: "geometry", phase: "review", values: { opening_time: 22, closing_time: 21 }, geometry: {}, travel_cm: 198, owner: true, sequence: 2, check: { gap_cm: 1, passed: true, check_seconds: 10.5 } } });
   assert.deepEqual(review.actions.map((action) => action.id), ["save"], "the summary only saves");
-  const real = buildScreen({ t, language: "it", stage: "saved", path: "A", cover: { name: "Cucina 2" }, local: { saved: { target: "profile_new", name: "cucina_2" } } });
+  const real = buildScreen({ t, language: "it", stage: "saved", path: "A", cover: { name: "Kitchen 2" }, local: { saved: { target: "profile_new", name: "cucina_2" } } });
   assert.equal(real.actions.find((action) => action.id === "refine").note, undefined, "no note under the button");
   assert.equal(real.body, `${translations.it.wiz_T155.replace("{name}", "cucina_2")}\n\n**Vuoi perfezionare la calibrazione?** Quattro letture col metro a un quarto e a tre quarti della corsa, più una verifica finale, renderanno la stima della posizione più precisa lungo tutta la corsa. Qualche minuto; la tapparella si muoverà.`,
     "T319 is the body's second paragraph");
   assert.deepEqual(real.actions.map((action) => [action.id, action.kind]), [["refine", "primary"], ["assign-profile", "secondary"], ["another", "secondary"],
     ["open-cover", "secondary"], ["close", "secondary"]], "L-28/L-47");
-  const coverOnly = buildScreen({ t, language: "it", stage: "saved", path: "A", cover: { name: "Cucina 2" }, local: { saved: { target: "cover_only" } } });
+  const coverOnly = buildScreen({ t, language: "it", stage: "saved", path: "A", cover: { name: "Kitchen 2" }, local: { saved: { target: "cover_only" } } });
   assert.equal(coverOnly.actions.some((action) => action.id === "assign-profile"), false, "no profile written, nothing to assign");
   assert.deepEqual(real.stepper.phases.map((phase) => [phase.key, phase.state]).slice(-2), [["summary", "done"], ["finetune", "future"]]);
   assert.equal(real.stepper.phases.at(-1).label, "Perfezionamento (facoltativo)");
-  assert.equal(buildScreen({ t, language: "it", stage: "saved", path: "C", cover: { name: "Cucina 2" }, local: { saved: { target: "cover_only" } } })
+  assert.equal(buildScreen({ t, language: "it", stage: "saved", path: "C", cover: { name: "Kitchen 2" }, local: { saved: { target: "cover_only" } } })
     .actions.some((action) => action.id === "refine"), false, "not on C-34");
-  const saved = buildScreen({ t, language: "it", stage: "saved", path: "C", cover: { name: "Cucina 2" }, local: { saved: { preview: true }, baseSaved: true } });
+  const saved = buildScreen({ t, language: "it", stage: "saved", path: "C", cover: { name: "Kitchen 2" }, local: { saved: { preview: true }, baseSaved: true } });
   assert.equal(saved.title, "Anteprima del riepilogo");
   assert.equal(saved.body, translations.it.wiz_T322);
   assert.equal(saved.preview, true);
@@ -2856,7 +2856,7 @@ test("A-21d defaults to updating the profile on the cover it was measured on, an
 test("counts of zero and one use their own forms", () => {
   const t = (key) => translations.it[key] || key;
   const view = { mode: "geometry", phase: "review", values: { opening_time: 22, closing_time: 21 }, geometry: {}, travel_cm: 110, owner: true, sequence: 2, check: { gap_cm: 1, passed: true, check_seconds: 10.5 } };
-  const cover = (followers) => ({ name: "Cucina 2", profile: { name: "alte" }, followers, effective: {} });
+  const cover = (followers) => ({ name: "Kitchen 2", profile: { name: "alte" }, followers, effective: {} });
   const review = (followers, local = {}) => buildScreen({ t, language: "it", stage: "session", path: "C", scope: "times_only", cover: cover(followers),
     view: { ...view, mode: "guided" }, local: { ackDescent: true, ...local } });
   assert.match(review([]).saveInfo.body, /Il profilo «alte» non cambierà\.\n/);
@@ -2871,18 +2871,18 @@ test("counts of zero and one use their own forms", () => {
   const update = buildScreen({ t, language: "it", stage: "session", path: "A", cover: cover(["Sala 3"]), view, local: { saveProfile: true, saveChoice: "update" } }).profileBlock;
   assert.equal(update.name, null, "updating the profile: no name and no sentence");
   assert.equal(update.switchLabel, "Salva anche come profilo riusabile, o aggiorna quello esistente", "the switch says it can also update");
-  assert.equal(buildScreen({ t, language: "it", stage: "session", path: "A", cover: { name: "Cucina 2", followers: [], effective: {} }, view, local: {} }).profileBlock.switchLabel,
+  assert.equal(buildScreen({ t, language: "it", stage: "session", path: "A", cover: { name: "Kitchen 2", followers: [], effective: {} }, view, local: {} }).profileBlock.switchLabel,
     "Salva anche come profilo riusabile", "without a profile the short label");
   assert.equal(a21d(["Sala 3"]).choice.options.find((option) => option.value === "update").description, "Cambierà anche l’altra tapparella che lo segue: Sala 3.");
   const b01 = (followerNames) => buildScreen({ t, language: "it", stage: "profile", path: "B", cover: cover([]), local: {},
     profiles: [{ id: "p", name: "alte", followers: followerNames.length, followerNames, measuredOn: "Sala 1" }] }).choice.options[0];
   assert.equal(b01([]).label, "alte · misurato su Sala 1");
   assert.deepEqual(b01([]).note, ["Nessuna tapparella lo segue"]);
-  assert.deepEqual(b01(["Tapparella Cucina"]).note, ["Seguito da Tapparella Cucina"]);
-  assert.deepEqual(b01(["Tapparella Cucina", "Portafinestra Terrazza"]).note, ["Seguito da Tapparella Cucina e Portafinestra Terrazza"]);
-  assert.deepEqual(b01(["Tapparella Bagno", "Tapparella Studio", "Tapparella Corridoio"]).note, ["Seguito da Tapparella Bagno, Tapparella Studio e Tapparella Corridoio"]);
-  assert.deepEqual(b01(["Tapparella Bagno", "Tapparella Studio", "Tapparella Corridoio", "Tapparella Cucina", "Portafinestra Terrazza"]).note,
-    ["Seguito da Tapparella Bagno, Tapparella Studio, Tapparella Corridoio e altre 2"]);
+  assert.deepEqual(b01(["Kitchen Shutter"]).note, ["Seguito da Kitchen Shutter"]);
+  assert.deepEqual(b01(["Kitchen Shutter", "Patio Door"]).note, ["Seguito da Kitchen Shutter e Patio Door"]);
+  assert.deepEqual(b01(["Bathroom Shutter", "Study Shutter", "Hallway Shutter"]).note, ["Seguito da Bathroom Shutter, Study Shutter e Hallway Shutter"]);
+  assert.deepEqual(b01(["Bathroom Shutter", "Study Shutter", "Hallway Shutter", "Kitchen Shutter", "Patio Door"]).note,
+    ["Seguito da Bathroom Shutter, Study Shutter, Hallway Shutter e altre 2"]);
   const en = (key) => translations.en[key] || key;
   assert.deepEqual(buildScreen({ t: en, language: "en", stage: "profile", path: "B", cover: cover([]), local: {},
     profiles: [{ id: "p", name: "tall", followerNames: ["X", "Y", "Z", "W"], measuredOn: "Hall" }] }).choice.options[0].note, ["Followed by X, Y, Z and 1 more"]);
@@ -2939,7 +2939,7 @@ test("A-01's list names the bus address and its notes in Italian too", async () 
   // Without a profile the clause about it falls.
   const t = (key) => translations.it[key] || key;
   const alone = buildScreen({ t, language: "it", stage: "choose", local: { coverKey: "k", coverPicked: true },
-    covers: [{ key: "k", label: "Cucina 2", status: "calibrated", detail: "times", last: "2026-10-01T09:00:00+00:00" }], cover: { name: "Cucina 2", profile: null } });
+    covers: [{ key: "k", label: "Kitchen 2", status: "calibrated", detail: "times", last: "2026-10-01T09:00:00+00:00" }], cover: { name: "Kitchen 2", profile: null } });
   assert.deepEqual(alone.picker.notes, [{ tone: "warning",
     text: "Questa tapparella è già calibrata (tempi misurati, 1 ott 2026). Una nuova calibrazione, se la scegli al passo successivo, sostituirà i valori in uso; per correggerli, scegli il perfezionamento." }]);
 });
@@ -3023,7 +3023,7 @@ test("our texts name the shell's tabs with the shell's own labels, and never cal
 
 test("a cover that follows a profile without a measured travel says the values are not scaled (A-02, C-01)", () => {
   const t = (key) => translations.it[key] || key;
-  const cover = (travel_cm) => ({ name: "Cucina 2", status: "calibrated", detail: "rolls", last: "2026-10-01T09:00:00+00:00", travel_cm, profile: { name: "alte" }, effective: {} });
+  const cover = (travel_cm) => ({ name: "Kitchen 2", status: "calibrated", detail: "rolls", last: "2026-10-01T09:00:00+00:00", travel_cm, profile: { name: "alte" }, effective: {} });
   assert.equal(buildScreen({ t, language: "it", stage: "path", profiles: [], cover: cover(null) }).subline,
     "Segue il profilo «alte»: i valori sono quelli del profilo, senza adattamento alla corsa, che non è stata misurata.");
   assert.equal(buildScreen({ t, language: "it", stage: "path", profiles: [], cover: cover(110) }).subline, "Segue il profilo «alte»");
@@ -3031,7 +3031,7 @@ test("a cover that follows a profile without a measured travel says the values a
   assert.equal(unscaled[0], "Segue il profilo «alte»: i valori sono quelli del profilo, senza adattamento alla corsa, che non è stata misurata.");
   assert.match(unscaled[1], /^Nel passo successivo/);
   assert.doesNotMatch(unscaled.join(" "), /cm/);
-  assert.match(buildScreen({ t, language: "it", stage: "current", path: "C", cover: cover(110) }).body, /^Cucina 2 segue il profilo «alte», adattato alla sua corsa del telo di 110 cm/);
+  assert.match(buildScreen({ t, language: "it", stage: "current", path: "C", cover: cover(110) }).body, /^Kitchen 2 segue il profilo «alte», adattato alla sua corsa del telo di 110 cm/);
 });
 
 test("how to tell the slats is a closed toggle right after the question (A-03); times only (C-35) says nothing about slats", async () => {
@@ -3096,7 +3096,7 @@ test("while the backend waits for the actuator's stop the screen says «Stopping
   assert.equal(code(), "A-08");
   // The actuator never confirmed: S-01, said plainly.
   const t = (key) => translations.it[key] || key;
-  const screen = buildScreen({ t, language: "it", stage: "session", path: "A", cover: { name: "Cucina 2" }, local: {},
+  const screen = buildScreen({ t, language: "it", stage: "session", path: "A", cover: { name: "Kitchen 2" }, local: {},
     view: { mode: "geometry", phase: "interrupted", reason: "not_stopped", step: "lift", values: {}, samples: {}, readings: {}, owner: true, sequence: 9 } });
   assert.deepEqual([screen.code, screen.body], ["S-01", "La tapparella non ha confermato l'arresto: ricomincia la calibrazione."]);
 });
@@ -3177,7 +3177,7 @@ test("«Start over» after an ended session carries nothing of the old measureme
 test("two minutes before the idle expiry a waiting screen warns, counting minutes and seconds down (M3, L-24)", async () => {
   const t = (key) => translations.it[key] || key;
   const now = Date.parse("2026-10-05T13:00:00Z");
-  const at = (seconds, extra = {}) => buildScreen({ t, language: "it", stage: "session", path: "A", local: { ackLift: true, ackAscent: true }, now, cover: { name: "Cucina 2" },
+  const at = (seconds, extra = {}) => buildScreen({ t, language: "it", stage: "session", path: "A", local: { ackLift: true, ackAscent: true }, now, cover: { name: "Kitchen 2" },
     view: { mode: "geometry", step: "opening", phase: "briefing", values: {}, samples: {}, readings: {}, slats: true, owner: true, sequence: 9, recoverable: true, attached: true,
       idle_expires_at: new Date(now + seconds * 1000).toISOString(), ...extra } });
   const warning = (screen) => screen.notices.find((notice) => /scade fra/.test(notice.text));
@@ -3244,7 +3244,7 @@ test("choosing a cover on A-01 patches the list in place: same content area, sam
 test("A-02 says why the advised option is advised, impersonally, and says nothing when nothing is advised (G3-1)", () => {
   const t = (key) => translations.it[key] || key;
   const tall = { id: "tall", name: "alte", slat: 4.4, referenceTravel: 109 };
-  const reason = (cover, profiles) => buildScreen({ t, language: "it", stage: "path", profiles, cover: { name: "Cucina 2", ...cover } }).body.split("\n\n")[1].replace(/ Nel dubbio, scegli questa opzione\.$/, "");
+  const reason = (cover, profiles) => buildScreen({ t, language: "it", stage: "path", profiles, cover: { name: "Kitchen 2", ...cover } }).body.split("\n\n")[1].replace(/ Nel dubbio, scegli questa opzione\.$/, "");
   assert.equal(reason({ status: "calibrated", detail: "rolls", last: "2026-10-01T09:00:00+00:00" }, [tall]), "«Perfezionamento» è l'opzione consigliata perché questa tapparella è già calibrata.");
   assert.equal(reason({ status: "calibrated", detail: "rolls", last: "2026-10-01T09:00:00+00:00", profile: { name: "alte" } }, [tall]),
     "«Perfezionamento» è l'opzione consigliata perché questa tapparella è già calibrata e segue il profilo «alte».");
@@ -3253,7 +3253,7 @@ test("A-02 says why the advised option is advised, impersonally, and says nothin
   assert.equal(reason({ status: "to_measure" }, []), "«Prima tapparella del suo tipo» è l'opzione consigliata perché la tapparella non è mai stata misurata e non ci sono profili salvati.");
   assert.equal(reason({ status: "to_measure", travel_cm: 110 }, [tall]),
     "«Come una tapparella già misurata» è l'opzione consigliata perché la corsa del telo (110 cm) è vicina a quella del profilo «alte» (109 cm).");
-  const none = buildScreen({ t, language: "it", stage: "path", profiles: [{ ...tall, referenceTravel: 198 }], cover: { name: "Cucina 2", status: "to_measure", travel_cm: 110 } });
+  const none = buildScreen({ t, language: "it", stage: "path", profiles: [{ ...tall, referenceTravel: 198 }], cover: { name: "Kitchen 2", status: "to_measure", travel_cm: 110 } });
   assert.equal(none.body, "Ci sono **tre percorsi di misurazione**.\n\n«Prima tapparella del suo tipo» è l'opzione consigliata perché la corsa del telo (110 cm) non è vicina a quella di nessun profilo salvato. Nel dubbio, scegli questa opzione.",
     "travel known, no similar profile: still one advice (G4-2)");
   assert.deepEqual(none.choice.options.filter((option) => option.badge).map((option) => option.value), ["A"]);
@@ -3323,7 +3323,7 @@ test("A-08b advises repeating: «Repeat the run» is the primary, «Ignore and c
 test("C-03 asks about the slats with the answer of the last calibration preselected (G4-5)", () => {
   const t = (key) => translations.it[key] || key;
   const before = (slat, local = {}) => buildScreen({ t, language: "it", stage: "before", path: "C", scope: "times_and_rolls", local,
-    cover: { name: "Cucina 2", effective: slat === undefined ? {} : { slat_time_s: { value: slat } } } });
+    cover: { name: "Kitchen 2", effective: slat === undefined ? {} : { slat_time_s: { value: slat } } } });
   const c03 = before(0);
   assert.equal(c03.code, "C-03");
   assert.equal(c03.choice.label, "Ha le lamelle?");
@@ -3336,7 +3336,7 @@ test("C-03 asks about the slats with the answer of the last calibration preselec
 
 test("no «—» inside a sentence: without the datum the variant that does not name it (M5-6)", () => {
   const t = (key) => translations.it[key] || key;
-  const before = (scope, travel_cm) => buildScreen({ t, language: "it", stage: "before", path: "C", scope, cover: { name: "Cucina 2", travel_cm } }).body;
+  const before = (scope, travel_cm) => buildScreen({ t, language: "it", stage: "before", path: "C", scope, cover: { name: "Kitchen 2", travel_cm } }).body;
   assert.match(before("times_only", null), /I due coefficienti di rullo e la corsa del telo resteranno quelli in uso/);
   assert.match(before("times_only", 110), /la corsa del telo, 110 cm, resteranno/);
   assert.match(before("points_only", null), /La corsa del telo non verrà rimisurata\./);

@@ -59,7 +59,7 @@ async def measured(cal, *, lift_s, gap, up, down, travel, half_open, half_close)
     assert cal.session.phase == "review"
 
 
-async def test_the_portafinestra_cucina_of_the_tenth_of_october_checks_down_to_half(geometry):
+async def test_the_garden_door_of_the_tenth_of_october_checks_down_to_half(geometry):
     """The refusal met live: lift-off at 8.1 s for 4 cm fits 7.5 s of slats; down from the top to half the travel is
     5.7 s of curtain, refused as if the slats came first (`invalid_check`, shown as a connection failure)."""
     cal = geometry

@@ -102,7 +102,7 @@ export function followedBy(t, list, language = "en") {
 }
 
 export function names(list, language = "en") {
-  // D-41: a name's closing number stays with it («Tapparella Soggiorno 1» never ends a line on «Soggiorno»).
+  // D-41: a name's closing number stays with it («Lounge Shutter 1» never ends a line on «Lounge»).
   const kept = list.map((name) => String(name).replace(/ (\d+)$/, "\u00a0$1"));
   try { return new Intl.ListFormat(language, { style: "long", type: "conjunction" }).format(kept); }
   catch { return kept.join(", "); }
