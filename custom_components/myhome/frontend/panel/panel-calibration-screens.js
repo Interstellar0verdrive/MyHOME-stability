@@ -798,6 +798,9 @@ function savedScreen(screen, ctx, tx, values) {
   if (saved.target === "profile_new" && saved.orphan) screen.note = { tone: "info", text: fill(t("wiz_T431"), { old: saved.orphan, tab: t("profileListTitle") }) };
   // Z-8: the bar holds the primary and one secondary (assigning the profile just saved, or another cover); the other
   // ways on are text links under the text, so a docked bar never covers the screen.
+  // L-26: another device saved it: the same A-34, read only: «Chiudi» alone.
+  if (saved.reader) return Object.assign(screen, { code: path === "C" ? "C-34" : "A-34", title: t("wiz_T154"), body,
+    actions: [{ id: "close", label: t("wiz_T158"), kind: "secondary" }], links: [] });
   if (path !== "C") return Object.assign(screen, { code: "A-34", title: t("wiz_T154"), body: `${body}\n\n${t("wiz_T319")}`,
     actions: [{ id: "refine", label: t("wiz_T103"), kind: "primary" }, ...(assign.length ? assign : [{ id: "another", label: t("wiz_T156"), kind: "secondary" }])],
     links: [...(assign.length ? [{ id: "another", label: t("wiz_T156") }] : []), { id: "open-cover", label: t("wiz_T157") }, { id: "close", label: t("wiz_T158") }] });

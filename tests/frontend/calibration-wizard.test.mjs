@@ -1456,6 +1456,44 @@ test("L-10: the row of a session in progress cancels it from its ⋮ menu, after
   assert.equal(tab.querySelector(".cal-tab-busy"), null, "the cover is free again");
 });
 
+test("L-25: the owner publishes its screen and a reader shows the same step, not one behind", async () => {
+  // The owner: every screen it draws is published (code, path, the acknowledgements made on it).
+  const { backend, press, startFor, code } = await mount();
+  await startFor("cover.living_one");
+  await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  const shown = () => backend.calls.filter((message) => message.action === "show").at(-1)?.screen;
+  assert.deepEqual([shown().code, shown().path, shown().local.ackLift], [code(), "A", false]);
+  await press("ack:lift");
+  assert.deepEqual([shown().code, shown().local.ackLift], ["A-07", true], "a local acknowledgement is published at once");
+  // A reader of a session whose owner acknowledged the ascent shows the travel question, as the owner does.
+  reset();
+  const view = { phase: "reading", step: "opening", reading_kind: "travel", values: { opening_time: 22 }, travel_cm: null, expected_cm: null, can_repeat: true,
+    screen: { code: "A-13", path: "A", scope: null, local: { ackLift: true, ackAscent: true } } };
+  const reader = await mount({ session: resumed(view), owner: false });
+  reader.tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
+  assert.equal(reader.code(), "A-13", "not A-12, the screen the owner already left");
+});
+
+test("L-28: a reopened session keeps the path it was started on, so a path A on a cover with a profile ends on A-34 with fine-tuning", async () => {
+  const session = resumed({ phase: "review", step: "half_close", reading_kind: "half_close", readings: { gap: 3, half_open: 97, half_close: 101 },
+    geometry: { slat_time_s: 4.4, opening_roll: 1.83, closing_roll: 1.91 }, screen: { code: "A-21", path: "A", scope: null, local: { ackAscent: true, ackDescent: true, ackReadings: true } } });
+  const { tab, code, panel } = await mount({ session });
+  tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
+  assert.match(code(), /^A-21/, "path A's summary, not C-21");
+  assert.equal(panel._calibrationTab._wizard._local.path, "A");
+});
+
+test("L-26: the A-34 of a reader is the owner's (what was saved, the old profile left alone) with «Close» only", () => {
+  const t = (key) => translations.en[key] || key;
+  const screen = buildScreen({ t, stage: "saved", path: "A", cover: { name: "Kitchen shutter 2" },
+    local: { saved: { target: "profile_new", name: "kitchen_big", orphan: "old_one", reader: true } } });
+  assert.equal(screen.code, "A-34");
+  assert.deepEqual(screen.actions.map((action) => action.id), ["close"]);
+  assert.deepEqual(screen.links, []);
+  assert.match(screen.body, /kitchen_big/);
+  assert.match(screen.note.text, /old_one/, "the note on the old profile, as the owner sees it");
+});
+
 test("A-03 and A-16 have no Cancel of their own: the header's Abandon the calibration does the same", () => {
   const t = (key) => translations.it[key] || key;
   const a03 = buildScreen({ t, language: "it", stage: "before", path: "A", cover: { name: "Cucina 2" } });

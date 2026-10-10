@@ -51,7 +51,7 @@ export async function mount(options = {}) {
     input.dispatchEvent(new Event("input", { bubbles: true }));
     await press("reading");
   };
-  const actions = () => backend.calls.filter((message) => message.type === "myhome/cover_calibration/action" && message.action !== "heartbeat").map((message) => message.action);
+  const actions = () => backend.calls.filter((message) => message.type === "myhome/cover_calibration/action" && !["heartbeat", "show"].includes(message.action)).map((message) => message.action);
   const title = () => wiz().querySelector(".wiz-title").textContent;
   /** A-01 starts empty: pick a cover by its position in the drop-down (0 = the first cover). */
   /** A-01: tick the radio of the cover at this place in the list (or of this entity id). */

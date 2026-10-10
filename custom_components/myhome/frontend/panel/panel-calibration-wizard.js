@@ -39,6 +39,8 @@ const STAGES_BEFORE_SESSION = ["choose", "path", "profile", "current", "case", "
  * Stop is never held back.
  */
 export const CONFIRM_GUARD_MS = 700;
+/** L-25: the choices made on the owner's own screens that its readers need to show the same step. */
+const SHARED_FLAGS = ["ackLift", "ackAscent", "ackDescent", "ackReadings", "invalidRun", "discarded", "misbehaved"];
 /** How long a sheet takes to slide in or out (the CSS animations use the same). */
 const SHEET_MS = 220;
 /** Home Assistant keeps a session open this long for its owner at rest (IDLE_LEASE_SECONDS) when the view does not say. */
@@ -191,7 +193,11 @@ export class CalibrationWizard {
   }
 
   _screen() {
-    const { t, hass } = this._context, local = this._local, gateway = this._gateway;
+    const { t, hass } = this._context, gateway = this._gateway;
+    // L-25: a reader shows the step the owner shows: the owner's path and the choices made on its screens (published
+    // with `show`) over this tab's own.
+    const shown = gateway?.view?.read_only && !gateway.view.preview ? gateway.view.screen : null;
+    const local = shown ? Object.assign(Object.create(this._local), shown.local || {}, shown.path ? { path: shown.path, scope: shown.scope ?? null } : {}) : this._local;
     const cover = this._cover(), language = hass.language || "en";
     const followed = local.path === "B" ? this._gatewayData()?.profiles.find((profile) => profile.id === local.profileId) : null;
     const screen = buildScreen({ t, language, path: local.path, scope: local.scope, stage: local.stage, local, cover,
@@ -213,6 +219,7 @@ export class CalibrationWizard {
     if (this._frame.querySelector(".wiz-dialog:not([hidden])")) { this._patch(this._screen()); return; }
     const screen = this._screen();
     this._current = screen;
+    this._publish(screen);
     const { t } = this._context;
     const drawing = (position) => screen.illustration?.position === position ? illustrationMarkup(screen.illustration.id, t("wizIllustration"), esc) : "";
     // G2-11: a notice that comments a result sits right under the result box (or the stopwatch), before text and drawing.
@@ -805,6 +812,20 @@ export class CalibrationWizard {
     return this._send("reading", { reading_cm: value });
   }
 
+  /**
+   * L-25/L-26/L-28: what this tab shows, published to the readers of the session it owns: the screen's code, the path
+   * and scope (a reopened session continues on them instead of guessing from the cover), the choices made on screens
+   * Home Assistant does not know (the result acknowledgements, a run judged not valid) and, once Save is pressed,
+   * what is being saved (the readers' A-34).
+   */
+  _publish(screen) {
+    const gateway = this._gateway, view = gateway?.view, local = this._local;
+    if (!gateway?.show || gateway.preview || !view || view.read_only || !view.owner || local.stage !== "session") return;
+    const flags = Object.fromEntries(SHARED_FLAGS.map((name) => [name, local[name] ?? null]));
+    gateway.show({ code: screen.code, path: local.path, scope: local.scope ?? null, slats: local.slats !== false, local: flags,
+      ...(local.pendingSave ? { saved: { target: local.pendingSave.target, name: local.pendingSave.name ?? null, orphan: local.pendingSave.orphan ?? null } } : {}) });
+  }
+
   _save() {
     const screen = this._current, local = this._local;
     const action = screen.actions.find((item) => item.id === "save");
@@ -818,6 +839,8 @@ export class CalibrationWizard {
       local.pendingSave.orphan = previous.name;
     }
     this._arm(this._gateway.view);
+    // L-26: the readers learn what is saved before Home Assistant closes the session.
+    this._publish(screen);
     return this._gateway.save(local.pendingSave);
   }
 
@@ -879,9 +902,14 @@ export class CalibrationWizard {
     if (item) local.coverKey = key(item);
     // The view has no path: a slat and roll measurement of a cover that already follows a profile is the
     // correction "remeasure everything" (C), of any other cover the first of its type (A).
+    // L-28: the path and the choices made come from the session (published by the tab that guided it): a path A on a
+    // cover that already follows a profile stays a path A, with its A-34 and its offer of fine-tuning. Only a session
+    // that never published them falls back on a guess from the cover.
+    const shown = session.screen?.path ? session.screen : null;
     const correction = session.mode === "geometry" && !!item?.profile, timesOnly = session.mode === "guided";
-    Object.assign(local, freshFlags(), { stage: "session", path: correction || timesOnly ? "C" : "A",
-      scope: timesOnly ? "times_only" : correction ? "times_and_rolls" : null, slats: session.slats !== false });
+    Object.assign(local, freshFlags(), { stage: "session", path: shown ? shown.path : correction || timesOnly ? "C" : "A",
+      scope: shown ? shown.scope ?? null : timesOnly ? "times_only" : correction ? "times_and_rolls" : null, slats: session.slats !== false },
+      shown ? Object.fromEntries(SHARED_FLAGS.filter((name) => shown.local?.[name] != null).map((name) => [name, shown.local[name]])) : {});
     this._newGateway("live").resume({ ...this._liveContext(), session });
   }
 
@@ -1081,13 +1109,18 @@ export class CalibrationWizard {
   }
 
   _saved(previewSaved) {
-    const local = this._local;
+    const local = this._local, view = this._gateway?.view ?? this._gateway?.lastView;
+    // L-26: a reader's A-34 is the owner's: what was saved comes from the session (published before Save), and the
+    // owner's path; only «Chiudi» is offered there.
+    const reader = !!view?.read_only && !view.preview;
+    if (reader && view.screen?.path) Object.assign(local, { path: view.screen.path, scope: view.screen.scope ?? null });
+    if (reader) local.pendingSave = view.screen?.saved ? { ...view.screen.saved } : null;
     const target = previewSaved?.target ?? local.pendingSave?.target;
     // The saved screen still shows what the steps measured, and whether the last part was a preview.
     // D-47: path B's stepper keeps the travel typed in B-04 too.
     if (this._gateway?.preview) local.fineReadings = { ...(this._gateway.view?.readings || {}), check: this._gateway.view?.check ?? null, travel: this._gateway.view?.travel_cm ?? null };
     local.saved = { target, name: previewSaved?.name ?? local.pendingSave?.name ?? null, travel_cm: this._gateway?.view?.travel_cm ?? local.review?.travel ?? null,
-      preview: !!this._gateway?.preview, orphan: this._gateway?.preview ? null : local.pendingSave?.orphan ?? null };
+      preview: !!this._gateway?.preview, orphan: this._gateway?.preview ? null : local.pendingSave?.orphan ?? null, reader };
     if (local.path === "B") local.saved.target = "follow_profile";
     local.stage = "saved";
     if (!local.refining && local.review) local.base = { ...local.review };

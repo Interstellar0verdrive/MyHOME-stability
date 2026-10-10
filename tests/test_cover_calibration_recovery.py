@@ -479,6 +479,21 @@ async def test_stop_is_accepted_from_every_reader_and_nothing_else_is(hass, reco
     assert session.owner == "first-controller"  # Stop did not take the session.
 
 
+async def test_the_owner_publishes_its_screen_to_readers_without_a_transition(hass, recovering):
+    """L-25: `show` carries the owner's panel screen to its readers; no sequence, lease or bus change; readers cannot."""
+    cal, session = recovering, recovering.session
+    owner = next(item for item in session.subscribers.values() if item.client_id == session.owner)
+    other = reader(cal, "second-tab")
+    sequence, lease, queued = session.sequence, session.lease_expires_at, len(cal.queue)
+    screen = {"code": "A-12", "path": "A", "local": {"ackAscent": False}}
+    result = await call(hass, cal, cal.connection, owner.token, "show", screen=screen)
+    assert result["screen"] == screen and session.view()["screen"] == screen
+    assert (session.sequence, session.lease_expires_at, len(cal.queue)) == (sequence, lease, queued)
+    assert other.connection.send_event.call_args[0][1]["screen"] == screen, "the reader got it"
+    assert await call(hass, cal, other.connection, other.token, "show", screen={"code": "X"}) == "calibration_owned"
+    assert session.view()["screen"] == screen
+
+
 async def test_stop_during_review_keeps_the_completed_measurements(hass, recovering):
     """Behaviour decision: in review nothing moves; Stop is written, the values stay, Cancel discards them."""
     cal, session = recovering, recovering.session

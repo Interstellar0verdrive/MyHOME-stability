@@ -124,6 +124,9 @@ class CalibrationSession:
         self.subscribers: dict[str, Subscriber] = {}
         # A cycle paused without its owner: the step that would have started, and how.
         self.next_step: dict[str, Any] | None = None
+        # L-25: what the owner's panel shows (its screen and the choices made on it), published to the readers as is.
+        # It is the panel's own description: the session never reads it and it changes nothing of the session.
+        self.shown: dict[str, Any] | None = None
         self.paused_at: datetime | None = None
         self.resume_step: tuple[Callable[[], None], Callable[[], None]] | None = None
         self.moved = False
@@ -165,6 +168,7 @@ class CalibrationSession:
                     else self.lease_expires_at.isoformat()} if self.client_id else {}),
                 "save_modes": ["new", "cover", "shared"] if self.store.profile(self.cover.unique_id) else ["new", "cover"],
                 **({"origin": self.origin} if self.origin else {}),
+                **({"screen": copy.deepcopy(self.shown)} if self.shown is not None else {}),
                 **({"direction": self.direction} if self.direction else {})}
 
     def present(self) -> bool:
@@ -324,6 +328,15 @@ class CalibrationSession:
         if action == "detach":
             self.leave(subscriber)
             return {**self.view(), **self.overlay(subscriber, attached=False)}
+        if action == "show":
+            # L-25: the owner's screen to its readers. Not a transition: no sequence, no lease, nothing to the bus.
+            if not owner:
+                raise ProfileError("calibration_owned")
+            self.shown = msg.get("screen") or None
+            for item in list(self.subscribers.values()):
+                if item.client_id != self.owner:
+                    self.send_to(item)
+            return {**self.view(), **self.overlay(subscriber)}
         if not owner and action != "stop":
             raise ProfileError("calibration_owned")
         if owner:
@@ -701,10 +714,19 @@ def send_error(connection: Any, msg: dict[str, Any], error: Any) -> None:
     connection.send_error(msg["id"], code, code)
 
 
+def shown_screen(value: dict[str, Any]) -> dict[str, Any]:
+    """L-25: a panel's screen description: plain data, small (it travels with every view)."""
+    import json
+    if len(json.dumps(value)) > 2048:
+        raise vol.Invalid("screen too large")
+    return value
+
+
 @websocket_command(as_any({
     vol.Required("type"): WS_ACTION, vol.Required("entry_id"): str,
     vol.Required("session_id"): str,
-    vol.Required("action"): vol.In(["run", "open", "close", "endpoint", "stop", "cancel", "save", "preview_save", "heartbeat", "detach", "next", "lift", "reading", "repeat", "continue", "check"]),
+    vol.Required("action"): vol.In(["run", "open", "close", "endpoint", "stop", "cancel", "save", "preview_save", "heartbeat", "detach", "next", "lift", "reading", "repeat", "continue", "check", "show"]),
+    vol.Optional("screen"): vol.All(dict, shown_screen),
     vol.Optional("reading_cm"): vol.Any(int, float),
     vol.Optional("direction"): vol.In(["opening", "closing"]),
     vol.Optional("target_cm"): vol.Any(int, float),

@@ -61,6 +61,8 @@ class WizardSession extends CoverCalibration {
   }
   _accept(state) {
     const claiming = this._claiming;
+    // L-26: the last view stays readable after the engine closes on «saved».
+    this.lastView = state;
     super._accept(state);
     // Attached again (Home Assistant reconnected, or the page came back): the interruption is over.
     if (state.attached && !this._lost) this.connection = null;
@@ -130,6 +132,8 @@ export class LiveCalibrationGateway {
   ping() { if (this._engine._state && !this._engine._busy) this._engine._perform("heartbeat"); }
 
   get view() { return this._engine._state || null; }
+  /** The last view received, kept after the session ended (the engine closes on «saved»). */
+  get lastView() { return this._engine.lastView || null; }
   get status() {
     const engine = this._engine;
     return { busy: !!engine._busy, lost: !!engine._lost, expired: !!engine._expired, error: engine.error, notice: engine.notice, connection: engine.connection,
@@ -167,6 +171,18 @@ export class LiveCalibrationGateway {
   }
 
   act(action, extra = {}) { return this._engine._perform(action, extra); }
+
+  /**
+   * L-25: publish this tab's screen to the session's readers (Home Assistant's `show`): outside the engine's queue of
+   * verbs (no busy state, nothing held back), only while this tab owns the session, and never twice the same.
+   */
+  show(screen) {
+    const engine = this._engine, state = engine._state, text = JSON.stringify(screen);
+    if (!state || state.read_only || !state.owner || !state.recoverable || text === this._shown) return Promise.resolve();
+    this._shown = text;
+    return engine._context.hass.callWS({ type: "myhome/cover_calibration/action", entry_id: state.entry_id, session_id: state.session_id,
+      ...(state.attachment ? { attachment: state.attachment } : {}), action: "show", screen }).catch(() => { this._shown = null; });
+  }
   /** Forget a refusal once the session has moved to another phase: its values belonged to that phase. */
   clearError() { this._engine.error = null; }
   stop() { return this._engine._perform("stop"); }
@@ -378,6 +394,7 @@ export class PreviewCalibrationGateway {
   stop() { return this.act("stop"); }
   cancel() { return this.act("cancel"); }
   abort() { return this.cancel(); }
+  show() { return Promise.resolve(); }
 
   save({ target, name }) {
     if (this._view?.phase !== "review" || !this.supports(target)) return Promise.resolve();

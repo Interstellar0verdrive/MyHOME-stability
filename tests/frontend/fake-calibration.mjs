@@ -208,6 +208,8 @@ export function createFakeBackend({ language = "en", inventory = coverInventory(
         if (action === "stop") { if (session.phase !== "review") { session.phase = "interrupted"; session.reason = "stopped"; } session.sequence += 1; return backend.view(); }
         if (action === "cancel") { session.phase = "cancelled"; session.reason = "cancelled"; session.sequence += 1; return backend.view(); }
         if (action === "detach") return backend.view();
+        // L-25: the owner's screen, published to readers without a transition.
+        if (action === "show") { session.screen = message.screen; return backend.view(); }
         if (action === "save") {
           if (session.phase !== "review") throw Object.assign(new Error("step"), { code: "calibration_step" });
           if (!session.save_modes.includes(message.save_mode || "new")) throw Object.assign(new Error("mode"), { code: "invalid_profile" });
