@@ -970,6 +970,31 @@ test("L-58b: an armed «Confirm take control» counts down and goes back after 1
   t.mock.timers.reset();
 });
 
+test("L-61: a reader's header says «Stop following» (secondary) and leaves without a dialog; the owner's stays red; it follows a claim", async () => {
+  const view = { phase: "briefing", step: "half_open", reading_kind: "half_open", values: { opening_time: 22, closing_time: 21 },
+    screen: { code: "A-15", path: "A", scope: null, local: { ackLift: true, ackAscent: true } } };
+  const { backend, panel, tab, wiz } = await mount({ session: resumed(view), owner: false });
+  tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
+  const head = () => [...wiz().querySelectorAll(".wiz-head button:not(.icon-button)")].map((button) => [button.className, button.textContent]);
+  assert.deepEqual(head(), [["wiz-unfollow", "Stop following"]], "reader: secondary, no red");
+  assert.equal(panel._beforeLeave?.(), null, "no exit guard armed for a reader");
+  // Taken: the owner's red button; taken back by the other device: the reader's again.
+  wiz().querySelector('[data-wiz="take"]').click(); await tick();
+  wiz().querySelector('[data-wiz="take"]').click(); await tick(8);
+  assert.deepEqual(head(), [["wiz-discard", "Discard calibration"]], "owner: unchanged");
+  const owned = backend.view;
+  backend.view = (extra = {}) => owned({ owner: false, read_only: true, ...extra });
+  backend.emit(); await tick(6);
+  assert.deepEqual(head(), [["wiz-unfollow", "Stop following"]], "control taken back elsewhere");
+  // Stop following: straight back to the list, no dialog, nothing cancelled; the row can follow again.
+  const sent = backend.calls.length;
+  wiz().querySelector(".wiz-unfollow").click(); await tick(8);
+  assert.equal(wiz(), null, "back to the list");
+  assert.equal(backend.calls.slice(sent).some((call) => call.action === "cancel"), false, "nothing cancelled");
+  assert.notEqual(backend.session.phase, "cancelled");
+  assert.ok(tab().querySelector('[data-action="cal-tab-session"]'), "«Open session» still there");
+});
+
 test("L-58: a reader stops a moving cover from its bar", async () => {
   const { backend, tab, wiz } = await mount({ session: resumed({ phase: "opening", step: "opening", reading_kind: "travel", values: {}, _started: 0 }), owner: false });
   tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);

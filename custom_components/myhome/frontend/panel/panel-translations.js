@@ -495,6 +495,7 @@ export const translations = {
     wiz_T570: "Precision",
     wiz_T571: "gap at half travel",
     wiz_T572: "The other device confirms this step.",
+    wiz_T573: "Stop following",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1454,6 +1455,7 @@ export const translations = {
     wiz_T570: "Precisione",
     wiz_T571: "scarto a metà corsa",
     wiz_T572: "La conferma di questo passo spetta all'altro dispositivo.",
+    wiz_T573: "Smetti di seguire",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

@@ -249,7 +249,10 @@ export class CalibrationWizard {
         <header class="wiz-head">
           ${screen.back ? `<button type="button" class="icon-button wiz-back" data-wiz="back" aria-label="${esc(t("wiz_T403"))}" title="${esc(t("wiz_T403"))}"><ha-icon icon="mdi:arrow-left" aria-hidden="true"></ha-icon></button>` : ""}
           <div class="wiz-head-text"><h3 id="wiz-cover" class="wiz-cover">${esc(screen.header.title)}</h3><p class="muted wiz-head-sub" hidden></p></div>
-          ${screen.discard ? `<button type="button" class="wiz-discard" data-wiz="exit">${esc(t("wizDiscard"))}</button>` : ""}
+          ${screen.discard ? (screen.readOnly
+            // L-61: a reader only stops following (the calibration goes on elsewhere): secondary, no dialog.
+            ? `<button type="button" class="wiz-unfollow" data-wiz="exit">${esc(t("wiz_T573"))}</button>`
+            : `<button type="button" class="wiz-discard" data-wiz="exit">${esc(t("wizDiscard"))}</button>`) : ""}
           <button type="button" class="icon-button wiz-x" data-wiz="${screen.discard ? "exit" : "close"}" aria-label="${esc(screen.discard ? t("wizDiscard") : t("wiz_T158"))}" title="${esc(screen.discard ? t("wizDiscard") : t("wiz_T158"))}"><ha-icon icon="mdi:close" aria-hidden="true"></ha-icon></button>
         </header>
         <div class="wiz-compact"><span class="wiz-dot" aria-hidden="true"></span><span class="wiz-compact-line"></span>

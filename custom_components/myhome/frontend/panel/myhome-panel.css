@@ -1191,6 +1191,11 @@ dialog.cal-dialog :is(button, select, input):focus:not(:focus-visible) { outline
 .wiz-discard { display: inline-flex; align-items: center; justify-content: center; align-self: center; box-sizing: border-box; min-height: 44px; padding: 0 16px;
   border: 1px solid var(--panel-error); border-radius: var(--cal-btn-radius); background: transparent; color: var(--panel-error); font-weight: 500; }
 @media (hover: hover) { .wiz-discard:hover { background: color-mix(in srgb, var(--panel-error) 8%, transparent); } }
+/* L-61: a reader's header button only stops following: the same shape, secondary (accent outline), never red. */
+.wiz-unfollow { display: inline-flex; align-items: center; justify-content: center; align-self: center; box-sizing: border-box; min-height: 44px; padding: 0 16px;
+  border: 1px solid var(--panel-accent); border-radius: var(--cal-btn-radius); background: transparent; color: var(--panel-accent); font-weight: 500; }
+@media (hover: hover) { .wiz-unfollow:hover { background: color-mix(in srgb, var(--panel-accent) 8%, transparent); } }
+.wiz-unfollow:active { background: color-mix(in srgb, var(--panel-accent) 12%, transparent); }
 /* L-47: the row menu's cancel confirmation, outlined red as every action that discards now. */
 .cal-abort-actions button.danger { border-color: var(--panel-error); }
 .wiz-x { display: none; }
@@ -1547,7 +1552,7 @@ dialog.cal-dialog .dialog-head { justify-content: space-between; padding-block: 
   .wiz-frame { display: flex; flex-direction: column; min-height: 0; height: 100%; }
   .wiz-head { padding: calc(12px + var(--cal-safe-top)) calc(16px + var(--cal-safe-right)) 12px calc(16px + var(--cal-safe-left)); }
   .wiz-compact { padding-inline: calc(16px + var(--cal-safe-left)) calc(16px + var(--cal-safe-right)); }
-  .wiz-discard { display: none; }
+  .wiz-discard, .wiz-unfollow { display: none; }
   .wiz-x { display: inline-flex; }
   /* M2-1: every ✕ of a title bar or sheet is a 44 px touch target with a 24 px icon. */
   .wiz-x, .wiz-sheet-close, .cal-page-close { width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0; justify-content: center; }
@@ -1637,7 +1642,7 @@ dialog.cal-dialog .dialog-head { justify-content: space-between; padding-block: 
   .wiz-head-text { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: center; column-gap: 10px; }
   .wiz-cover { font-size: 16px; }
   .wiz-head .muted { margin: 0; font-size: 12px; }
-  .wiz-discard { display: none; }
+  .wiz-discard, .wiz-unfollow { display: none; }
   .wiz-x { display: inline-flex; width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0; justify-content: center; }
   .wiz-x ha-icon { --mdc-icon-size: 24px; }
   .wiz-steps { display: none; }
