@@ -124,11 +124,53 @@ export class CalibrationTab {
     else if (!still && this._fullHold) { this._fullHold(); this._fullHold = null; }
   }
 
+  /** L-6/L-7, D-39: what the window tells the list (rotation, phone edge, fonts); returns its teardown (R-8). */
+  _watchWindow(context) {
+    const off = [];
+    const listen = (target, type, handler, options) => {
+      if (!target?.addEventListener) return;
+      target.addEventListener(type, handler, options);
+      off.push(() => target.removeEventListener(type, handler, options));
+    };
+    // L-6/L-7: a rotation or a window that crosses the phone's edge changes the layout without always changing the
+    // tab's width first (iOS settles the media queries after the resize): the list is drawn again for the new mode
+    // (no card open in place on the phone, no page outside it), and every card is measured again, also once the
+    // rotation has settled.
+    const view = context.host.ownerDocument?.defaultView;
+    const relayout = () => {
+      if (this._mode.kind !== "list") return;
+      if (layout.phone() !== this._wasPhone) this._render(); else { this._band(); this._alignCards(); }
+    };
+    const frame = globalThis.requestAnimationFrame || ((callback) => setTimeout(callback, 16));
+    for (const query of [PHONE, SHORT]) {
+      const list = typeof view?.matchMedia === "function" ? view.matchMedia(query) : null;
+      listen(list, "change", () => frame(relayout));
+    }
+    // L-7b: after a rotation WebKit may keep the cards' previous geometry (container queries and measured rules not
+    // evaluated again) until a touch changes a state on them. Once the rotation has settled (two frames and 150 ms,
+    // again at 400 ms), the list is laid out afresh: see `_settleLayout`.
+    let settle = 0;
+    const settled = () => {
+      clearTimeout(settle);
+      frame(() => frame(() => { settle = setTimeout(() => { this._settleLayout(); setTimeout(() => this._settleLayout(), 250); }, 150); }));
+    };
+    listen(view, "orientationchange", () => { frame(relayout); settled(); });
+    listen(view?.visualViewport, "resize", settled);
+    // D-39: the measured card layouts (chips, Q-14 edge) are measured again once the fonts have loaded.
+    const fonts = context.host.ownerDocument?.fonts;
+    listen(fonts, "loadingdone", () => this._alignCards());
+    fonts?.ready?.then(() => this._alignCards());
+    return () => { clearTimeout(settle); for (const remove of off.splice(0)) remove(); };
+  }
+
   /** Replace the wizard (tests use a faster preview); `null` leaves only sessions and groups. */
   useWizard(wizard) { this._wizard?.close(); this._wizard = wizard; }
 
   clear() {
     this._context?.setBeforeLeave?.(null);
+    // R-8: one teardown for what the tab hung on the window and on a docked view.
+    this._windowOff?.(); this._windowOff = null;
+    this._undockView?.(); this._undockView = null; this._dockedView = null;
     this._catalogue?.close();
     this._generation++;
     this._closeDialog();
@@ -182,35 +224,10 @@ export class CalibrationTab {
           });
         }).observe(host);
       }
-      // L-6/L-7: a rotation or a window that crosses the phone's edge changes the layout without always changing the
-      // tab's width first (iOS settles the media queries after the resize): the list is drawn again for the new mode
-      // (no card open in place on the phone, no page outside it), and every card is measured again, also once the
-      // rotation has settled.
-      const view = context.host.ownerDocument?.defaultView;
-      const relayout = () => {
-        if (this._mode.kind !== "list") return;
-        if (layout.phone() !== this._wasPhone) this._render(); else { this._band(); this._alignCards(); }
-      };
-      const frame = globalThis.requestAnimationFrame || ((callback) => setTimeout(callback, 16));
-      for (const query of [PHONE, SHORT]) {
-        const list = typeof view?.matchMedia === "function" ? view.matchMedia(query) : null;
-        list?.addEventListener?.("change", () => frame(relayout));
-      }
-      // L-7b: after a rotation WebKit may keep the cards' previous geometry (container queries and measured rules not
-      // evaluated again) until a touch changes a state on them. Once the rotation has settled (two frames and 150 ms,
-      // again at 400 ms), the list is laid out afresh: see `_settleLayout`.
-      let settle = 0;
-      const settled = () => {
-        clearTimeout(settle);
-        frame(() => frame(() => { settle = setTimeout(() => { this._settleLayout(); setTimeout(() => this._settleLayout(), 250); }, 150); }));
-      };
-      view?.addEventListener?.("orientationchange", () => { frame(relayout); settled(); });
-      view?.visualViewport?.addEventListener?.("resize", settled);
-      // D-39: the measured card layouts (chips, Q-14 edge) are measured again once the fonts have loaded.
-      const fonts = context.host.ownerDocument?.fonts;
-      fonts?.addEventListener?.("loadingdone", () => this._alignCards());
-      fonts?.ready?.then(() => this._alignCards());
     }
+    // R-8: the window's listeners once per showing, removed by `clear()` (not once per host: a rebuilt shell gave a new
+    // host, and every one added them again).
+    if (!this._windowOff) this._windowOff = this._watchWindow(context);
     if (changed) {
       const generation = this._generation;
       for (const entry of context.gateways) this._rows.set(entry.entry_id, { loading: false, data: null, session: null, error: false, again: false });

@@ -1157,6 +1157,31 @@ test("L-83: an open row's band in the accent at 20 %, its details at 10 %, both 
   }
 });
 
+test("R-8: what the tab hangs on the window is removed when it is cleared, and added once when it shows again", async () => {
+  const view = dom.window;
+  const active = new Map();
+  const add = view.addEventListener.bind(view), remove = view.removeEventListener.bind(view);
+  view.addEventListener = (type, handler, options) => { if (type === "orientationchange") active.set(handler, true); return add(type, handler, options); };
+  view.removeEventListener = (type, handler, options) => { if (type === "orientationchange") active.delete(handler); return remove(type, handler, options); };
+  try {
+    const { panel } = await mount();
+    const tab = panel._calibrationTab;
+    assert.equal(active.size, 1, "one listener while the tab shows");
+    const context = tab._context;
+    tab.clear();
+    assert.equal(active.size, 0, "none once cleared");
+    // A rebuilt shell gives the tab a new host: still one listener, not one more per host.
+    const host = context.host.ownerDocument.createElement("div"); context.host.after(host);
+    tab.show({ ...context, host }); await tick(4);
+    tab.show({ ...context, host }); await tick(4);
+    assert.equal(active.size, 1);
+    tab.clear();
+    assert.equal(active.size, 0);
+  } finally {
+    view.addEventListener = add; view.removeEventListener = remove;
+  }
+});
+
 test("L-18: a tap on the cover already chosen in A-01 un-chooses it", async () => {
   const { wiz, tab, pickCover, code } = await mount();
   tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
