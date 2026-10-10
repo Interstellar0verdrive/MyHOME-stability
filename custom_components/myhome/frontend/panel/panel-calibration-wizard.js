@@ -78,6 +78,7 @@ export class CalibrationWizard {
     this._navResolve = null;
     this._unloadGuard(false);
     this._generation++;
+    this._staying = null;
     clearTimeout(this._guardTimer);
     this._gateway?.close();
     this._gateway = null;
@@ -806,9 +807,7 @@ export class CalibrationWizard {
       // R-6: only a cancel Home Assistant confirmed lets the gateway go; refused (its error shows) or not sent, the
       // session stays here, still reserving the cover for this tab, instead of being detached and left to its lease.
       const gateway = this._gateway;
-      this._staying = true;
       Promise.resolve(gateway?.act("cancel")).catch(() => {}).finally(() => {
-        this._staying = false;
         if (this._gateway !== gateway) return;
         if (gateway && (gateway.lastView || gateway.view)?.phase !== "cancelled") { this._render(); return; }
         this._dropGateway(); Object.assign(local, freshFlags(), { stage: "before" }); this._render();
@@ -942,7 +941,7 @@ export class CalibrationWizard {
     return this._gateway;
   }
 
-  _dropGateway() { clearInterval(this._leaseTimer); this._leaseTimer = null; clearInterval(this._tickTimer); this._tickTimer = null; this._gateway?.close(); this._gateway = null; }
+  _dropGateway() { clearInterval(this._leaseTimer); this._leaseTimer = null; clearInterval(this._tickTimer); this._tickTimer = null; this._gateway?.close(); this._gateway = null; this._staying = null; }
 
   /** The idle expiry warning counts down without any message from Home Assistant: redraw it every 15 s. */
   _watchLease() {
@@ -957,11 +956,17 @@ export class CalibrationWizard {
   }
 
   _liveContext() {
-    const item = this._item(), { hass, t } = this._context, generation = this._generation;
+    // Called once the gateway it serves is in place (`this._newGateway("live").start({ ...this._liveContext() })`).
+    const item = this._item(), { hass, t } = this._context, generation = this._generation, gateway = this._gateway;
     return { host: this._engineHost(), hass, t, entity: { entry_id: item.entry.entry_id, entity_id: item.cover.entity_id }, revision: item.revision,
       onSaved: () => { if (generation === this._generation) this._saved(); },
-      // R-2: a cancel asked to start over closes the session, not the wizard (one-shot, set by `_abortDead`).
-      onCancel: () => { if (generation !== this._generation) return; if (this._staying) { this._staying = false; return; } this._finish(); } };
+      // R-2: a cancel asked to start over closes the session, not the wizard (one-shot, set by `_abortDead`). S-2: the
+      // flag names the gateway it was set for, so it never swallows the cancel of a later session.
+      onCancel: () => {
+        if (generation !== this._generation) return;
+        if (this._staying === gateway) { this._staying = null; return; }
+        this._finish();
+      } };
   }
 
   _begin() {
@@ -1369,9 +1374,9 @@ export class CalibrationWizard {
     const discarded = this._discarded(gateway);
     // Staying: the view's own close after Cancel must not close the wizard. R-2: a one-shot flag, not a new generation,
     // so a refused cancel leaves every callback of this gateway alive.
-    if (stay) this._staying = true;
+    if (stay) this._staying = gateway;
     await gateway.abort();
-    if (gateway.status.cancelPending || gateway.status.error) { this._staying = false; if (this._gateway === gateway) this._render(); return false; }
+    if (gateway.status.cancelPending || gateway.status.error) { if (this._staying === gateway) this._staying = null; if (this._gateway === gateway) this._render(); return false; }
     discarded();
     return true;
   }

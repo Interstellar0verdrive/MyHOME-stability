@@ -2218,6 +2218,31 @@ test("R-2: a refused cancel on «Start over» leaves the wizard alive: the next 
   void panel;
 });
 
+test("S-2: «Start over» while «Cancel the measurement» is still on its way: the next session's exit still closes the wizard", async () => {
+  const { backend, tab, wiz, code, press } = await mount({ session: interrupted() });
+  tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
+  assert.equal(code(), "S-01");
+  const original = backend.hass.callWS;
+  let release;
+  backend.hass.callWS = (message) => message.action === "cancel" && !release
+    ? new Promise((resolve) => { release = () => resolve(original(message)); }) : original(message);
+  wiz().querySelector('[data-wiz="abort"]').click(); await tick(6);
+  assert.ok(release, "the first cancel is on its way");
+  wiz().querySelector('[data-wiz="start-over"]').click(); await tick(6);
+  release(); await tick(12);
+  backend.hass.callWS = original;
+  assert.equal(backend.session.phase, "cancelled");
+  assert.ok(wiz(), "the wizard stays open to start again");
+  // A new session, then «Exit without saving»: the wizard closes (before S-2 the stale flag swallowed this cancel).
+  backend.hass.states["cover.living_one"] = { state: "closed", attributes: { current_position: 0 } };
+  await press("begin");
+  assert.ok(backend.session && backend.session.phase !== "cancelled", "a new session is open");
+  wiz().querySelector('[data-wiz="exit"]').click(); await tick();
+  wiz().querySelector('[data-wiz="leave"]').click(); await tick(12);
+  assert.equal(backend.session.phase, "cancelled");
+  assert.equal(wiz(), null, "the wizard closed");
+});
+
 test("L-10: Start over and Abandon from S-01 cancel the interrupted session first; the exit of a live one cancels it", async () => {
   // Start over: the session is cancelled, then the wizard starts again from «Before you begin».
   const a = await mount({ session: interrupted(), owner: false });
