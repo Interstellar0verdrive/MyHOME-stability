@@ -731,6 +731,12 @@ test("L-56: the header's «Abandon the calibration» is 44 px high, its label ce
   assert.match(css, /\.wiz-discard \{ display: inline-flex; align-items: center; justify-content: center; align-self: center; box-sizing: border-box; min-height: 44px; padding: 0 16px;/);
 });
 
+test("L-57: a red button keeps its red border under the pointer, pressed and focused; no accent", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /:is\(\.wiz-discard, \.wiz-leave, \.wiz-action\.stop, \.wiz-action\.danger-outline, \.wiz-action\.danger, \.cal-abort-actions button\.danger\):is\(:hover, :active, :focus, :focus-visible\) \{ border-color: var\(--panel-error\); \}/);
+  assert.match(css, /:focus-visible \{ outline-color: var\(--panel-error\); \}/);
+});
+
 test("L-18: a tap on the cover already chosen in A-01 un-chooses it", async () => {
   const { wiz, tab, pickCover, code } = await mount();
   tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();

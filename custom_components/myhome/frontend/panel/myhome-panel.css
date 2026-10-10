@@ -1403,6 +1403,12 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 :is(.wiz-action.stop, .wiz-action.danger-outline, .wiz-action.danger):active:not(:disabled) { background: color-mix(in srgb, var(--panel-error) 12%, transparent); }
 @media (hover: hover) { .wiz-action.link:hover:not(:disabled) { background: transparent; text-decoration: underline; color: color-mix(in srgb, var(--panel-accent) 80%, #000); } }
 .wiz-action.danger { border: 1px solid var(--panel-error); background: transparent; color: var(--panel-error); }
+/* L-57: no accent on a red button: its border stays red under the pointer, pressed and focused (the shell's
+   `button:hover` would turn it blue), and its keyboard ring is red too. */
+:is(.wiz-discard, .wiz-leave, .wiz-action.stop, .wiz-action.danger-outline, .wiz-action.danger, .cal-abort-actions button.danger):is(:hover, :active, :focus, :focus-visible) { border-color: var(--panel-error); }
+@media (hover: hover) { :is(.wiz-discard, .wiz-leave):hover { background: color-mix(in srgb, var(--panel-error) 8%, transparent); } }
+:is(.wiz-discard, .wiz-leave, .cal-abort-actions button.danger):active { background: color-mix(in srgb, var(--panel-error) 12%, transparent); }
+:is(.wiz-discard, .wiz-leave, .wiz-action.stop, .wiz-action.danger-outline, .wiz-action.danger, .cal-abort-actions button.danger):focus-visible { outline-color: var(--panel-error); }
 /* L-47: a blue text link among the actions (a way on that is neither the primary nor red). */
 .wiz-action.text { min-height: 44px; border: 0; background: transparent; box-shadow: none; color: var(--panel-accent); }
 @media (hover: hover) { :is(.wiz-action.text, .wiz-link, .wiz-more-toggle, .cal-disclosure-toggle):hover:not(:disabled) { background: transparent; text-decoration: underline; color: color-mix(in srgb, var(--panel-accent) 80%, #000); } }
