@@ -44,6 +44,12 @@ READING_WARN_SHARE = 0.10
 CHECK_RETURNS = frozenset({"stopped", "unexpected_stop", "unexpected_movement"})
 
 
+def edge_percent(reading_cm: float, travel_cm: float) -> float:
+    """R-1: where a tape reading puts the edge, in percent of the travel. A reading accepted above the travel (L-9: up
+    to its physical limit, the tape read past the window's top) is the top, never past it."""
+    return min(100.0, max(0.0, 100 * reading_cm / travel_cm))
+
+
 class GeometryCalibrationSession(guided.CalibrationSession):
     """No browser timings, unattended continuation, or partially saved geometry."""
 
@@ -336,7 +342,7 @@ class GeometryCalibrationSession(guided.CalibrationSession):
             # The verdict is published with the measurements; Save stays available either way.
             check = cast(CalibrationCheck, self.check)
             check.read(value)
-            self.edge_position = 100 * cast(float, check.measured_cm) / check.travel_cm
+            self.edge_position = edge_percent(cast(float, check.measured_cm), check.travel_cm)
             self.checking, self.check_before = False, None
             self.step, self.phase = "half_close", "review"
             self.emit()
@@ -381,7 +387,7 @@ class GeometryCalibrationSession(guided.CalibrationSession):
             self.geometry = {"slat_time_s": slat, "opening_roll": roll}
             self.geometry_provenance = {key: evidence("guided", self.cover.unique_id) for key in self.geometry}
             self.readings["half_open"] = number
-            self.edge_position = 100 * number / cast(float, self.measured_travel)
+            self.edge_position = edge_percent(number, cast(float, self.measured_travel))
             self.step, self.after_position = "top", "half_close"
         else:
             roll = closing_fit(self.values["closing_time"], self.geometry["slat_time_s"], self.samples["half_close"],
@@ -389,7 +395,7 @@ class GeometryCalibrationSession(guided.CalibrationSession):
             self.geometry["closing_roll"] = roll
             self.geometry_provenance["closing_roll"] = evidence("guided", self.cover.unique_id)
             self.readings["half_close"] = number
-            self.edge_position = 100 * number / cast(float, self.measured_travel)
+            self.edge_position = edge_percent(number, cast(float, self.measured_travel))
             self.phase = "review"
             self.emit()
             return
