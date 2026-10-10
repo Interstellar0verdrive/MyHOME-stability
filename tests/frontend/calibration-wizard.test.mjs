@@ -1196,6 +1196,31 @@ test("R-10: closing the wizard gives the focus back to what opened it", async ()
   assert.equal(active?.dataset.action, "cal-tab-measure", "the header's «Calibrate a cover» has the focus again");
 });
 
+test("L-84/L-85/L-88: the phone bar on the steps strip's surface, no bar on the motor box, a note's bar in its text's colour", () => {
+  assert.match(cascadeCss, /\.wiz-actions \{ padding: 12px calc\(16px \+ var\(--cal-safe-right\)\) calc\(12px \+ var\(--cal-safe-bottom\)\) calc\(16px \+ var\(--cal-safe-left\)\); border-top: 1px solid var\(--panel-border\); background: var\(--panel-surface-2\); \}/, "L-84");
+  const doc = dom.window.document;
+  const host = doc.createElement("div"); host.className = "cal-tab"; doc.body.append(host);
+  host.innerHTML = '<div class="wiz-stopwatch"></div>';
+  assert.equal(winner(host.firstElementChild, "border-inline-start"), "", "L-85: the motor box is not a note");
+  host.remove();
+  for (const theme of ["light", "dark"]) {
+    const box = doc.createElement("div"); box.className = "cal-tab"; box.dataset.theme = theme; doc.body.append(box);
+    box.innerHTML = '<p class="cal-note"></p><p class="cal-note is-success"></p><p class="notice error"></p><p class="cal-note is-warning"></p>';
+    const [info, success, error, warning] = box.children;
+    const bar = (note) => winner(note, "border-inline-start-color") || "var(--note-tone)";
+    if (theme === "light") {
+      assert.equal(bar(info), winner(info, "color"), "light info: bar as text");
+      assert.equal(bar(success), winner(success, "color"), "light success: bar as text");
+      assert.equal(winner(error, "color"), "var(--panel-error)");
+      assert.equal(winner(error, "border-inline-start"), "2px solid var(--note-tone)");
+    } else {
+      assert.equal(bar(info), "var(--note-tone)", "dark: the tone's colour, as before");
+    }
+    assert.equal(winner(warning, "border-inline-start"), "2px solid var(--note-tone)", `${theme}: a warning's bar yellow`);
+    box.remove();
+  }
+});
+
 test("L-18: a tap on the cover already chosen in A-01 un-chooses it", async () => {
   const { wiz, tab, pickCover, code } = await mount();
   tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();

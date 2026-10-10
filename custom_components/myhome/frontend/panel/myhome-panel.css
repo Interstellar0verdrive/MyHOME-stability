@@ -1241,7 +1241,7 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-body p { margin: 0 0 10px; line-height: 1.55; }
 .wiz-body p:last-child { margin-bottom: 0; }
 /* The motor bar is as wide as the drawing under it (at most 564 px), left-aligned; its value at the right end. */
-.wiz-stopwatch { box-sizing: border-box; width: min(100%, var(--wiz-stopwatch-width, 564px)); display: flex; justify-content: space-between; gap: 12px; padding: 10px 16px; border-radius: var(--cal-btn-radius); border-inline-start: 4px solid var(--panel-accent); background: var(--panel-accent-soft); font-variant-numeric: tabular-nums; }
+.wiz-stopwatch { box-sizing: border-box; width: min(100%, var(--wiz-stopwatch-width, 564px)); display: flex; justify-content: space-between; gap: 12px; padding: 10px 16px; border-radius: var(--cal-btn-radius); background: var(--panel-accent-soft); font-variant-numeric: tabular-nums; }
 /* Label/value pairs follow the tab's blocks: the label regular, the value bold. */
 .wiz-stopwatch-label { font-weight: 400; color: var(--panel-text-2); }
 /* Live values keep their width: tabular digits and a minimum width, so the label never moves while they count. */
@@ -1598,7 +1598,8 @@ dialog.cal-dialog .dialog-head { justify-content: space-between; padding-block: 
   /* A column of blocks that keep their own height: in the scrolling grid a scaled drawing kept a shorter row and the
      text under it slid beneath the drawing. */
   .wiz-main > * { flex-shrink: 0; min-width: 0; }
-  .wiz-actions { padding: 12px calc(16px + var(--cal-safe-right)) calc(12px + var(--cal-safe-bottom)) calc(16px + var(--cal-safe-left)); border-top: 1px solid var(--panel-border); background: var(--panel-surface); }
+  /* L-84: the bar on its own surface, the steps strip's at the top, in both themes. */
+  .wiz-actions { padding: 12px calc(16px + var(--cal-safe-right)) calc(12px + var(--cal-safe-bottom)) calc(16px + var(--cal-safe-left)); border-top: 1px solid var(--panel-border); background: var(--panel-surface-2); }
   /* A fade above the bar while the content goes on below it (`has-more`, set from the content's scroll). */
   .wiz-actions { position: relative; }
   .wiz-actions::before { content: ""; position: absolute; inset-inline: 0; bottom: calc(100% + 1px); height: 40px; pointer-events: none;
@@ -1668,8 +1669,11 @@ dialog.cal-dialog .dialog-head { justify-content: space-between; padding-block: 
 :is(.cal-note.is-warning, .cal-tab .notice.cal-tab-busy, .cal-tab .notice[data-tone="warning"]) { --note-tone: var(--panel-warning); }
 :is(.cal-tab .notice.error, .cal-tab .notice[data-tone="error"]) { --note-tone: var(--panel-error); }
 .cal-tab .notice ha-icon { display: none; }
-/* Light: an info note's text in the accent, a little darker to read on white. */
-.cal-note:not(.is-warning, .is-success) { color: color-mix(in srgb, var(--panel-accent) 80%, #000); }
+/* Light: an info note's text in the accent, a little darker to read on white. L-88: where the text has the tone's
+   colour (info, success, error) the bar takes exactly the text's colour, one token for both; a warning's text stays
+   the text colour, its bar yellow. */
+.cal-note:not(.is-warning, .is-success) { color: color-mix(in srgb, var(--panel-accent) 80%, #000); border-inline-start-color: color-mix(in srgb, var(--panel-accent) 80%, #000); }
+:is(.cal-note.is-success, .cal-tab .notice.cal-tab-done, .cal-tab .notice[data-tone="success"]) { border-inline-start-color: var(--panel-success); }
 /* Light: warning and error notes in their box, as before L-74 but square, with the 2 px bar. */
 .cal-note.is-warning { background: color-mix(in srgb, var(--panel-warning) 8%, var(--panel-surface));
   border: 1px solid color-mix(in srgb, var(--panel-warning) 75%, transparent); border-inline-start: 2px solid var(--note-tone); padding: 8px 12px; }
@@ -1682,7 +1686,7 @@ dialog.cal-dialog .dialog-head { justify-content: space-between; padding-block: 
 /* Dark: every tone a quote, its text as before. */
 [data-theme="dark"] :is(.cal-note.is-warning, .cal-tab .notice.cal-tab-busy, .cal-tab .notice[data-tone="warning"], .cal-tab .notice.error, .cal-tab .notice[data-tone="error"]) {
   background: none; border: 0 solid transparent; border-inline-start: 2px solid var(--note-tone); padding: 4px 0 4px 12px; }
-[data-theme="dark"] .cal-note:not(.is-warning, .is-success) { color: color-mix(in srgb, var(--panel-accent) 70%, var(--primary-text-color, #fff)); }
+[data-theme="dark"] .cal-note:not(.is-warning, .is-success) { color: color-mix(in srgb, var(--panel-accent) 70%, var(--primary-text-color, #fff)); border-inline-start-color: var(--note-tone); }
 /* L-72: one corner radius for the calibration tab, the wizard and their dialogs: the shell's 8 px (`--cal-btn-radius`)
    for notes, tiles, cards, boxes, menus, inputs, drop-downs and buttons. Chips and counts stay pills, marks and radios
    round; the dialogs' and sheets' own frames and the list and wizard frames keep Home Assistant's card radius. */
