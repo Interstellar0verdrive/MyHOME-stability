@@ -2855,7 +2855,10 @@ test("a lift-off gap under 1 cm repeats the run and the repeat says which value 
   await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
   await press("ack:lift"); await press("next"); await move(backend); await press("lift"); backend.stopped(); await tick();
   assert.equal(code(), "A-08");
-  assert.equal(wiz().querySelector("#wiz-field-hint").textContent, "Di solito 1–4 cm.");
+  assert.equal(wiz().querySelector("#wiz-field-hint").textContent,
+    "Di solito 1–4 cm. Non è un errore da correggere: con questo numero il ritardo della pressione si annulla e il risultato diventa più preciso.", "L-76: the reassurance in the hint");
+  assert.equal(wiz().querySelector(".wiz-body").textContent.trim(), "Fra la pressione e l'arresto passa sempre un istante, e il bordo continua a salire per quell'istante. Misura con il metro quanti centimetri ci sono ora dalla base della finestra, cioè l'appoggio su cui si ferma la tapparella chiusa, al bordo inferiore del telo.", "L-76: the shorter text");
+  assert.doesNotMatch(wiz().querySelector(".wiz-body").textContent + wiz().querySelector("#wiz-field-hint").textContent, /—/, "no em dash");
   // 0,5 is sent as it is (no rounding): under the backend's 1 cm the edge still rests.
   await type("0,5");
   assert.equal(backend.calls.filter((message) => message.action === "reading").at(-1).reading_cm, 0.5);
