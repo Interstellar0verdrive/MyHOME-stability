@@ -509,8 +509,9 @@ export class CalibrationWizard {
       const focused = column.contains(root.getRootNode().activeElement) ? root.getRootNode().activeElement.dataset.wiz : null;
       this._actionsSignature = actions;
       // L-58: a reader's bar: one warning note saying who guides the calibration, then «Prendi il controllo».
+      // L-67: the only action a reader has is the primary of its bar, armed or not.
       column.innerHTML = `${screen.readOnly ? `<div class="wiz-readonly"><p class="cal-note is-warning wiz-readonly-note">${esc(screen.readOnly.text)}</p>
-          <button type="button" class="wiz-take ${screen.readOnly.primary || screen.readOnly.consequence ? "primary" : "secondary"}" data-wiz="take">${esc(takeLabel(screen.readOnly))}</button>
+          <button type="button" class="wiz-take primary" data-wiz="take">${esc(takeLabel(screen.readOnly))}</button>
           ${screen.readOnly.consequence ? `<p class="muted">${esc(screen.readOnly.consequence)}</p>` : ""}</div>` : ""}
         ${(() => {
           const one = (action) => action.kind === "status" || action.kind === "state"

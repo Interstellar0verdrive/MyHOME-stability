@@ -411,7 +411,7 @@ test("a reader sees the step read-only and takes control in two taps while the o
   // L-58: the reader's bar: one warning note, then Take control; none of the owner's buttons; no Stop at rest.
   assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-readonly > p")].map((line) => [line.className, line.textContent]),
     [["cal-note is-warning wiz-readonly-note", "Another device is guiding this calibration."]]);
-  assert.equal(wiz().querySelector('[data-wiz="take"]').className, "wiz-take secondary");
+  assert.equal(wiz().querySelector('[data-wiz="take"]').className, "wiz-take primary", "L-67: the reader's only action is its primary");
   assert.deepEqual([...wiz().querySelectorAll(".wiz-action")].map((button) => button.dataset.wiz), [], "no owner's buttons, not even greyed");
   assert.match(wiz().querySelector(".wiz-body").textContent, /The other device confirms this step\.$/, "what the owner decides, said in the text");
   assert.equal(wiz().querySelector('.wiz-frame [name="reading_cm"]').disabled, true, "the field is there, read only");
@@ -419,6 +419,7 @@ test("a reader sees the step read-only and takes control in two taps while the o
   assert.equal(wiz().querySelector(".wiz-stopwatch").hidden, true, "who guides it is no longer in the stopwatch box");
   wiz().querySelector('[data-wiz="take"]').click(); await tick();
   assert.equal(wiz().querySelector('[data-wiz="take"]').textContent, "Confirm take control · 10 s");
+  assert.equal(wiz().querySelector('[data-wiz="take"]').className, "wiz-take primary", "L-67: armed, still the primary");
   assert.match(wiz().querySelector(".wiz-readonly").textContent, /this device will guide the calibration/);
   assert.equal(backend.subscriptions.filter((message) => message.claim).length, 0, "the first tap sends nothing");
   wiz().querySelector('[data-wiz="take"]').click(); await tick(6);
@@ -1106,7 +1107,6 @@ test("L-58: a reader's bar while the cover moves: the note, Take control and Sto
   assert.deepEqual(screen.actions.map((action) => [action.id, action.kind, !!action.disabled]), [["stop", "stop", false]]);
   assert.equal(screen.readOnly.text, "Another device is guiding this calibration.");
   assert.equal(screen.readOnly.take, "Take control");
-  assert.equal(screen.readOnly.primary, false, "the owner is present: taking control is not the first choice");
 });
 
 test("a check run is shown like an intermediate run, two stages and its own bar, Stop only while it moves, then asks for its tape reading (L-44)", () => {

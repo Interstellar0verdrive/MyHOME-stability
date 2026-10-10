@@ -1413,8 +1413,8 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
   background: color-mix(in srgb, var(--panel-accent) 14%, var(--panel-surface)); color: color-mix(in srgb, var(--primary-text-color, #fff) 45%, transparent); }
 .wiz-action.secondary { border-color: var(--panel-accent); color: var(--panel-accent); background: transparent; }
 /* L-47: outlined actions answer the pointer as the primary does: the accent at 8 % under the pointer, 12 % pressed. */
-@media (hover: hover) { .wiz-action.secondary:hover:not(:disabled), button.wiz-take.secondary:hover:not(:disabled) { background: color-mix(in srgb, var(--panel-accent) 8%, transparent); } }
-.wiz-action.secondary:active:not(:disabled), button.wiz-take.secondary:active:not(:disabled) { background: color-mix(in srgb, var(--panel-accent) 12%, transparent); }
+@media (hover: hover) { .wiz-action.secondary:hover:not(:disabled) { background: color-mix(in srgb, var(--panel-accent) 8%, transparent); } }
+.wiz-action.secondary:active:not(:disabled) { background: color-mix(in srgb, var(--panel-accent) 12%, transparent); }
 /* L-47 (revised, HANDOFF §9.122): red is only for emergencies and abandoning a process, always outlined («Ferma la
    tapparella», «Annulla la misurazione», «Esci senza salvare», «Abbandona la calibrazione»); no red text, no red fill. */
 .wiz-action.stop, .wiz-action.danger-outline { min-height: 44px; border: 1px solid var(--panel-error); color: var(--panel-error); background: transparent; box-shadow: none; }
@@ -1441,7 +1441,6 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-readonly .wiz-readonly-note { width: 100%; box-sizing: border-box; }
 .wiz-readonly p { margin: 0; font-size: 14px; line-height: 1.5; }
 .wiz-take { width: 100%; min-height: 44px; border-radius: var(--cal-btn-radius); font-size: 15px; }
-.wiz-take.secondary { border-color: var(--panel-accent); color: var(--panel-accent); background: transparent; }
 /* S-01…S-05: the motor's state as plain lines under the text. */
 .wiz-status p { margin: 0; line-height: 1.55; }
 .wiz-sheet, .wiz-dialog { position: fixed; inset: 0; z-index: 10; display: flex; background: rgb(0 0 0 / 40%); }
