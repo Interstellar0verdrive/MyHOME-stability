@@ -1062,7 +1062,8 @@ function finalize(screen, ctx) {
     ascent: [...(slats && !(path === "C" && scope === "times_only") ? [[t("wiz_T039"), (samples.lift ?? base.lift) != null
       ? `${seconds(samples.lift ?? base.lift)} · ${(readings.gap ?? base.gap) != null ? cm(readings.gap ?? base.gap) : "—"}` : "—"]] : []),
       [t("wiz_T040"), seconds(kept("opening", values.opening_time ?? base.opening))],
-      ...(path === "C" && scope === "times_only" ? [] : [[t("wiz_T041"), cm(source?.travel_cm ?? base.travel)]])],
+      // L-41: the travel typed and not yet sent (L-13) is shown as soon as it is known, as its tile does.
+      ...(path === "C" && scope === "times_only" ? [] : [[t("wiz_T041"), cm(local.travelTyped ?? source?.travel_cm ?? base.travel)]])],
     descent: [[t("wiz_T068"), seconds(kept("closing", values.closing_time ?? base.closing))]],
     readings: path === "B" ? [[t("wiz_T041"), cm(view?.travel_cm ?? local.fineReadings?.travel)],
       [t("wiz_T119"), (view?.check ?? local.fineReadings?.check) ? `${(view?.check ?? local.fineReadings.check).gap_cm} cm` : "—"]]

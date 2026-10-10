@@ -276,6 +276,8 @@ test("path A runs the live geometry session from the first close to Save, one me
   assert.equal(tiles()[0][0], "Lift-off");
   assert.match(tiles()[0][1], /^\d+(\.\d)? s · 3 cm$/, "lift-off time and gap in one tile");
   assert.deepEqual(tiles().slice(1), [["Full ascent", "22.2 s"], ["Curtain travel", "198 cm"]]);
+  assert.ok([...wiz().querySelectorAll(".wiz-steps li li")].some((item) => item.textContent.replace(/\s+/g, " ").includes("Curtain travel: 198 cm")),
+    "L-41: the stepper shows the travel typed, as the tile does");
   assert.deepEqual([wiz().querySelector(".wiz-results").nextElementSibling.className, wiz().querySelector(".wiz-results").nextElementSibling.nextElementSibling.className],
     ["wiz-result-notices", "wiz-body"], "above the text, with the notices about the result between them (G2-11)");
   assert.match(wiz().querySelector(".wiz-body").textContent, /^If both presses came at the right moment, continue\./);
