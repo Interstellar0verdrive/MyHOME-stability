@@ -186,6 +186,31 @@ test("times only: a repeat starts the times again from the briefing, and a run t
   assert.equal(wizard._local.fullRun.step, "opening");
 });
 
+test("R-6: «Ricomincia» keeps the session when Home Assistant refuses the cancel: no detach, the error shown, the cover still held", async () => {
+  const context = await mount();
+  const { backend, wiz, code, press } = context;
+  await toCase(context, "times_only");
+  await press("begin");
+  await press("run:open");
+  await move(backend, { seconds: 12.6 });
+  await press("endpoint");
+  assert.equal(code(), "C-12");
+  const original = backend.hass.callWS;
+  backend.hass.callWS = async (message) => {
+    if (message.action === "cancel") { backend.calls.push(message); throw { code: "cover_unavailable", message: "refused" }; }
+    return original(message);
+  };
+  await press("restart"); await tick(8);
+  assert.equal(backend.session.phase !== "cancelled", true);
+  assert.equal(code(), "C-12", "still on the session's screen");
+  assert.equal(backend.calls.some((message) => message.action === "detach"), false, "not detached: the cover stays this tab's");
+  assert.ok(wiz().querySelector(".wiz-notices").textContent.length > 0, "the refusal is shown");
+  backend.hass.callWS = original;
+  await press("restart"); await tick(8);
+  assert.equal(backend.session.phase, "cancelled");
+  assert.equal(code(), "C-35", "confirmed: from the briefing again");
+});
+
 test("L-4: a «solo tempi» session the wizard started opens in the wizard's reader view from a second tab; one from Devices keeps the maintainer's dialog", async () => {
   // The wizard marks its own start.
   const first = await mount();

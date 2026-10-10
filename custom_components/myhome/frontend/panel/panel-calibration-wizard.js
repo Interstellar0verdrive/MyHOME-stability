@@ -810,9 +810,14 @@ export class CalibrationWizard {
     if (id === "restart") {
       // G4-6: the guided session has no repeat verb: this attempt is cancelled (nothing was saved) and the times start
       // again from the briefing, with the cover to be closed.
+      // R-6: only a cancel Home Assistant confirmed lets the gateway go; refused (its error shows) or not sent, the
+      // session stays here, still reserving the cover for this tab, instead of being detached and left to its lease.
       const gateway = this._gateway;
+      this._staying = true;
       Promise.resolve(gateway?.act("cancel")).catch(() => {}).finally(() => {
+        this._staying = false;
         if (this._gateway !== gateway) return;
+        if (gateway && (gateway.lastView || gateway.view)?.phase !== "cancelled") { this._render(); return; }
         this._dropGateway(); Object.assign(local, freshFlags(), { stage: "before" }); this._render();
       });
       return;
