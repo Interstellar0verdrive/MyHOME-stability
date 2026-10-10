@@ -1453,7 +1453,7 @@ test("the lists in the wizard are cards, with the bar's counts above its drop-do
   assert.match(tab.querySelector(".cal-batch-filterbar > .cal-tab-summary").textContent, /^\d+ tapparell[ae] · /);
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /\.cal-batch-rows \{ display: grid; gap: 12px; \}/, "D-40: no fixed width any more");
-  assert.match(css, /\.cal-batch-row \{[^}]*border: 1px solid var\(--panel-border\); border-radius: 12px; background: var\(--panel-surface\);/);
+  assert.match(css, /\.cal-batch-row \{[^}]*border: 1px solid var\(--panel-border\); border-radius: var\(--cal-btn-radius\); background: var\(--panel-surface\);/);
   assert.match(css, /\.cal-batch-row\.is-beside \{ grid-template-columns: auto minmax\(0, 1fr\) auto; grid-template-areas: "lead name status"; \}/);
   assert.match(css, /\.cal-batch-row\.is-stacked \.cal-batch-chips \{ flex-direction: column; align-items: end; \}/);
 });

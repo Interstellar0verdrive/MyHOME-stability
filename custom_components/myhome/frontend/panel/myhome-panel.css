@@ -722,7 +722,7 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
    behind, a 3 px bar of accent at 20 % on the left, secondary text; it follows its block (at most 360 px in the details). */
 /* A note: opaque tint, a 1 px border all round in its own tint at 75 %, the left bar 3 px thick. */
 .cal-note { margin: 0; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--panel-accent) 75%, transparent); border-inline-start-width: 3px;
-  border-radius: 4px; background: color-mix(in srgb, var(--panel-accent) 8%, var(--panel-surface)); color: var(--panel-text-2);
+  border-radius: var(--cal-btn-radius); background: color-mix(in srgb, var(--panel-accent) 8%, var(--panel-surface)); color: var(--panel-text-2);
   font-size: 13px; line-height: 18px; font-weight: 400; }
 .cal-details-grid .cal-note { margin-top: 8px; max-width: 360px; }
 /* The warning variant (T-06): the same shape in the theme's warning colours, text in the text colour. Both variants are
@@ -773,7 +773,7 @@ dialog.cal-dialog :is(button, select, input):focus:not(:focus-visible) { outline
 .cal-compact-sort:has(select:focus-visible) { outline: 2px solid var(--panel-accent); outline-offset: 2px; }
 .cal-tab :is(button, select, input):focus:not(:focus-visible), .wiz :is(button, select, input):focus:not(:focus-visible) { outline: none; }
 .cal-compact-filter, .cal-compact-sort { box-sizing: border-box; display: flex; align-items: center; gap: 4px; min-width: 0; min-height: 44px; margin: 0;
-  padding: 0 8px 0 12px; border: 1px solid var(--panel-border); border-radius: 10px; background: var(--panel-surface);
+  padding: 0 8px 0 12px; border: 1px solid var(--panel-border); border-radius: var(--cal-btn-radius); background: var(--panel-surface);
   color: var(--primary-text-color, #182b37); font-size: 14px; font-weight: 400; }
 .cal-compact-sort { flex-direction: row; white-space: nowrap; }
 .cal-compact-sort > span { flex: none; }
@@ -847,7 +847,7 @@ dialog.cal-dialog :is(button, select, input):focus:not(:focus-visible) { outline
 .cal-row-lead { display: inline-flex; align-items: center; gap: var(--cal-lead-gap, 12px); flex-shrink: 0; }
 .cal-row-chevron { display: inline-grid; place-items: center; width: 18px; height: 18px; --mdc-icon-size: 18px; transition: transform var(--panel-ease); color: var(--panel-text-2); }
 .cal-row-toggle[aria-expanded="true"] .cal-row-chevron { transform: rotate(90deg); }
-.cal-row-icon { display: inline-grid; place-items: center; width: 40px; height: 40px; flex-shrink: 0; border-radius: 10px; background: var(--panel-accent-soft); color: var(--panel-accent); }
+.cal-row-icon { display: inline-grid; place-items: center; width: 40px; height: 40px; flex-shrink: 0; border-radius: var(--cal-btn-radius); background: var(--panel-accent-soft); color: var(--panel-accent); }
 .cal-row-name { display: grid; gap: 2px; min-width: 0; }
 .cal-row-name strong { font-size: 14px; overflow-wrap: anywhere; }
 /* Responsive map §3.3: the line under a cover's name (list, A-01, sequence, details page, wizard header) wraps only
@@ -867,7 +867,7 @@ dialog.cal-dialog :is(button, select, input):focus:not(:focus-visible) { outline
 .cal-row-actions .icon-button { width: 40px; min-width: 40px; height: 40px; min-height: 40px; padding: 0; border-color: var(--panel-border); background: transparent; color: var(--panel-text-2); }
 .cal-row-actions .icon-button:hover { border-color: var(--panel-accent); background: var(--panel-accent-soft); color: var(--panel-text-2); }
 .cal-menu-wrap { position: relative; }
-.cal-menu { position: absolute; inset-inline-end: 0; top: calc(100% + 4px); z-index: 3; display: grid; min-width: 200px; padding: 6px; border: 1px solid var(--panel-border); border-radius: 12px; background: var(--panel-surface); box-shadow: var(--panel-shadow-hover); }
+.cal-menu { position: absolute; inset-inline-end: 0; top: calc(100% + 4px); z-index: 3; display: grid; min-width: 200px; padding: 6px; border: 1px solid var(--panel-border); border-radius: var(--cal-btn-radius); background: var(--panel-surface); box-shadow: var(--panel-shadow-hover); }
 .cal-menu button { justify-content: start; border: 0; background: transparent; }
 .cal-menu button:hover, .cal-menu button:focus-visible { background: var(--panel-accent-soft); }
 /* L-10: cancelling the calibration in progress, in the row's menu, in red; its confirmation's two buttons on one row. */
@@ -936,14 +936,14 @@ dialog.cal-dialog :is(button, select, input):focus:not(:focus-visible) { outline
   .cal-list { border: 0; border-radius: 0; background: transparent; }
   /* D-39: the cards are never wider than the list. */
   .cal-list-rows { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
-  .cal-row, .cal-row:first-of-type, .cal-list-head + .cal-row { border: 1px solid var(--panel-border); border-radius: 12px; background: var(--panel-surface); }
+  .cal-row, .cal-row:first-of-type, .cal-list-head + .cal-row { border: 1px solid var(--panel-border); border-radius: var(--cal-btn-radius); background: var(--panel-surface); }
   /* L-66: the card of a session in progress has the table row's warning fill too (the card's own surface, set above
      with a heavier selector for the first card, hid it). */
   .cal-row.is-running, .cal-row.is-running:first-of-type, .cal-list-head + .cal-row.is-running {
     border-color: color-mix(in srgb, var(--panel-warning) 60%, transparent); background: color-mix(in srgb, var(--panel-warning) 7%, var(--panel-surface)); }
   /* M4-6 + P-4: the chips on the left, the action on the right and never wrapping, centred on the chips. Status and
      profile side by side while they fit the card, one under the other only when they do not. */
-  .cal-row-main { grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "cover cover menu" "chips action action"; row-gap: 6px; border-radius: 11px; }
+  .cal-row-main { grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "cover cover menu" "chips action action"; row-gap: 6px; border-radius: calc(var(--cal-btn-radius) - 1px); }
   .cal-row-actions { display: contents; }
   .cal-menu-wrap { grid-area: menu; align-self: start; justify-self: end; }
   .cal-row-chips { grid-area: chips; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; align-self: center; min-width: 0; padding-inline-start: 4px; }
@@ -957,8 +957,8 @@ dialog.cal-dialog :is(button, select, input):focus:not(:focus-visible) { outline
   .cal-row-main .cal-profile-chip { max-width: min(100%, 180px); }
   .cal-row-last-inline { display: block; color: var(--panel-text-2); }
   /* Responsive map: from 720 px of window a card opens in place; its three blocks one under the other. */
-  .cal-row.is-expanded .cal-row-main { border-radius: 11px 11px 0 0; }
-  .cal-row-details { border-radius: 0 0 11px 11px; }
+  .cal-row.is-expanded .cal-row-main { border-radius: calc(var(--cal-btn-radius) - 1px) calc(var(--cal-btn-radius) - 1px) 0 0; }
+  .cal-row-details { border-radius: 0 0 calc(var(--cal-btn-radius) - 1px) calc(var(--cal-btn-radius) - 1px); }
   .cal-details-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px 32px; }
   .cal-details-grid > section { max-width: none; }
   .cal-details-grid .cal-note { max-width: none; }
@@ -1025,9 +1025,9 @@ dialog.cal-dialog :is(button, select, input):focus:not(:focus-visible) { outline
 .cal-page-session button { width: 100%; min-height: 48px; justify-content: center; }
 .cal-tab-back { justify-self: start; }
 /* T-04 / T-04b: empty states as a card (no timed cover; nothing matches the filter). */
-.cal-empty { display: grid; justify-items: center; gap: 8px; padding: 32px 24px; border: 1px solid var(--panel-border); border-radius: var(--panel-radius);
+.cal-empty { display: grid; justify-items: center; gap: 8px; padding: 32px 24px; border: 1px solid var(--panel-border); border-radius: var(--cal-btn-radius);
   background: var(--panel-surface); text-align: center; }
-.cal-empty-icon { display: inline-grid; place-items: center; width: 40px; height: 40px; margin-bottom: 4px; border-radius: 10px; background: var(--panel-accent-soft); color: var(--panel-text-2); }
+.cal-empty-icon { display: inline-grid; place-items: center; width: 40px; height: 40px; margin-bottom: 4px; border-radius: var(--cal-btn-radius); background: var(--panel-accent-soft); color: var(--panel-text-2); }
 .cal-empty h4 { margin: 0; font-size: 16px; font-weight: 600; }
 .cal-empty > .muted { max-width: 480px; font-size: 13px; line-height: 1.5; }
 .cal-empty-how > p { max-width: 480px; margin: 0 auto; }
@@ -1102,7 +1102,7 @@ dialog.cal-dialog :is(button, select, input):focus:not(:focus-visible) { outline
    other), under them on a narrow list. */
 .cal-batch-rows { display: grid; gap: 12px; }
 .cal-batch-row { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "lead name" "status status"; align-items: center; gap: 8px 12px;
-  min-height: 48px; padding: 12px; border: 1px solid var(--panel-border); border-radius: 12px; background: var(--panel-surface); cursor: pointer;
+  min-height: 48px; padding: 12px; border: 1px solid var(--panel-border); border-radius: var(--cal-btn-radius); background: var(--panel-surface); cursor: pointer;
   font-size: 13px; font-weight: 400; color: inherit; }
 /* D-40 (decided 8 Oct): beside the name when it keeps 200 px (`fitRows()`, measured as the page cards, Q-15): side by
    side, or one under the other (`is-stacked`); under the name otherwise. */
@@ -1230,17 +1230,17 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-steps ul, .wiz-sheet-steps ul { grid-column: 2; list-style: none; margin: 4px 0 2px; padding: 0; font-size: 12px; color: var(--panel-text-2); display: grid; gap: 2px; }
 .wiz-main { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-content: start; padding: 20px; min-width: 0; }
 .wiz-title { margin: 0; font-size: 18px; font-weight: 600; outline: none; }
-.wiz-preview { display: flex; gap: 8px; align-items: start; margin: 0; padding: 10px 12px; border-radius: 10px; font-size: 13px;
+.wiz-preview { display: flex; gap: 8px; align-items: start; margin: 0; padding: 10px 12px; border-radius: var(--cal-btn-radius); font-size: 13px;
   background: color-mix(in srgb, var(--panel-warning) 14%, var(--panel-surface)); border: 1px dashed color-mix(in srgb, var(--panel-warning) 60%, transparent); }
 .wiz-body p { margin: 0 0 10px; line-height: 1.55; }
 .wiz-body p:last-child { margin-bottom: 0; }
 /* The motor bar is as wide as the drawing under it (at most 564 px), left-aligned; its value at the right end. */
-.wiz-stopwatch { box-sizing: border-box; width: min(100%, var(--wiz-stopwatch-width, 564px)); display: flex; justify-content: space-between; gap: 12px; padding: 10px 16px; border-radius: 10px; border-inline-start: 4px solid var(--panel-accent); background: var(--panel-accent-soft); font-variant-numeric: tabular-nums; }
+.wiz-stopwatch { box-sizing: border-box; width: min(100%, var(--wiz-stopwatch-width, 564px)); display: flex; justify-content: space-between; gap: 12px; padding: 10px 16px; border-radius: var(--cal-btn-radius); border-inline-start: 4px solid var(--panel-accent); background: var(--panel-accent-soft); font-variant-numeric: tabular-nums; }
 /* Label/value pairs follow the tab's blocks: the label regular, the value bold. */
 .wiz-stopwatch-label { font-weight: 400; color: var(--panel-text-2); }
 /* Live values keep their width: tabular digits and a minimum width, so the label never moves while they count. */
 .wiz-stopwatch-value { font-weight: 600; font-variant-numeric: tabular-nums; min-width: 14ch; text-align: end; }
-.wiz-wait { display: grid; gap: 10px; padding: 18px 20px; border-radius: 12px; border: 1px solid var(--panel-border); background: var(--panel-surface-2); }
+.wiz-wait { display: grid; gap: 10px; padding: 18px 20px; border-radius: var(--cal-btn-radius); border: 1px solid var(--panel-border); background: var(--panel-surface-2); }
 .wiz-wait p { margin: 0; }
 .wiz-wait-stages { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; font-size: 13px; }
 .wiz-wait-stages li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
@@ -1263,7 +1263,7 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-wait p.wiz-wait-remaining { font-size: 12px; font-variant-numeric: tabular-nums; min-width: 22ch; }
 /* What a step has just measured: tiles side by side, a small label and a big value (its unit smaller). */
 .wiz-results { display: flex; flex-wrap: wrap; gap: 12px; }
-.wiz-result { display: grid; gap: 2px; min-width: 150px; padding: 12px 16px; border-radius: 10px; background: var(--panel-accent-soft); }
+.wiz-result { display: grid; gap: 2px; min-width: 150px; padding: 12px 16px; border-radius: var(--cal-btn-radius); background: var(--panel-accent-soft); }
 .wiz-result-label { font-size: 12px; color: var(--panel-text-2); }
 .wiz-result-value { font-size: 32px; line-height: 1.15; font-weight: 600; font-variant-numeric: tabular-nums; }
 .wiz-result-value small, .wiz-result-extra { font-size: 16px; font-weight: 500; }
@@ -1290,7 +1290,7 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-result.is-invalid .wiz-result-number { text-decoration: line-through; text-decoration-thickness: 2px; }
 /* N-14: on a dark theme the secondary background is almost the page's: the box is the text colour at 6 % on the
    surface, with a hairline, seen in both themes. */
-.wiz-box { display: grid; gap: 4px; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--panel-border);
+.wiz-box { display: grid; gap: 4px; padding: 12px 14px; border-radius: var(--cal-btn-radius); border: 1px solid var(--panel-border);
   background: color-mix(in srgb, var(--primary-text-color, #182b37) 6%, var(--panel-surface)); }
 .wiz-box p { margin: 0; }
 /* L-1/L-28: more than three actions: in the columns all of them, as ordinary buttons (the disclosure's toggle hidden);
@@ -1355,7 +1355,7 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-table tbody td { font-weight: 600; }
 .wiz-steps ul strong, .wiz-sheet-steps ul strong { font-weight: 600; color: var(--primary-text-color, #182b37); }
 .wiz-table s { color: var(--panel-text-2); }
-.wiz-accordion { border: 1px solid var(--panel-border); border-radius: 10px; padding: 0 14px; }
+.wiz-accordion { border: 1px solid var(--panel-border); border-radius: var(--cal-btn-radius); padding: 0 14px; }
 .wiz-accordion summary { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 46px; cursor: pointer; list-style: none; font-weight: 500; }
 .wiz-accordion summary::-webkit-details-marker { display: none; }
 .wiz-accordion summary ha-icon { transition: transform var(--panel-ease); }
@@ -1363,8 +1363,8 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 /* G2-3: the slats explanation, right after its question and before the answers. */
 .wiz-help { margin: -6px 0 6px; }
 .wiz-accordion > p, .wiz-accordion > table, .wiz-accordion > pre { margin: 0 0 12px; }
-.wiz-code { padding: 10px 12px; border-radius: 8px; background: var(--panel-surface-2); font-size: 12px; overflow-x: auto; }
-.wiz-profile-block { display: grid; gap: 10px; padding: 14px 16px; border-radius: 12px; background: var(--panel-surface-2); border: 1px solid var(--panel-border); }
+.wiz-code { padding: 10px 12px; border-radius: var(--cal-btn-radius); background: var(--panel-surface-2); font-size: 12px; overflow-x: auto; }
+.wiz-profile-block { display: grid; gap: 10px; padding: 14px 16px; border-radius: var(--cal-btn-radius); background: var(--panel-surface-2); border: 1px solid var(--panel-border); }
 .wiz-profile-block p { margin: 0; }
 /* N-05: the name field keeps its 420 px; the switch's label takes the block's width (no early wrap). */
 .wiz-profile-block label:not(.wiz-switch) { max-width: 420px; }
@@ -1649,6 +1649,12 @@ dialog.cal-dialog .dialog-head { justify-content: space-between; padding-block: 
   dialog.cal-dialog .dialog-foot, .wiz-dialog .actions { flex-direction: row; flex-wrap: wrap; justify-content: end; }
   dialog.cal-dialog .dialog-foot button, .wiz-dialog .actions button { flex: 1 1 auto; width: auto; min-width: 0; white-space: nowrap; }
 }
+/* L-72: one corner radius for the calibration tab, the wizard and their dialogs: the shell's 8 px (`--cal-btn-radius`)
+   for notes, tiles, cards, boxes, menus, inputs, drop-downs and buttons. Chips and counts stay pills, marks and radios
+   round; the dialogs' and sheets' own frames and the list and wizard frames keep Home Assistant's card radius. */
+:is(.cal-tab, dialog.cal-dialog) :is(button, a.button, select, textarea, input):not(.cal-chip, [type="checkbox"], [type="radio"]) { border-radius: var(--cal-btn-radius); }
+/* The sort chip's invisible select keeps the chip's pill (its focus ring follows it). */
+:is(.cal-tab, dialog.cal-dialog) .cal-filterbar.is-chips .cal-filterbar-sort select { border-radius: inherit; }
 /* R-4 (Q-17): every button of the wizard, the sequence, the blocks and the dialogs has its label centred, and the
    shell's radius through `--cal-btn-radius`. */
 .wiz-action, .wiz-take, .wiz-dialog-card .actions button, dialog.cal-dialog .dialog-foot button, .cal-block-action > button {

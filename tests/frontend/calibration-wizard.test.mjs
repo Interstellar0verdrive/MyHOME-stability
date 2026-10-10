@@ -759,6 +759,15 @@ const weight = (selector) => {
   const types = (flat.replace(/\[[^\]]+\]|[.#:][\w-]+/g, " ").match(/[a-z][\w-]*/gi) || []).length;
   return ids * 10000 + classes * 100 + types;
 };
+// A selector list split at its own commas only (not those inside :is(), :not() and attribute values).
+const topLevel = (list) => {
+  const parts = []; let depth = 0, start = 0;
+  for (let i = 0; i < list.length; i++) {
+    if ("([".includes(list[i])) depth += 1; else if (")]".includes(list[i])) depth -= 1;
+    else if (list[i] === "," && depth === 0) { parts.push(list.slice(start, i)); start = i + 1; }
+  }
+  return [...parts, list.slice(start)].map((part) => part.trim());
+};
 // The declaration of `property` that wins for `element`: highest weight, then the later rule.
 const winner = (element, property) => {
   let best = null, order = 0;
@@ -766,7 +775,7 @@ const winner = (element, property) => {
     order += 1;
     const value = body.match(new RegExp(`(?:^|;)\\s*${property}\\s*:\\s*([^;]+)`))?.[1]?.trim();
     if (!value) continue;
-    for (const selector of selectors.split(/,(?![^(]*\))/).map((part) => part.trim())) {
+    for (const selector of topLevel(selectors)) {
       let hit = false; try { hit = element.matches(selector); } catch { /* selectors jsdom does not know */ }
       const w = weight(selector);
       if (hit && (!best || w > best.w || (w === best.w && order >= best.order))) best = { w, order, value, selector };
@@ -903,6 +912,39 @@ test("L-69: the «Precision» tile takes its note's colours, green within the th
     assert.equal(winner(plain, "background"), "var(--panel-accent-soft)", "other tiles unchanged");
     host.remove();
   }
+});
+
+test("L-72: one corner radius (the shell's 8 px) for notes, tiles, cards, boxes, menus, inputs and buttons; chips stay pills", () => {
+  const doc = dom.window.document;
+  const host = doc.createElement("div"); host.className = "cal-tab"; doc.body.append(host);
+  host.innerHTML = `<p class="cal-note"></p><p class="cal-note is-success"></p><p class="cal-note is-warning"></p><div class="cal-compact-sort"></div>
+    <div class="cal-list"><div class="cal-row"><div class="cal-row-main"><span class="cal-row-icon"></span><button></button><button class="icon-button"></button></div>
+      <div class="cal-menu"></div><div class="cal-block-action"><button class="primary"></button></div></div></div>
+    <div class="cal-empty"><span class="cal-empty-icon"></span></div><div class="cal-batch-row"></div><input type="text"><select></select>
+    <div class="wiz"><p class="wiz-preview"></p><div class="wiz-stopwatch"></div><div class="wiz-wait"></div><div class="wiz-result"></div><div class="wiz-box"></div>
+      <details class="wiz-accordion"></details><pre class="wiz-code"></pre><div class="wiz-profile-block"></div>
+      <div class="wiz-actions"><button class="wiz-action primary"></button><button class="wiz-action secondary"></button><button class="wiz-take primary"></button></div></div>
+    <div class="cal-filterbar is-chips"><span class="cal-filterbar-sort"><select></select></span></div>
+    <button class="cal-chip"></button><span class="badge cal-badge"></span><span class="cal-profile-chip"></span><input type="checkbox">`;
+  const all = [...host.querySelectorAll("*")];
+  const pills = all.filter((element) => element.matches(".cal-chip, .cal-badge, .cal-profile-chip"));
+  // The list's and the wizard's own frames keep Home Assistant's card radius (none where they fill the screen).
+  const frames = all.filter((element) => element.matches(".cal-list, .wiz, .cal-filterbar, .cal-filterbar-sort, .cal-filterbar-sort select"));
+  const rounded = ".cal-note, .cal-compact-sort, .cal-row, .cal-row-main, .cal-row-icon, .cal-menu, .cal-empty, .cal-empty-icon, .cal-batch-row, "
+    + ".wiz-preview, .wiz-stopwatch, .wiz-wait, .wiz-result, .wiz-box, .wiz-accordion, .wiz-code, .wiz-profile-block, button, select, input";
+  for (const element of all.filter((item) => item.matches(rounded) && !pills.includes(item) && !frames.includes(item) && !item.matches('input[type="checkbox"]'))) {
+    // A card's inner band sits 1 px inside its border.
+    assert.match(winner(element, "border-radius"), /^(?:var\(--cal-btn-radius\)|calc\(var\(--cal-btn-radius\) - 1px\))$/, element.outerHTML.slice(0, 60));
+  }
+  for (const element of pills) assert.equal(winner(element, "border-radius"), "999px", `${element.className}: a pill`);
+  assert.equal(winner(host.querySelector(".cal-filterbar-sort select"), "border-radius"), "inherit", "the sort chip's select follows its pill");
+  host.remove();
+  // No other fixed radius left in the calibration rules but pills, circles, none, the card radius and the dialogs' frames.
+  const loose = [...cascadeCss.matchAll(/(?<=^|[{}])\s*([^{}@]*\.(?:cal|wiz)-[^{}@]*?)\s*\{[^{}]*border-radius: ([^;}]+)/g)]
+    .filter(([, , value]) => !/^(?:var\(--cal-btn-radius\)|calc\(var\(--cal-btn-radius\) - 1px\)|999px|50%|0|inherit|var\(--panel-radius\)|18px(?: 18px 0 0)?|0 0 var\(--panel-radius\) var\(--panel-radius\)|(?:calc\(var\(--cal-btn-radius\) - 1px\) ?){2}0 0|0 0 (?:calc\(var\(--cal-btn-radius\) - 1px\) ?){2})$/.test(value.trim()))
+    .map(([, selector, value]) => `${selector.trim().slice(0, 50)}: ${value}`)
+    .filter((line) => !/^\.(?:cal-status|cal-visual|cal-actions|cal-values)/.test(line));
+  assert.deepEqual(loose, [], "every other radius is the shell's");
 });
 
 test("L-18: a tap on the cover already chosen in A-01 un-chooses it", async () => {
