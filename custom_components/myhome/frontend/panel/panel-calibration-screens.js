@@ -790,7 +790,7 @@ function summaryScreen(screen, ctx, tx, n, values) {
     actions: [{ ...save, target }, ...(liveCheck && !liveCheck.passed ? [{ id: "check-start", label: t("wiz_T143"), kind: "secondary" }] : [])] });
   withSupport(screen, ctx, target);
   // After the notices that matter more (D-16: what cannot be saved comes first).
-  if (liveCheck) { screen.results = [...(screen.results || []), liveCheck.tile]; screen.notices.push(liveCheck.notice); }
+  if (liveCheck) screen.results = [...(screen.results || []), liveCheck.tile];
   return screen;
 }
 
@@ -855,7 +855,7 @@ function savedScreen(screen, ctx, tx, values) {
   // L-45: the check's tile and note, as in the summary.
   const n = (value, digits = 1) => number(value, ctx.language || "en", digits);
   const checked = saved.check ? checkResult(ctx, tx, n, saved.check, saved.threshold ?? 4) : null;
-  if (checked) { screen.results = [checked.tile]; screen.notices.push(checked.notice); }
+  if (checked) screen.results = [checked.tile];
   // "Close" keeps each mockup's own style: B-09 red filled, A-34 red text, C-34 red outlined.
   // L-47 (revised): the end of a completed flow is not «Chiudi»: «Torna all'elenco», the primary unless fine-tuning is
   // offered (then a secondary); never red.
@@ -980,8 +980,10 @@ export function checkResult(ctx, tx, n, check, threshold = 4) {
   const gap = checkGap(check);
   if (gap == null) return null;
   const passed = check.passed ?? gap <= threshold, values = { measured: n(check.measured_cm), expected: n(check.expected_cm ?? check.target_cm, 0), gap: n(gap, 0), threshold: n(threshold, 0) };
-  return { passed, tile: { label: ctx.t("wiz_T556"), value: n(gap, 0), unit: "cm" },
-    notice: { tone: passed ? "info" : "warning", result: true, text: `${tx("wiz_T561", values)} ${tx(passed ? "wiz_T562" : "wiz_T563", values)}` } };
+  // L-55: the tile is «Precisione» (the gap at half travel); its note beside it, green within the threshold (Nota
+  // «Successo»), yellow beyond (Avviso).
+  return { passed, tile: { label: ctx.t("wiz_T570"), value: n(gap, 0), unit: "cm", caption: ctx.t("wiz_T571"),
+    note: { tone: passed ? "success" : "warning", text: `${tx("wiz_T561", values)} ${tx(passed ? "wiz_T562" : "wiz_T563", values)}` } } };
 }
 
 /** L-44: the two stages of the check's wait: to the end stop (its time), then the timed run to its target (planned). */

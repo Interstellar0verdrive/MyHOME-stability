@@ -626,14 +626,17 @@ test("L-44: the check runs as the half readings do: to the top (confirmed by the
   await type("97");
   assert.equal(code(), "A-21", "then the summary");
   // L-45: the result is a tile with the other measured values, and a note with the heights and the threshold.
-  const tile = [...wiz().querySelectorAll(".wiz-result")].find((item) => item.querySelector(".wiz-result-label").textContent === "Check");
+  // L-55: «Precision», with its caption, and its note beside it in green (within the threshold).
+  const tile = [...wiz().querySelectorAll(".wiz-result")].find((item) => item.querySelector(".wiz-result-label").textContent === "Precision");
   assert.equal(tile.querySelector(".wiz-result-value").textContent.replace(/\s+/g, " ").trim(), "2 cm");
-  assert.match(wiz().querySelector(".wiz-result-notices").textContent,
-    /Check at half travel: the cover stopped at 97 cm, about 99 cm was expected\. Gap 2 cm: up to 4 cm the calibration counts as precise\./);
+  assert.equal(tile.querySelector(".wiz-result-caption").textContent, "gap at half travel");
+  const note = tile.parentElement.querySelector(".wiz-result-note");
+  assert.ok(note.classList.contains("is-success"));
+  assert.match(note.textContent, /Check at half travel: the cover stopped at 97 cm, about 99 cm was expected\. Gap 2 cm: up to 4 cm the calibration counts as precise\./);
   assert.doesNotMatch(wiz().textContent, /\{\w+\}/, "no placeholder left on screen");
   await press("save");
   assert.equal(code(), "A-34");
-  assert.ok([...wiz().querySelectorAll(".wiz-result-label")].some((item) => item.textContent === "Check"), "the tile on A-34 too");
+  assert.ok([...wiz().querySelectorAll(".wiz-result-label")].some((item) => item.textContent === "Precision"), "the tile on A-34 too");
   assert.ok([...wiz().querySelectorAll(".wiz-steps li li")].some((item) => item.textContent.replace(/\s+/g, " ").includes("Gap: 2 cm")), "and its gap in the stepper");
   assert.doesNotMatch(wiz().textContent, /\{\w+\}/);
 });
@@ -708,6 +711,19 @@ test("L-54: the return to the top before the half-descent reading is the reading
   // Before the readings (a repeated descent: no half-ascent reading yet) the return to the top stays A-09.
   const repeat = buildScreen({ t, language: "it", stage: "session", path: "A", view: { ...view, readings: { gap: 3 } }, local: {}, elapsed: 4, cover: { name: "K", effective: {} } });
   assert.equal(repeat.code, "A-09");
+});
+
+test("L-55: the precision tile's note is green within the threshold, yellow beyond, and «Repeat the check» is offered beyond", () => {
+  const t = (key) => translations.it[key] || key;
+  const base = { mode: "geometry", phase: "review", step: "half_close", values: { opening_time: 22, closing_time: 21 }, samples: {}, readings: { half_open: 97, half_close: 101 },
+    geometry: { slat_time_s: 0, opening_roll: 1.8, closing_roll: 1.9 }, slats: false, travel_cm: 198, owner: true, sequence: 9, check_threshold_cm: 4 };
+  const at = (check) => buildScreen({ t, language: "it", stage: "session", path: "A", view: { ...base, check }, local: {}, cover: { name: "K", effective: {} } });
+  const good = at({ expected_cm: 99, measured_cm: 97, deviation_cm: -2, passed: true });
+  assert.deepEqual([good.results.at(-1).label, good.results.at(-1).value, good.results.at(-1).caption, good.results.at(-1).note.tone], ["Precisione", "2", "scarto a metà corsa", "success"]);
+  const bad = at({ expected_cm: 99, measured_cm: 93, deviation_cm: -6, passed: false });
+  assert.equal(bad.results.at(-1).note.tone, "warning");
+  assert.match(bad.results.at(-1).note.text, /Scarto 6 cm: sopra i 4 cm che consideriamo accettabili/);
+  assert.ok(bad.actions.some((action) => action.id === "check-start"), "the check can be repeated");
 });
 
 test("L-18: a tap on the cover already chosen in A-01 un-chooses it", async () => {

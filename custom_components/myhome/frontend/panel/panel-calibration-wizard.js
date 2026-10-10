@@ -263,8 +263,12 @@ export class CalibrationWizard {
             ${screen.results?.length ? "" : resultNotices}
             ${drawing("before-body")}
             ${screen.wait ? this._waitMarkup(screen.wait) : ""}
-            ${screen.results?.length ? `<div class="wiz-results">${screen.results.map((tile) => `<div class="wiz-result${tile.invalid ? " is-invalid" : ""}"><span class="wiz-result-label">${esc(tile.label)}</span>
-              <span class="wiz-result-value"><span class="wiz-result-number">${esc(tile.value)}</span><small> ${esc(tile.unit)}</small>${tile.extra ? `<span class="wiz-result-extra"> · ${esc(tile.extra)}</span>` : ""}</span></div>`).join("")}</div>${resultNotices}` : ""}
+            ${screen.results?.length ? `<div class="wiz-results">${screen.results.map((tile) => {
+              const box = `<div class="wiz-result${tile.invalid ? " is-invalid" : ""}"><span class="wiz-result-label">${esc(tile.label)}</span>
+              <span class="wiz-result-value"><span class="wiz-result-number">${esc(tile.value)}</span><small> ${esc(tile.unit)}</small>${tile.extra ? `<span class="wiz-result-extra"> · ${esc(tile.extra)}</span>` : ""}</span>${tile.caption ? `<span class="wiz-result-caption">${esc(tile.caption)}</span>` : ""}</div>`;
+              // L-55: a tile with its own note (the check's precision): the note beside it, under it where narrow.
+              return tile.note ? `<div class="wiz-result-row">${box}<p class="cal-note is-${tile.note.tone} wiz-result-note">${text.units(esc(tile.note.text))}</p></div>` : box;
+            }).join("")}</div>${resultNotices}` : ""}
             ${screen.body ? `<div class="wiz-body">${rich(screen.body)}</div>` : ""}
             ${screen.help && !screen.choice ? this._helpMarkup(screen.help) : ""}
             ${screen.note ? `<p class="cal-note${screen.note.tone === "warning" ? " is-warning" : ""} wiz-note">${esc(screen.note.text)}</p>` : ""}
