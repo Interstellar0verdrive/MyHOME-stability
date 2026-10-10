@@ -463,6 +463,7 @@ export const translations = {
     wiz_T538: "A calibration is in progress: resume it with «Open session», or cancel it from the ⋮ menu of its row.",
     wiz_T539: "The cover is finishing its last movement: it is free again as soon as the motor confirms the stop, within 10 minutes at most.",
     wiz_T540: "The cover is held by a calibration the panel cannot read: try again in a moment.",
+    wiz_T541: "The session expires in {time} unless you continue: the cover will be released and the measurements lost.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1390,6 +1391,7 @@ export const translations = {
     wiz_T538: "Una calibrazione è in corso: riprendila con «Apri sessione», oppure annullala dal menu ⋮ della sua riga.",
     wiz_T539: "La tapparella sta finendo l’ultimo movimento: torna libera appena il motore conferma l’arresto, al più entro 10 minuti.",
     wiz_T540: "La tapparella è trattenuta da una calibrazione che il pannello non riesce a leggere: riprova tra poco.",
+    wiz_T541: "La sessione scade fra {time} se non prosegui: la tapparella verrà liberata e le misure andranno perse.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

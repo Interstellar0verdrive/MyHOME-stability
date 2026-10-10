@@ -2388,7 +2388,7 @@ test("«Start over» after an ended session carries nothing of the old measureme
   assert.match(lift.textContent, /s · —$/, "no gap in the stepper before this session's reading");
 });
 
-test("two minutes before the idle expiry a waiting screen warns, counting the minutes down (M3)", () => {
+test("two minutes before the idle expiry a waiting screen warns, counting minutes and seconds down (M3, L-24)", async () => {
   const t = (key) => translations.it[key] || key;
   const now = Date.parse("2026-10-05T13:00:00Z");
   const at = (seconds, extra = {}) => buildScreen({ t, language: "it", stage: "session", path: "A", local: { ackLift: true, ackAscent: true }, now, cover: { name: "Cucina 2" },
@@ -2396,11 +2396,24 @@ test("two minutes before the idle expiry a waiting screen warns, counting the mi
       idle_expires_at: new Date(now + seconds * 1000).toISOString(), ...extra } });
   const warning = (screen) => screen.notices.find((notice) => /scade fra/.test(notice.text));
   assert.equal(warning(at(300)), undefined, "five minutes left: nothing yet");
-  assert.deepEqual(warning(at(110)), { tone: "warning", result: true,
-    text: "La sessione scade fra 2 min se non prosegui: la tapparella verrà liberata e le misure andranno perse." });
-  assert.match(warning(at(50)).text, /fra 1 min/);
+  const shown = warning(at(103));
+  assert.deepEqual([shown.tone, shown.text], ["warning", "La sessione scade fra 1:43 se non prosegui: la tapparella verrà liberata e le misure andranno perse."]);
+  assert.deepEqual(shown.countdown, { expires: now + 103000, template: translations.it.wiz_T541 }, "the wizard counts it down by itself");
+  assert.match(warning(at(9)).text, /fra 0:09 /);
   assert.equal(warning(at(-5)), undefined, "past the deadline the backend's own end decides");
   assert.equal(warning(at(60, { phase: "opening" })), undefined, "not while the cover moves");
+  // On screen: only the notice's text changes, every second.
+  const { backend, wiz, startFor, press } = await mount({ language: "it" });
+  await startFor("cover.living_one");
+  await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  backend.session.idle_expires_at = new Date(Date.now() + 65000).toISOString(); backend.emit(); await tick();
+  const notice = () => wiz().querySelector(".wiz-notice[data-expires]");
+  assert.match(notice().textContent, /fra 1:0[45] /);
+  const node = notice(), frame = wiz().querySelector(".wiz-title"), before = node.textContent;
+  await new Promise((resolve) => setTimeout(resolve, 2100));
+  assert.notEqual(notice().textContent, before, "seconds later it has counted down");
+  assert.match(notice().textContent, /fra 1:0\d /);
+  assert.deepEqual([notice(), wiz().querySelector(".wiz-title")], [node, frame], "the same nodes: nothing redrawn");
 });
 
 test("an ended session keeps the step it reached, greyed, in the stepper and the phone's strip (M3-3)", async () => {

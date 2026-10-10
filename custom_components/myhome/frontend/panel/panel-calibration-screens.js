@@ -46,6 +46,9 @@ const invalidNotice = (t, reason) => ({ tone: "error", result: true, text: t(rea
 /** Stop is offered while the motor runs; once it has stopped by itself only the confirmation is left. */
 const whileRunning = (view, stop) => MOTOR_STOPPED(view) ? [] : [stop];
 
+/** L-24: a time left as minutes and seconds («1:43»), rounded up to the second. */
+export const clock = (ms) => { const total = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`; };
+
 /** Movements in progress or about to start: Stop is the action that matters. */
 export const MOVING = (view) => !!view && !MOTOR_STOPPED(view)
   && (["opening", "closing", "geometry_wait_stop", "positioning"].includes(view.phase) || view.phase?.startsWith("starting_"));
@@ -1042,7 +1045,9 @@ function finalize(screen, ctx) {
   // extend it). Two minutes before, a screen that waits for the user says so, counting the minutes down.
   if (view && !view.preview && view.idle_expires_at && !status.expired && !ENDED.includes(view.phase) && !MOVING(view)) {
     const left = Date.parse(view.idle_expires_at) - (ctx.now ?? Date.now());
-    if (left > 0 && left <= LEASE_WARNING_MS) screen.notices.unshift({ tone: "warning", result: true, text: fill(t("wiz_T462"), { minutes: Math.max(1, Math.ceil(left / 60000)) }) });
+    // L-24: under two minutes the time left counts down in minutes and seconds (the wizard updates only that text).
+    if (left > 0 && left <= LEASE_WARNING_MS) screen.notices.unshift({ tone: "warning", result: true, text: fill(t("wiz_T541"), { time: clock(left) }),
+      countdown: { expires: Date.parse(view.idle_expires_at), template: t("wiz_T541") } });
   }
   if (status.lost && !status.expired && view && !ENDED.includes(view.phase)) {
     // A missed heartbeat (the phone put the page aside, the connection dropped for a moment) is a calm status while the

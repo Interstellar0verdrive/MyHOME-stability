@@ -74,6 +74,7 @@ export class CalibrationWizard {
 
   close() {
     clearInterval(this._leaseTimer); this._leaseTimer = null;
+    clearInterval(this._tickTimer); this._tickTimer = null;
     if (this._onVisible) document.removeEventListener("visibilitychange", this._onVisible);
     this._onVisible = null;
     this._moreObserver?.disconnect();
@@ -325,6 +326,14 @@ export class CalibrationWizard {
     }));
   }
 
+  /** L-24: the countdowns on screen, each its text only. */
+  _tick() {
+    for (const notice of this._frame?.querySelectorAll(".wiz-notice[data-expires]") || []) {
+      const value = text.fill(notice.dataset.template, { time: screens.clock(Number(notice.dataset.expires) - Date.now()) });
+      if (notice.textContent !== value) notice.textContent = value;
+    }
+  }
+
   _engineHost() { return this._engine; }
 
   /**
@@ -439,7 +448,10 @@ export class CalibrationWizard {
       remaining.textContent = screen.wait.remaining || "";
       remaining.hidden = !screen.wait.remaining;
     }
-    const markup = (list) => list.map((notice) => `<p class="notice wiz-notice" data-tone="${notice.tone}" ${notice.tone === "error" ? 'role="alert"' : ""}>${text.units(esc(notice.text))}</p>`).join("");
+    // L-24: a countdown keeps its own text node, updated every second by `_tick` (the rest is not redrawn).
+    const markup = (list) => list.map((notice) => notice.countdown
+      ? `<p class="notice wiz-notice" data-tone="${notice.tone}" data-expires="${notice.countdown.expires}" data-template="${esc(notice.countdown.template)}">${esc(notice.text)}</p>`
+      : `<p class="notice wiz-notice" data-tone="${notice.tone}" ${notice.tone === "error" ? 'role="alert"' : ""}>${text.units(esc(notice.text))}</p>`).join("");
     const top = root.querySelector(".wiz-result-notices");
     const notices = markup(screen.notices.filter((notice) => !(top && notice.result)));
     const box = root.querySelector(".wiz-notices");
@@ -868,6 +880,9 @@ export class CalibrationWizard {
 
   /** The idle expiry warning counts down without any message from Home Assistant: redraw it every 15 s. */
   _watchLease() {
+    // L-24: and its minutes and seconds every second, its text node only.
+    clearInterval(this._tickTimer);
+    this._tickTimer = setInterval(() => this._tick(), 1000);
     clearInterval(this._leaseTimer);
     this._leaseTimer = setInterval(() => {
       if (!this._root || !this._gateway?.view?.idle_expires_at) return;
