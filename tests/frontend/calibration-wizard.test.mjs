@@ -753,7 +753,7 @@ test("A-34 offers fine-tuning once the calibration is saved: path C on the same 
   const expected = Math.round(document.querySelector("myhome-panel")._calibrationTab._wizard._gateway.view.expected_cm);
   await type(String(expected + 6));
   assert.equal(code(), "A-32b");
-  assert.equal(wiz().querySelector('[data-wiz="continue_anyway"]').classList.contains("link"), true);
+  assert.equal(wiz().querySelector('[data-wiz="continue_anyway"]').classList.contains("text"), true, "L-47: a blue text link (it loses nothing)");
   await press("repeat_check"); await settle();
   await type(String(expected + 1));
   assert.equal(code(), "A-32");
@@ -1015,7 +1015,7 @@ test("on the phone the run's ① and ② stack, never side by side", async () =>
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.doesNotMatch(css, /\.wiz-actions:has\(\.wiz-action:nth-of-type\(2\)\.primary\)/, "no two-column rule for two primaries");
   assert.match(css, /\.wiz-actions \{ display: grid; grid-template-columns: minmax\(0, 1fr\);/, "one column");
-  assert.match(css, /@media \(hover: hover\) \{ \.wiz-action\.stop:hover \{/, "a tap leaves no tint on Stop");
+  assert.match(css, /@media \(hover: hover\) \{ :is\(\.wiz-action\.stop, \.wiz-action\.danger-outline, \.wiz-action\.danger\):hover:not\(:disabled\) \{/, "a tap leaves no tint on Stop");
   assert.match(css, /\.wiz-main \{ flex: 1; min-height: 0; overflow-y: auto;[^}]*display: flex; flex-direction: column; \}/, "the phone's content scrolls between the strip and the bar");
   assert.match(css, /\.wiz-main > \* \{ flex-shrink: 0; min-width: 0; \}/, "blocks keep their height: a drawing never covers the text");
   assert.match(css, /\.wiz-action\.stop, \.wiz-action\.link \{ min-height: 44px; background: transparent; \}/, "plain red text, the bar's height");
@@ -1104,7 +1104,7 @@ test("Stop alone in a wait is the red filled button; beside a step's buttons it 
   // Positionings to an end stop offer the end stop at once: Stop is then the red link beside it (R6-6).
   assert.deepEqual(kinds({ step: "home", phase: "starting_close" }), ["endpoint:primary", "stop:stop"], "A-04");
   assert.deepEqual(kinds({ step: "reset", phase: "closing" }), ["endpoint:primary", "stop:stop"], "A-09 (no time known: A-10 at once)");
-  assert.deepEqual(kinds({ step: "half_open", phase: "opening" }, { ackDescent: true, ackReadings: true }), ["stop:danger"], "A-17: Home Assistant stops the half run, Stop alone");
+  assert.deepEqual(kinds({ step: "half_open", phase: "opening" }, { ackDescent: true, ackReadings: true }), ["stop:stop"], "A-17: Stop alone, outlined red as everywhere (L-47)");
   assert.deepEqual(kinds({ step: "lift", phase: "opening" }, { ackLift: true }), ["next:primary", "lift:primary", "stop:stop"], "A-07 keeps the link");
   assert.deepEqual(kinds({ step: "top", phase: "opening" }, { ackReadings: true }), ["endpoint:primary", "stop:stop"], "A-19 while it positions");
   const starting = buildScreen({ t, stage: "session", path: "A", view: { ...view, step: "home", phase: "starting_close" }, elapsed: null, cover: { name: "K" } });
@@ -1122,15 +1122,17 @@ test("Stop alone in a wait is the red filled button; beside a step's buttons it 
   assert.equal(backend.calls.filter((message) => message.action === "stop").length, 1, "the red button stops as before");
 });
 
-test("radios are plain rows, the advice badge is accent blue, links and Exit without saving are red text", async () => {
+test("radios are plain rows, the advice badge is accent blue; L-47: red text closes, red outlined stops or discards", async () => {
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   const rule = (selector) => css.match(new RegExp(`^${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} \\{([^}]*)\\}`, "m"))?.[1] ?? "";
   assert.doesNotMatch(rule(".wiz-radio"), /border|background/, "no card around a radio");
   assert.doesNotMatch(css, /\.wiz-radio:has\(input:checked\)/, "no tint on the chosen radio");
   assert.match(rule(".wiz-recommended"), /color: var\(--panel-accent\)/);
   assert.match(rule(".wiz-action.link"), /color: var\(--panel-error\)/);
-  assert.match(rule(".wiz-action.danger"), /background: var\(--panel-error\)/);
-  assert.match(rule(".wiz-leave"), /color: var\(--panel-error\); border: 0/);
+  assert.match(rule(".wiz-action.danger"), /border: 1px solid var\(--panel-error\); background: transparent;/, "no red is filled");
+  assert.match(rule(".wiz-leave"), /color: var\(--panel-error\); border: 1px solid var\(--panel-error\)/, "Exit without saving discards: outlined");
+  assert.match(css, /\.wiz-action\.stop, \.wiz-action\.danger-outline \{ min-height: 44px; border: 1px solid var\(--panel-error\)/);
+  assert.match(css, /@media \(hover: hover\) \{ \.wiz-action\.secondary:hover:not\(:disabled\)/, "outlined buttons answer the pointer");
 });
 
 test("a step's problem says the motor's state as plain lines under the text, S-05 with the stopwatch, and keeps Stop", () => {
@@ -1279,19 +1281,19 @@ test("the screen behind an open Discard dialog is not rebuilt until the dialog c
   assert.equal(code(), "S-01");
 });
 
-test("Close keeps each mockup's style: B-09 red filled, A-34 red text, C-34 and S-06 red outlined", () => {
+test("L-47: «Close» loses nothing: red text after a save and on S-06; the primary at the end of a preview (U-8)", () => {
   const t = (key) => translations.it[key] || key;
   const close = (screen) => [screen.code, screen.actions.find((action) => action.id === "close")?.kind ?? (screen.links.some((link) => link.id === "close") ? "link" : null)];
   const saved = (path, preview = false) => buildScreen({ t, language: "it", stage: "saved", path, scope: path === "C" ? "times_only" : null,
     cover: { name: "Cucina 2", followProfile: "alta" }, local: { saved: { target: path === "B" ? "follow_profile" : "cover_only", preview } } });
-  assert.deepEqual(close(saved("B")), ["B-09", "danger"]);
+  assert.deepEqual(close(saved("B")), ["B-09", "link"]);
   assert.deepEqual(close(saved("A")), ["A-34", "link"]);
-  assert.deepEqual(close(saved("C")), ["C-34", "danger-outline"]);
+  assert.deepEqual(close(saved("C")), ["C-34", "link"]);
   assert.deepEqual([close(saved("B", true)), close(saved("A", true)), close(saved("C", true))],
     [["B-09", "primary"], ["A-34", "link"], ["C-34", "primary"]], "U-8: at the end of a preview Close is the primary on B-09 and C-34");
   const expired = buildScreen({ t, language: "it", stage: "session", path: "A", cover: { name: "Cucina 2" }, status: { expired: true },
     view: { mode: "geometry", phase: "briefing", step: "lift", values: {}, samples: {}, readings: {}, owner: true, sequence: 3 } });
-  assert.deepEqual(close(expired), ["S-06", "danger-outline"]);
+  assert.deepEqual(close(expired), ["S-06", "link"]);
 });
 
 test("full runs and the return to the top: once the motor stopped the stopwatch freezes, Stop goes, the bar is full; ② only while it runs (L-3)", async () => {
@@ -1536,7 +1538,7 @@ test("L-10: S-01 of an interrupted session cancels it, also from a tab that only
   tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
   assert.equal(code(), "S-01");
   const buttons = [...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((button) => [button.dataset.wiz, button.className.replace("wiz-action ", "")]);
-  assert.deepEqual(buttons, [["start-over", "primary"], ["close", "secondary"], ["abort", "link"]], "«Cancel the measurement», in red");
+  assert.deepEqual(buttons, [["start-over", "primary"], ["close", "link"], ["abort", "danger-outline"]], "«Cancel the measurement», outlined red; «Close» red text (L-47)");
   assert.equal(wiz().querySelector('[data-wiz="abort"]').textContent, "Cancel the measurement");
   wiz().querySelector('[data-wiz="abort"]').click(); await tick(12);
   assert.equal(claims(backend), 1, "control taken first (a reader cannot cancel)");

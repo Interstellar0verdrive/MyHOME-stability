@@ -1186,8 +1186,10 @@ dialog.cal-dialog :is(button, select, input):focus:not(:focus-visible) { outline
 .wiz-back { flex: none; margin: -2px 0 0 -8px; }
 .wiz-cover { margin: 0; font-size: 20px; font-weight: 600; overflow-wrap: anywhere; }
 .wiz-head .muted { margin-top: 2px; }
-.wiz-discard { border: 0; background: transparent; color: var(--panel-error); font-weight: 500; }
-.wiz-discard:hover { background: color-mix(in srgb, var(--panel-error) 8%, transparent); }
+.wiz-discard { min-height: 32px; padding: 4px 12px; border: 1px solid var(--panel-error); border-radius: var(--cal-btn-radius); background: transparent; color: var(--panel-error); font-weight: 500; }
+@media (hover: hover) { .wiz-discard:hover { background: color-mix(in srgb, var(--panel-error) 8%, transparent); } }
+/* L-47: the row menu's cancel confirmation, outlined red as every action that discards now. */
+.cal-abort-actions button.danger { border-color: var(--panel-error); }
 .wiz-x { display: none; }
 .wiz-compact { display: none; }
 .wiz-columns { display: grid; grid-template-columns: minmax(0, 1fr); }
@@ -1374,16 +1376,21 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 [data-theme="dark"] :is(.wiz-action.primary, button.primary).is-settling:disabled, [data-theme="dark"] :is(.wiz-action.primary, button.primary).is-settling:disabled:hover {
   background: color-mix(in srgb, var(--panel-accent) 14%, var(--panel-surface)); color: color-mix(in srgb, var(--primary-text-color, #fff) 45%, transparent); }
 .wiz-action.secondary { border-color: var(--panel-accent); color: var(--panel-accent); background: transparent; }
-.wiz-action.stop, .wiz-action.link { min-height: 44px; border: 0; background: transparent; box-shadow: none; }
-.wiz-action.stop { color: var(--panel-error); }
-@media (hover: hover) { .wiz-action.stop:hover { background: color-mix(in srgb, var(--panel-error) 8%, transparent); } }
-.wiz-action.link { color: var(--panel-error); }
-@media (hover: hover) { .wiz-action.link:hover { background: color-mix(in srgb, var(--panel-error) 8%, transparent); } }
-/* Stop alone in a wait, and B-09's Close: red filled, the geometry of the primary. C-34's and S-06's Close: red outlined. */
-.wiz-action.danger { border-color: var(--panel-error); background: var(--panel-error); color: #fff; }
-.wiz-action.danger:hover { background: color-mix(in srgb, var(--panel-error) 88%, #000); }
-.wiz-action.danger-outline { border-color: var(--panel-error); color: var(--panel-error); background: transparent; }
-.wiz-action.danger-outline:hover { background: color-mix(in srgb, var(--panel-error) 8%, transparent); }
+/* L-47: outlined actions answer the pointer as the primary does: the accent at 8 % under the pointer, 12 % pressed. */
+@media (hover: hover) { .wiz-action.secondary:hover:not(:disabled), button.wiz-take.secondary:hover:not(:disabled) { background: color-mix(in srgb, var(--panel-accent) 8%, transparent); } }
+.wiz-action.secondary:active:not(:disabled), button.wiz-take.secondary:active:not(:disabled) { background: color-mix(in srgb, var(--panel-accent) 12%, transparent); }
+/* L-47, the red rule (HANDOFF §9.122): OUTLINED red stops a movement or discards unsaved measurements now («Ferma la
+   tapparella», «Annulla la misurazione», «Esci senza salvare», «Abbandona la calibrazione»); TEXT red closes or
+   leaves without losing anything («Chiudi»). No red is filled. */
+.wiz-action.stop, .wiz-action.danger-outline { min-height: 44px; border: 1px solid var(--panel-error); color: var(--panel-error); background: transparent; box-shadow: none; }
+.wiz-action.link { min-height: 44px; border: 0; background: transparent; box-shadow: none; color: var(--panel-error); }
+@media (hover: hover) { :is(.wiz-action.stop, .wiz-action.danger-outline, .wiz-action.danger):hover:not(:disabled) { background: color-mix(in srgb, var(--panel-error) 8%, transparent); } }
+:is(.wiz-action.stop, .wiz-action.danger-outline, .wiz-action.danger):active:not(:disabled) { background: color-mix(in srgb, var(--panel-error) 12%, transparent); }
+@media (hover: hover) { .wiz-action.link:hover:not(:disabled) { background: transparent; text-decoration: underline; color: color-mix(in srgb, var(--panel-error) 80%, #000); } }
+.wiz-action.danger { border: 1px solid var(--panel-error); background: transparent; color: var(--panel-error); }
+/* L-47: a blue text link among the actions (a way on that is neither the primary nor red). */
+.wiz-action.text { min-height: 44px; border: 0; background: transparent; box-shadow: none; color: var(--panel-accent); }
+@media (hover: hover) { :is(.wiz-action.text, .wiz-link, .wiz-more-toggle, .cal-disclosure-toggle):hover:not(:disabled) { background: transparent; text-decoration: underline; color: color-mix(in srgb, var(--panel-accent) 80%, #000); } }
 /* S-07: plain text at the top of the actions column, then Take control (outlined while the owner is present). */
 .wiz-readonly { display: grid; gap: 16px; }
 .wiz-readonly p { margin: 0; font-size: 14px; line-height: 1.5; }
@@ -1449,8 +1456,9 @@ dialog.cal-dialog .dialog-head { justify-content: space-between; padding-block: 
 .wiz-nav-dialog .wiz-dialog-card { width: min(100%, 592px); box-sizing: border-box; }
 @media (min-width: 720px) and (min-height: 500px) { .wiz-nav-dialog .wiz-dialog-card .actions { flex-wrap: nowrap; } }
 /* S-08: "Exit without saving" as red text beside the primary, both on the right (R-5, Figma «Dialoghi»). */
-.wiz-leave { color: var(--panel-error); border: 0; background: transparent; box-shadow: none; }
-.wiz-leave:hover { background: color-mix(in srgb, var(--panel-error) 8%, transparent); }
+.wiz-leave { color: var(--panel-error); border: 1px solid var(--panel-error); background: transparent; box-shadow: none; }
+@media (hover: hover) { .wiz-leave:hover { background: color-mix(in srgb, var(--panel-error) 8%, transparent); } }
+.wiz-leave:active { background: color-mix(in srgb, var(--panel-error) 12%, transparent); }
 /* Drawings of the steps: Figma size, never wider than the column. */
 .wiz-illustration { display: block; max-width: 100%; height: auto; margin: 0; }
 /* M2-7: A-07 has a drawing of its own on phones; only one of the two is shown. A landscape phone keeps the wide one. */

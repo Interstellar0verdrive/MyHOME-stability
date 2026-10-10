@@ -261,14 +261,14 @@ export function buildScreen(ctx) {
   if (stage === "saved") return finish(savedScreen(screen, ctx, tx, values));
   // L-40: a reader whose session was cancelled where it was guided: its own end, with «Chiudi» only.
   if (stage === "cancelled") return finish(Object.assign(screen, { code: "S-01", phase: screen.phase, title: t("wiz_T542"), body: t("wiz_T543"),
-    discard: false, actions: [{ id: "close", label: t("wiz_T158"), kind: "secondary" }] }));
+    discard: false, actions: [{ id: "close", label: t("wiz_T158"), kind: "link" }] }));
 
   // L-38: before a times-only measurement the cover is closed by Home Assistant, as path A's first positioning (C-04).
   if (local.homing && !view) {
     const seconds = local.homing.seconds, done = Math.min(seconds ?? 0, Math.max(0, ((ctx.now ?? Date.now()) - local.homing.started) / 1000));
     Object.assign(screen, { code: "C-04", phase: "prep", title: t("wiz_T027"),
       wait: { text: tx("wiz_T029", values), stages: [], progress: seconds > 0 ? { value: done / seconds, remaining: Math.max(1, Math.ceil(seconds - done - 0.001)) } : { value: null, remaining: null } },
-      actions: [{ id: "stop", label: t("wiz_T028"), kind: "danger" }] });
+      actions: [{ id: "stop", label: t("wiz_T028"), kind: "stop" }] });
     return finish();
   }
   // ---- A session (live or preview). ----
@@ -676,7 +676,8 @@ function previewScreen(screen, ctx, tx, n, values, stop) {
       body: tx(passed ? "wiz_T142" : "wiz_T145", verdict),
       actions: passed ? [{ id: "accept", label: t("wiz_T060"), kind: "primary" }, { id: "repeat_check", label: t("wiz_T143"), kind: "secondary" }]
         : [{ id: "repeat_check", label: t("wiz_T143"), kind: "primary" }, { id: "redo_readings", label: t("wiz_T146"), kind: "secondary" },
-          { id: "continue_anyway", label: t("wiz_T147"), kind: "link" }] });
+          // L-47: not red (it loses nothing): a blue text link.
+          { id: "continue_anyway", label: t("wiz_T147"), kind: "text" }] });
   }
   return Object.assign(screen, { code: "unknown", title: t("loading"), actions: [stop] });
 }
@@ -850,7 +851,8 @@ function savedScreen(screen, ctx, tx, values) {
   const checked = saved.check ? checkResult(ctx, tx, n, saved.check, saved.threshold ?? 4) : null;
   if (checked) { screen.results = [checked.tile]; screen.notices.push(checked.notice); }
   // "Close" keeps each mockup's own style: B-09 red filled, A-34 red text, C-34 red outlined.
-  const close = (of) => ({ id: "close", label: t("wiz_T158"), kind: of === "B" ? "danger" : of === "C" ? "danger-outline" : "link" });
+  // L-47: «Chiudi» after a save or a preview loses nothing: red text everywhere.
+  const close = () => ({ id: "close", label: t("wiz_T158"), kind: "link" });
   screen.discard = false;
   screen.phase = "done";
   screen.preview = !!saved.preview;
@@ -879,7 +881,7 @@ function savedScreen(screen, ctx, tx, values) {
   if (saved.target === "profile_new" && saved.orphan) screen.note = { tone: "info", text: fill(t("wiz_T431"), { old: saved.orphan, tab: t("profileListTitle") }) };
   // L-26: another device saved it: the same A-34, read only: «Chiudi» alone.
   if (saved.reader) return Object.assign(screen, { code: path === "C" ? "C-34" : "A-34", title: t("wiz_T154"), body,
-    actions: [{ id: "close", label: t("wiz_T158"), kind: "secondary" }], links: [] });
+    actions: [{ id: "close", label: t("wiz_T158"), kind: "link" }], links: [] });
   // L-28 (final): fine-tuning first, then giving the new profile to other covers, another cover, this cover's details,
   // and «Chiudi» in red, last. Where the bar is one column (phone, single column) the wizard keeps the first and the
   // red one visible and puts the others under «Altre opzioni ▾» (the rule of every bar: at most three visible).
@@ -907,7 +909,7 @@ function problemScreen(screen, ctx, reason, step = false) {
   if (code === "S-06") {
     screen.body = t(body);
     // As in its mockup, "Close" is outlined in red.
-    screen.actions = [{ id: "start-over", label: t("wiz_T261"), kind: "primary" }, { id: "close", label: t("wiz_T158"), kind: "danger-outline" }];
+    screen.actions = [{ id: "start-over", label: t("wiz_T261"), kind: "primary" }, { id: "close", label: t("wiz_T158"), kind: "link" }];
   } else if (step) {
     // The step alone is repeated: the texts of the mockups describe exactly this.
     screen.body = t(body);
@@ -932,10 +934,10 @@ function problemScreen(screen, ctx, reason, step = false) {
       : reason === "stopped" && ctx.local && !ctx.local.stopSent ? t("wiz_T524")
       : reason === "unexpected_stop" && ctx.view?.step === "lift" ? t("wiz_T443")
         : t(key) === key ? t("calPhase_interrupted") : t(key);
-    screen.actions = [{ id: "start-over", label: t("wiz_T261"), kind: "primary" }, { id: "close", label: t("wiz_T158"), kind: "secondary" }];
+    screen.actions = [{ id: "start-over", label: t("wiz_T261"), kind: "primary" }, { id: "close", label: t("wiz_T158"), kind: "link" }];
     // L-10: a session interrupted (a Stop from another tab, say) stays open in Home Assistant, holding the cover, until
     // it is cancelled: S-01 says how, in red; «Start over» cancels it too before starting again.
-    if (ctx.view && !ctx.view.preview && ctx.view.phase === "interrupted" && ctx.view.recoverable) screen.actions.push({ id: "abort", label: t("wiz_T533"), kind: "link" });
+    if (ctx.view && !ctx.view.preview && ctx.view.phase === "interrupted" && ctx.view.recoverable) screen.actions.push({ id: "abort", label: t("wiz_T533"), kind: "danger-outline" });
   }
   // A step's problem keeps the session open: Abandon stays (and asks); an ended session has nothing to abandon.
   screen.discard = step && code !== "S-06";
@@ -1157,7 +1159,7 @@ function finalize(screen, ctx) {
     if (screen.field) screen.field = { ...screen.field, disabled: true };
   }
   // Alone in a wait, Stop is the red filled button of the mockups; beside a step's buttons it stays a red link.
-  if (screen.wait && screen.actions.length === 1 && screen.actions[0].id === "stop") screen.actions[0] = { ...screen.actions[0], kind: "danger" };
+  // L-47: Stop is outlined red everywhere, alone in a wait too (one rule; no red is filled).
   // The backend hands the cover back after a stretch without any step (600 s after a movement; heartbeats do not
   // extend it). Two minutes before, a screen that waits for the user says so, counting the minutes down.
   if (view && !view.preview && view.idle_expires_at && !status.expired && !ENDED.includes(view.phase) && !MOVING(view)) {
