@@ -581,6 +581,14 @@ class CalibrationSession:
             "profile": {"name": msg.get("name", ""), **self.values,
                         **({"reference_travel_cm": travel} if travel is not None else {})},
         }, calibration=self)
+        # L-36: as the geometry session: in review the motor is still at the end stop the operator confirmed, so the
+        # new times apply now and that end stop stays the anchor.
+        position = self.cover._attr_current_cover_position
+        self.cover._attr_is_opening = self.cover._attr_is_closing = False
+        self.cover._move_start_time = None
+        self.cover._apply_pending_cover_profile()
+        if position in (0, 100):
+            self.confirm_position(position)
         return result["revision"]
 
 

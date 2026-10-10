@@ -424,6 +424,12 @@ class GeometryCalibrationSession(guided.CalibrationSession):
         # The last tape reading or confirmed end stop is an actual physical observation, not
         # an old-model estimate. Seed the newly applied model only after the atomic save; after
         # a check that moved the cover unread there is nothing to seed.
+        # L-36: a profile written while the cover still looked in motion waits for its next stop status, and until then
+        # the old model keeps estimating; the motor is known to be still here, so the new model applies now, then the
+        # position is anchored in it.
+        self.cover._attr_is_opening = self.cover._attr_is_closing = False
+        self.cover._move_start_time = None
+        self.cover._apply_pending_cover_profile()
         if self.edge_position is None:
             self._forget_position()
         else:

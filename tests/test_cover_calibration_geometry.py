@@ -145,7 +145,10 @@ async def test_basic_measurement_atomic_save_runtime_provenance_and_no_accuracy(
         with pytest.raises(OSError):
             await act(cal, "save", name="Measured roll")
     assert cal.session.phase == "review" and cal.session.store.data == before
+    # L-36: the cover still looks in motion when the profile is written (a stale flag): the new model applies at once.
+    cal.cover._attr_is_closing = True
     result = await act(cal, "save", name="Measured roll")
+    assert cal.cover._pending_profile is None
     assert result["phase"] == "saved"
     data = await read_profile(hass, cal.session.entry_id, cal.cover.entity_id)
     profile = data["profiles"][0]
