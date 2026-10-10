@@ -868,6 +868,21 @@ test("L-66: a card with a session in progress has the table row's warning fill, 
   assert.ok(cards.indexOf(".cal-list-head + .cal-row.is-running") > cards.indexOf(".cal-list-head + .cal-row {"), "after the card's own surface");
 });
 
+test("L-68: every step with a drawing reads title → drawing → text → field; the lift-off reading A-08 included", async () => {
+  const { tab, wiz, code } = await mount({ session: resumed({ phase: "reading", step: "lift", reading_kind: "lift" }) });
+  tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
+  assert.equal(code(), "A-08");
+  assert.equal(wiz().querySelector(".wiz-title").textContent, "How far has the edge risen?");
+  const main = wiz().querySelector(".wiz-main");
+  const parts = [".wiz-title", ".wiz-illustration", ".wiz-body", ".wiz-field, .wiz-frame input"].map((selector) => main.querySelector(selector));
+  assert.ok(parts.every(Boolean), "title, drawing, text and field are all there");
+  const before = (a, b) => Boolean(a.compareDocumentPosition(b) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
+  for (let i = 1; i < parts.length; i++) assert.ok(before(parts[i - 1], parts[i]), `${i - 1} before ${i}`);
+  // The table of drawings has a single place for them now: under the title.
+  const table = readFileSync(new URL("../../custom_components/myhome/frontend/panel/panel-calibration-screens.js", import.meta.url), "utf8");
+  assert.doesNotMatch(table, /AFTER|after-body/);
+});
+
 test("L-18: a tap on the cover already chosen in A-01 un-chooses it", async () => {
   const { wiz, tab, pickCover, code } = await mount();
   tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
@@ -1158,7 +1173,7 @@ test("L-9: an intermediate reading names the expected height in Italian, refuses
   assert.equal(running.stopwatch, null, "an intermediate run shows no elapsed time: Home Assistant stops it");
 });
 
-test("each mockup gets its drawing by code: readings after the text, steps and briefings before it, none elsewhere", () => {
+test("each mockup gets its drawing by code, always under the title and before the text (L-68), none elsewhere", () => {
   const t = (key) => translations.en[key] || key;
   const base = { mode: "geometry", values: { opening_time: 22, closing_time: 21 }, samples: { lift: 4 }, readings: { gap: 3 },
     geometry: { slat_time_s: 4 }, travel_cm: 110, slats: true, owner: true, sequence: 4 };
@@ -1170,21 +1185,21 @@ test("each mockup gets its drawing by code: readings after the text, steps and b
   assert.deepEqual(drawn({ step: "home", phase: "closing" }), ["A-05", "window-closed before-body"]);
   assert.deepEqual(drawn({ step: "lift", phase: "briefing" }), ["A-06", "two-runs before-body"]);
   assert.deepEqual(drawn({ step: "lift", phase: "briefing" }, { ackLift: true }), ["A-07", "lift-sequence before-body"]);
-  assert.deepEqual(drawn({ step: "lift", phase: "reading", reading_kind: "lift" }), ["A-08", "lift-zoom after-body"]);
+  assert.deepEqual(drawn({ step: "lift", phase: "reading", reading_kind: "lift" }), ["A-08", "lift-zoom before-body"]);
   assert.deepEqual(drawn({ step: "reset", phase: "starting_close" }), ["A-09", null], "A-09's frame shows only the wait box");
   assert.deepEqual(drawn({ step: "reset", phase: "closing" }), ["A-10", "window-closed before-body"], "the closed window, as on A-05");
   assert.deepEqual(drawn({ step: "reset", phase: "closing" }, {}, "C"), ["C-10", "window-closed before-body"]);
   assert.deepEqual(drawn({ step: "opening", phase: "opening" }), ["A-11", "ascent-sequence before-body"]);
   assert.deepEqual(drawn({ step: "opening", phase: "reading" }, { travelTyped: 198 }), ["A-12", null]);
-  assert.deepEqual(drawn({ step: "opening", phase: "reading" }), ["A-13", "curtain-open-tape after-body"]);
+  assert.deepEqual(drawn({ step: "opening", phase: "reading" }), ["A-13", "curtain-open-tape before-body"]);
   assert.deepEqual(drawn({ step: "closing", phase: "closing" }), ["A-14", "descent-sequence before-body"]);
   assert.deepEqual(drawn({ step: "half_open", phase: "briefing" }), ["A-15", null]);
   assert.deepEqual(drawn({ step: "half_open", phase: "briefing" }, { ackDescent: true }), ["A-16", "curtain-partial-tape before-body"]);
   assert.deepEqual(drawn({ step: "half_open", phase: "opening" }, { ackDescent: true, ackReadings: true }), ["A-17", null]);
-  assert.deepEqual(drawn({ step: "half_open", phase: "reading" }, { ackDescent: true, ackReadings: true }), ["A-18", "curtain-partial-tape after-body"]);
+  assert.deepEqual(drawn({ step: "half_open", phase: "reading" }, { ackDescent: true, ackReadings: true }), ["A-18", "curtain-partial-tape before-body"]);
   assert.deepEqual(drawn({ step: "top", phase: "opening" }, { ackReadings: true }), ["A-19", null]);
   assert.deepEqual(drawn({ step: "top", phase: "opening" }), ["A-09", null], "the return to the top reuses A-09: no drawing either");
-  assert.deepEqual(drawn({ step: "half_close", phase: "reading" }, { ackReadings: true }), ["A-20", "curtain-partial-tape after-body"]);
+  assert.deepEqual(drawn({ step: "half_close", phase: "reading" }, { ackReadings: true }), ["A-20", "curtain-partial-tape before-body"]);
   assert.deepEqual(drawn({ step: "closing", phase: "closing" }, {}, "C"), ["C-14", "descent-sequence before-body"], "clones follow their A screen");
   assert.deepEqual(drawn({ phase: "review" }), ["A-21v", null], "L-43: the check first");
   assert.deepEqual(drawn({ phase: "review", check: { gap_cm: 1, passed: true, check_seconds: 10.5 } }), ["A-21", null]);
@@ -1196,7 +1211,7 @@ test("every drawing a screen can pick is a themed inline SVG, and A-09 has none"
   const panel = new URL("../../custom_components/myhome/frontend/panel/", import.meta.url);
   const source = readFileSync(new URL("panel-calibration-screens.js", panel), "utf8");
   const table = source.slice(source.indexOf("const ILLUSTRATION_OF = {"), source.indexOf("ILLUSTRATION_OF.C ="));
-  const used = new Set([...table.matchAll(/\["([a-z-]+)", (?:BEFORE|AFTER)\]/g)].map((match) => match[1]));
+  const used = new Set([...table.matchAll(/\["([a-z-]+)", BEFORE\]/g)].map((match) => match[1]));
   assert.ok(used.size >= 9, `${used.size} ids in the table`);
   assert.deepEqual(Object.keys(SVG).sort(), Object.keys(ILLUSTRATIONS).sort(), "one drawing per id, no drawing without an id");
   const ids = new Set();

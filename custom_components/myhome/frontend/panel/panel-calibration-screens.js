@@ -1057,17 +1057,17 @@ function knownTime(entry) {
 
 /**
  * The drawing of each mockup, by the number of its code (C-05…C-34 are the clones of A): its illustration id and
- * where it sits. Readings with the tape show it between the text and the field; steps and briefings under the title
- * (and the motor bar), above the text. Every other screen has none (A-09 too: its frame shows only the wait box).
+ * where it sits. L-68: on every step the order is title → drawing → text (→ inputs → actions): the readings with the tape
+ * too, which used to show the text first. Every other screen has none (A-09 too: its frame shows only the wait box).
  */
-const BEFORE = "before-body", AFTER = "after-body";
+const BEFORE = "before-body";
 const ILLUSTRATION_OF = {
-  A: { "05": ["window-closed", BEFORE], "10": ["window-closed", BEFORE], "06": ["two-runs", BEFORE], "07": ["lift-sequence", BEFORE], "08": ["lift-zoom", AFTER],
-    "11": ["ascent-sequence", BEFORE], "13": ["curtain-open-tape", AFTER], "14": ["descent-sequence", BEFORE],
-    "16": ["curtain-partial-tape", BEFORE], "18": ["curtain-partial-tape", AFTER], "20": ["curtain-partial-tape", AFTER],
-    "23": ["curtain-partial-tape", AFTER], "25": ["curtain-partial-tape", AFTER], "27": ["curtain-partial-tape", AFTER],
-    "29": ["curtain-partial-tape", AFTER], "31": ["curtain-partial-tape", AFTER], "34": ["check", BEFORE] },
-  B: { "02": ["curtain-open-tape", BEFORE], "06": ["curtain-partial-tape", AFTER] },
+  A: { "05": ["window-closed", BEFORE], "10": ["window-closed", BEFORE], "06": ["two-runs", BEFORE], "07": ["lift-sequence", BEFORE], "08": ["lift-zoom", BEFORE],
+    "11": ["ascent-sequence", BEFORE], "13": ["curtain-open-tape", BEFORE], "14": ["descent-sequence", BEFORE],
+    "16": ["curtain-partial-tape", BEFORE], "18": ["curtain-partial-tape", BEFORE], "20": ["curtain-partial-tape", BEFORE],
+    "23": ["curtain-partial-tape", BEFORE], "25": ["curtain-partial-tape", BEFORE], "27": ["curtain-partial-tape", BEFORE],
+    "29": ["curtain-partial-tape", BEFORE], "31": ["curtain-partial-tape", BEFORE], "34": ["check", BEFORE] },
+  B: { "02": ["curtain-open-tape", BEFORE], "06": ["curtain-partial-tape", BEFORE] },
 };
 ILLUSTRATION_OF.C = ILLUSTRATION_OF.A;
 

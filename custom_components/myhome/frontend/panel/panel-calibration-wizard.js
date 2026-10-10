@@ -276,7 +276,6 @@ export class CalibrationWizard {
             ${screen.help && !screen.choice ? this._helpMarkup(screen.help) : ""}
             ${screen.note ? `<p class="cal-note${screen.note.tone === "warning" ? " is-warning" : ""} wiz-note">${esc(screen.note.text)}</p>` : ""}
             ${screen.status.length ? `<div class="wiz-status">${screen.status.map((line) => `<p>${esc(line)}</p>`).join("")}</div>` : ""}
-            ${drawing("after-body")}
             ${screen.box ? `<div class="wiz-box"><strong>${esc(screen.box.label)}</strong>${screen.box.lines.map((line) => `<p>${factMarkup(line)}</p>`).join("")}</div>` : ""}
             ${screen.choice ? this._choiceMarkup(screen.choice) : ""}
             ${screen.picker ? '<div class="wiz-picker"></div>' : ""}
