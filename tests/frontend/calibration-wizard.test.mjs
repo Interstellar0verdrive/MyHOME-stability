@@ -320,7 +320,7 @@ test("path A runs the live geometry session from the first close to Save, one me
   const field = wiz().querySelector('[name="reading_cm"]');
   field.value = "40"; field.dispatchEvent(new Event("input", { bubbles: true })); await tick();
   assert.equal(wiz().querySelector("#wiz-field-warning").hidden, false);
-  assert.equal(wiz().querySelector("#wiz-field-warning").textContent, "The reading is far from the expected one, about 91 cm: check the reference. If it is right, go on.");
+  assert.equal(wiz().querySelector("#wiz-field-warning").textContent, "The reading is far from the expected one: check the reference. If it is right, continue.");
   assert.equal(wiz().querySelector('[data-wiz="reading"]').disabled, false, "never blocked");
   field.value = "100"; field.dispatchEvent(new Event("input", { bubbles: true })); await tick();
   assert.equal(wiz().querySelector("#wiz-field-warning").hidden, true, "half the travel plus 1 cm: no warning");
@@ -1470,7 +1470,7 @@ test("L-9: an intermediate reading names the expected height in Italian, refuses
   assert.equal(screen.code, "A-20");
   assert.equal(screen.field.hint, "Di solito fra 66 e 100 cm: qualche centimetro di differenza è normale. Scrivi quello che dice il metro; virgola o punto vanno bene.", "L-30");
   assert.deepEqual([screen.field.min > 0, screen.field.max > 201, screen.field.max < 201.001], [true, true, true], "the physical limits");
-  assert.equal(screen.field.band.warning, "La lettura è lontana da quella attesa, circa 83 cm: ricontrolla il riferimento. Se è giusta, continua.");
+  assert.equal(screen.field.band.warning, "La lettura è lontana da quella attesa: ricontrolla il riferimento. Se è giusta, continua.");
   assert.equal(screen.notices[0].text, "La lettura (205,5 cm) è più della corsa del telo (198 cm): ricontrolla il metro e il punto da cui misuri.");
   assert.equal(screen.stopwatch, null, "no time is shown for a reading");
   const typed = buildScreen({ t, language: "it", stage: "session", path: "A", view, local: { fieldError: 230 }, cover: { name: "Kitchen 2" } });

@@ -982,7 +982,7 @@ function halfField(ctx, tx, n) {
     : expectedHint(t, tx, n, view.expected_cm, view.travel_cm);
   if (!span) return { label: t("wiz_T064"), hint, min: 0.1, max: 10000, kind: "height" };
   return { label: t("wiz_T064"), hint, min: span.min_cm - RANGE_SLACK_CM, max: span.max_cm + RANGE_SLACK_CM, kind: "height",
-    travel: view.travel_cm, band: band ? { min: band.min_cm, max: band.max_cm, warning: tx("wiz_T530", { expected: n(band.expected_cm, 0) }) } : null };
+    travel: view.travel_cm, band: band ? { min: band.min_cm, max: band.max_cm, warning: t("wiz_T530") } : null };
 }
 
 /** L-45: a check's gap, whichever way the session names it. */
