@@ -1059,6 +1059,86 @@ test("L-77: Stop shows the moment ① is sent, before the session answers, and t
   backend.hass.callWS = original;
 });
 
+/** L-78: a base calibration up to its check's intro (A-21v), as in the L-37 test. */
+async function toCheckIntro(context) {
+  const { backend, press, type, startFor, code } = context;
+  await startFor("cover.living_one");
+  await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  await press("ack:lift"); await press("next"); await move(backend, { seconds: 4.4 }); await press("lift"); backend.stopped(); await tick();
+  await type("3"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  await press("next"); await move(backend, { seconds: 22.2 }); await press("endpoint"); backend.stopped(); await tick();
+  await type("198"); await press("ack:ascent");
+  await press("next"); await move(backend, { seconds: 21.7 }); await press("endpoint"); backend.stopped(); await tick();
+  await press("ack:descent"); await press("ack:readings"); await move(backend, { auto: true, stop: true });
+  await type("97"); await move(backend, { seconds: 24 }); await press("endpoint"); backend.stopped(); await tick();
+  await move(backend, { auto: true, stop: true }); await type("101");
+  assert.equal(code(), "A-21v");
+}
+
+test("L-78: one press sends one check, held from the click until the answer; its target is never a NaN", async () => {
+  const context = await mount({ guardMs: 0 });
+  const { backend, wiz, panel } = context;
+  await toCheckIntro(context);
+  const original = backend.hass.callWS;
+  let release;
+  backend.hass.callWS = (message) => message.action === "check" ? new Promise((resolve) => { release = () => resolve(original(message)); }) : original(message);
+  const button = () => wiz().querySelector('.wiz-actions [data-wiz="check-start"]');
+  button().click(); button().click(); await tick();
+  assert.equal(button().disabled, true, "held from the click until the answer");
+  assert.ok(button().classList.contains("is-settling"), "with the passing look");
+  button().click(); await tick();
+  release(); await tick(8);
+  backend.hass.callWS = original;
+  const checks = backend.calls.filter((message) => message.action === "check");
+  assert.equal(checks.length, 1, "a double click sends once");
+  assert.deepEqual([checks[0].direction, checks[0].target_cm], ["closing", 99], "half the view's travel, descending");
+  // The view without its travel when the check is sent: no target at all (the backend plans its own), nothing null.
+  const wizard = panel._calibrationTab._wizard, gateway = wizard._gateway;
+  const sent = [];
+  const act = gateway.act.bind(gateway);
+  gateway.act = (action, extra) => { sent.push([action, extra]); return Promise.resolve(); };
+  const travel = gateway.view.travel_cm; gateway.view.travel_cm = undefined;
+  await wizard._act("check-start");
+  gateway.view.travel_cm = travel; gateway.act = act;
+  assert.deepEqual(sent, [["check", {}]]);
+});
+
+test("L-78: refusals say what happened: our words for the check, the code for an unknown one, the connection only when nothing came back", () => {
+  const t = (key) => translations.en[key] || key;
+  const view = { mode: "geometry", phase: "review", step: "half_close", travel_cm: 198, values: { opening_time: 22, closing_time: 21 }, samples: { lift: 4 },
+    readings: { gap: 3, half_open: 97, half_close: 101 }, geometry: { slat_time_s: 4 }, slats: true, owner: true, sequence: 9, check: null };
+  const local = { ackLift: true, ackAscent: true, ackDescent: true, ackReadings: true };
+  const errorOf = (error) => buildScreen({ t, stage: "session", path: "A", view, local, status: { error }, cover: { name: "K" } });
+  const texts = (built) => built.notices.filter((notice) => notice.tone === "error").map((notice) => notice.text);
+  const impossible = errorOf({ code: "invalid_check" });
+  assert.deepEqual(texts(impossible), [translations.en.wiz_T575]);
+  assert.deepEqual(impossible.actions.map((action) => action.id), ["check-start", "skip-check"], "never a dead end");
+  assert.deepEqual(texts(errorOf({ code: "invalid_format" })), ["Home Assistant did not accept the command (code: invalid_format). Check the current step and try again."]);
+  assert.deepEqual(texts(errorOf({ code: 3, message: "Connection lost" })), [translations.en.calConnectionError], "the socket's own number");
+  assert.deepEqual(texts(errorOf({})), [translations.en.calConnectionError], "nothing came back");
+  // Skipped: the summary, without a check.
+  const skipped = buildScreen({ t, stage: "session", path: "A", view, local: { ...local, checkSkipped: true }, cover: { name: "K" } });
+  assert.equal(skipped.code, "A-21");
+});
+
+test("L-78: «the measurement state changed» is not shown once the session has moved past the command", async () => {
+  const context = await mount({ guardMs: 0 });
+  const { backend, wiz, panel } = context;
+  await toCheckIntro(context);
+  const original = backend.hass.callWS;
+  backend.hass.callWS = async (message) => {
+    if (message.action !== "check") return original(message);
+    backend.calls.push(message);
+    throw { code: "calibration_step", message: "stale" };
+  };
+  wiz().querySelector('.wiz-actions [data-wiz="check-start"]').click(); await tick(4);
+  assert.match(wiz().querySelector(".wiz-notices").textContent, /measurement state changed/i, "shown while nothing newer is known");
+  backend.session.sequence += 1; backend.emit(); await tick(6);
+  assert.equal(wiz().querySelector(".wiz-notices").textContent.trim(), "", "a newer view: the refusal is gone");
+  backend.hass.callWS = original;
+  void panel;
+});
+
 test("L-18: a tap on the cover already chosen in A-01 un-chooses it", async () => {
   const { wiz, tab, pickCover, code } = await mount();
   tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();

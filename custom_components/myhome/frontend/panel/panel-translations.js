@@ -495,6 +495,9 @@ export const translations = {
     wiz_T570: "Precision",
     wiz_T571: "gap at half travel",
     wiz_T573: "Stop following",
+    wiz_T574: "Home Assistant did not accept the command (code: {code}). Check the current step and try again.",
+    wiz_T575: "Home Assistant cannot plan a check for the values just measured. Repeat the check, or save without it: the cover will not show «Verified».",
+    wiz_T576: "Save without the check",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1454,6 +1457,9 @@ export const translations = {
     wiz_T570: "Precisione",
     wiz_T571: "scarto a metà corsa",
     wiz_T573: "Smetti di seguire",
+    wiz_T574: "Home Assistant non ha accettato il comando (codice: {code}). Controlla il passaggio attuale e riprova.",
+    wiz_T575: "Home Assistant non riesce a pianificare una verifica con i valori appena misurati. Ripeti la verifica, oppure salva senza: la tapparella non mostrerà «Verificata».",
+    wiz_T576: "Salva senza verifica",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

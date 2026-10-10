@@ -151,7 +151,7 @@ class GeometryCalibrationSession(guided.CalibrationSession):
     def _check(self, msg: dict[str, Any]) -> None:
         """Verify the measured model before Save: back to the end stop, then a timed run and a reading."""
         model = profile_motion({**self.values, "geometry": self.geometry})
-        check = CalibrationCheck.plan(cast(CoverMotionModel, model), cast(float, self.measured_travel),
+        check = CalibrationCheck.plan_possible(cast(CoverMotionModel, model), cast(float, self.measured_travel),
                                            msg.get("direction"), msg.get("target_cm"), fraction=GEOMETRY_CHECK_FRACTION)
         self.check, self.check_before, self.checking = check, self.check, True
         self.check_interrupted = None

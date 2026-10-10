@@ -63,10 +63,12 @@ class WizardSession extends CoverCalibration {
       if (this._expired) { this._expired = false; this.onBeatExpired?.(); }
       this.connection = "interrupted"; this._listener("view"); return;
     }
-    this.error = { ...(error || {}), code: error?.code, reading: extra.reading_cm ?? null }; this._listener("error");
+    this.error = { ...(error || {}), code: error?.code, reading: extra.reading_cm ?? null, sequence: this._sentSequence ?? null }; this._listener("error");
   }
   _accept(state) {
     const claiming = this._claiming;
+    // L-78: «the measurement state changed» for a command the session has moved past: the new view says it all.
+    if (this.error?.code === "calibration_step" && this.error.sequence != null && state?.sequence !== this.error.sequence) this.error = null;
     // L-26: the last view stays readable after the engine closes on «saved».
     this.lastView = state;
     super._accept(state);
@@ -77,7 +79,8 @@ class WizardSession extends CoverCalibration {
     if (claiming && state.read_only) { this.notice = "calClaimStale"; this._listener("view"); }
   }
   _perform(action, extra) {
-    if (action !== "heartbeat") { this.error = null; this.notice = null; return super._perform(action, extra); }
+    // L-78: the sequence a command was sent against, to recognise a refusal the session has since moved past.
+    if (action !== "heartbeat") { this.error = null; this.notice = null; this._sentSequence = this._state?.sequence ?? null; return super._perform(action, extra); }
     const beat = {};
     this._beats.add(beat);
     return super._perform(action, beat);

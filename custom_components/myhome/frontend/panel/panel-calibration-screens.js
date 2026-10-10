@@ -65,6 +65,8 @@ export const IN_MOTION = (view, status = {}) => MOVING(view) || !!status.startin
   || (!!view && ["settling", "between_covers"].includes(view.phase));
 
 const ENDED = ["interrupted", "cancelled", "expired"];
+/** Refusals told in our own words rather than with the maintainer's `profileError_*` texts. */
+const OUR_REFUSALS = { reading_over_travel: "wiz_T531", invalid_check: "wiz_T575" };
 /** How long before the session's idle expiry the wizard warns (M3). */
 export const LEASE_WARNING_MS = 120000;
 
@@ -376,11 +378,14 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
   // the summary, and the reading anchors Home Assistant's estimate.
   // L-43: it is part of the path (not skippable): its own step «Verifica», in a live view as in a reopened or read one.
   // L-44b: a check stopped (Stop, or a movement it did not expect) is done again: it is part of the path.
-  if (phase === "review" && !view.check && !local.refining && view.travel_cm > 0) {
+  if (phase === "review" && !view.check && !local.refining && !local.checkSkipped && view.travel_cm > 0) {
     screen.phase = "check";
     if (view.check_interrupted) screen.notices.push({ tone: "warning", result: true, text: t("wiz_T568") });
+    // L-78: never a dead end: a model Home Assistant can plan no check for may be saved without one (no «Verificata»).
+    const impossible = ctx.status?.error?.code === "invalid_check";
     return Object.assign(screen, { code: p("21v"), title: t("wiz_T544"), body: `${t("wiz_T545")}\n\n${tx("wiz_T564", { threshold: n(view.check_threshold_cm ?? 4, 0) })}`, illustration: false,
-      actions: [{ id: "check-start", label: t("wiz_T546"), kind: "primary" }] });
+      actions: [{ id: "check-start", label: t("wiz_T546"), kind: "primary" },
+        ...(impossible ? [{ id: "skip-check", label: t("wiz_T576"), kind: "secondary" }] : [])] });
   }
   if (phase === "review" || phase === "saving") return summaryScreen(screen, ctx, tx, n, values);
   if (step === "home") {
@@ -1201,10 +1206,15 @@ function finalize(screen, ctx) {
   if (status.cancelPending) screen.notices.push({ tone: "error", text: t("calCancelFailed") });
   if (status.error) {
     // L-9: our own refusal of a reading above the travel, in our words.
-    const key = status.error.code === "reading_over_travel" ? "wiz_T531" : `profileError_${status.error.code}`;
+    const code = status.error.code;
+    // Our own words for some refusals (L-9 a reading above the travel, L-78 a check the cover cannot make).
+    const key = OUR_REFUSALS[code] || `profileError_${code}`;
     const values = { ...(view || {}), ...(readingRange(view?.reading_range, language, status.error.reading) || {}),
-      ...(status.error.code === "reading_over_travel" ? { reading: n(status.error.reading), travel: n(view?.travel_cm) } : {}) };
-    const text = t(key) === key ? t(view?.preview ? "calReadingNumber" : "calConnectionError") : fill(t(key), values);
+      ...(code === "reading_over_travel" ? { reading: n(status.error.reading), travel: n(view?.travel_cm) } : {}), code };
+    // L-78: the connection's text only when nothing came back (no code, or the socket's own number); a refusal Home
+    // Assistant sent with a code of its own, even one without a text here, says so and names it.
+    const transport = code == null || typeof code === "number";
+    const text = t(key) !== key ? fill(t(key), values) : view?.preview ? t("calReadingNumber") : transport ? t("calConnectionError") : fill(t("wiz_T574"), values);
     // A refusal whose values are gone (the session moved on) is not shown with empty placeholders.
     if (!/\{\w+\}/.test(text)) screen.notices.push({ tone: "error", text });
   }

@@ -131,10 +131,15 @@ def test_a_check_aims_between_a_tenth_and_nine_tenths_and_moves_the_curtain_past
     for direction in ("opening", "closing"):
         assert CalibrationCheck.plan(MODEL, TRAVEL, direction, 20).target_cm == 20
     assert CalibrationCheck.plan(MODEL, TRAVEL, "opening", 180).target_cm == 180
-    # Down from the top to 90 %: 18 s of curtain times 1 - u(0.9, 3) is about 1.2 s, not more than 2 + 1.
-    assert CalibrationCheck(MODEL, TRAVEL, "closing", 180).planned_seconds < 3
+    # L-78: down from the top the curtain moves from the first second (the slats close at the bottom): to 90 %, 18 s of
+    # curtain times 1 - u(0.9, 3) is about 1.2 s of curtain, more than the 1 s asked for.
+    assert 1 < CalibrationCheck(MODEL, TRAVEL, "closing", 180).planned_seconds < 3
+    assert CalibrationCheck.plan(MODEL, TRAVEL, "closing", 180).target_cm == 180
+    # A descent too short to say anything is still refused: to 90 % of a curtain lowered in 6 s is under a second.
+    quick = CoverMotionModel(opening_time_s=8, closing_time_s=8, slat_time_s=2, opening_roll=2, closing_roll=3)
+    assert CalibrationCheck(quick, TRAVEL, "closing", 180).planned_seconds <= 1
     with pytest.raises(ProfileError, match="invalid_check"):
-        CalibrationCheck.plan(MODEL, TRAVEL, "closing", 180)
+        CalibrationCheck.plan(quick, TRAVEL, "closing", 180)
     # Ten seconds of slats and two of curtain: halfway up is exactly 11 s, not more than 10 + 1.
     slow_slats = CoverMotionModel(opening_time_s=12, closing_time_s=12, slat_time_s=10)
     assert CalibrationCheck(slow_slats, TRAVEL, "opening", 100).planned_seconds == 11
@@ -500,8 +505,8 @@ async def test_a_check_is_offered_only_in_review_to_its_owner_with_the_current_s
 
 
 @pytest.mark.parametrize("extra", [{"target_cm": 0}, {"target_cm": 19}, {"target_cm": 181}, {"target_cm": 200},
-                                   {"target_cm": 250}, {"target_cm": -5}, {"direction": "sideways"},
-                                   {"direction": "closing", "target_cm": 180}])
+                                   {"target_cm": 250}, {"target_cm": -5}, {"direction": "sideways"}])
+# L-78: down to 180 cm is no longer here: a descent moves the curtain from the start and that run is a valid check.
 async def test_a_check_the_cover_cannot_make_sends_nothing_and_keeps_review(geometry, extra):
     """Fork `test_calibration_session_paths.py:1304`: refused, not clamped into another run."""
     cal = geometry

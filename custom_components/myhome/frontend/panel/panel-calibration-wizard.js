@@ -528,6 +528,9 @@ export class CalibrationWizard {
     const more = column.querySelector(".wiz-more");
     if (more) { more.classList.toggle("is-open", !!this._local.moreOpen); more.querySelector(".wiz-more-toggle").setAttribute("aria-expanded", String(!!this._local.moreOpen)); }
     const guarded = this._guarded();
+    // L-78: from the click until Home Assistant answers the buttons are held too (one press, one message), with the
+    // passing look; Stop never waits.
+    const inFlight = !!this._gateway?.status.busy;
     for (const action of screen.actions) {
       const button = column.querySelector(`[data-wiz="${action.id}"]`);
       if (!button || action.kind === "status" || action.kind === "state") continue;
@@ -535,7 +538,7 @@ export class CalibrationWizard {
       // refused value it stays off until the value typed is one the field accepts.
       const input = action.id === "reading" ? root.querySelector('[name="reading_cm"]') : null;
       const empty = !!input && (!input.value.trim() || (this._local.fieldError != null && !accepted(input)));
-      button.disabled = !!action.disabled || empty || (guarded && action.id !== "stop");
+      button.disabled = !!action.disabled || empty || ((guarded || inFlight) && action.id !== "stop");
       // D-13 (decided 8 Oct): off only for a moment, enabling by itself (the hold after a change, a request or the motor
       // settling) keeps the light primary look; off until the user acts is the neutral grey.
       button.classList.toggle("is-settling", button.disabled && !empty && (!action.disabled || !!action.settling));
@@ -703,7 +706,13 @@ export class CalibrationWizard {
     if (id === "steps") { const sheet = this._frame.querySelector(".wiz-sheet"); sheet.hidden = false; focusOnOpen(sheet.querySelector(".wiz-sheet-card"), sheet.querySelector("button")); return; }
     if (id === "more") { local.moreOpen = !local.moreOpen; return this._render(); }
     // L-37: the optional check at the end of the base calibration: descending from the top to half the travel.
-    if (id === "check-start") { const travel = gateway?.view?.travel_cm; return this._send("check", { direction: "closing", target_cm: travel / 2 }); }
+    if (id === "skip-check") { local.checkSkipped = true; gateway?.clearError?.(); this._render(); return; }
+    if (id === "check-start") {
+      // L-78: the target comes from the session's own view at the moment of sending: half its travel, descending from
+      // the top (L-37). Without a travel there (never a NaN on the wire) the backend plans its own default check.
+      const travel = gateway?.view?.travel_cm;
+      return this._send("check", Number.isFinite(travel) && travel > 0 ? { direction: "closing", target_cm: travel / 2 } : {});
+    }
     if (id === "steps-close") { this._slideAway(this._frame.querySelector(".wiz-sheet")); this._frame.querySelector('[data-wiz="steps"]').focus(); return; }
     if (id === "exit") { this._exit(); return; }
     if (id === "back") { this._back(); return; }
