@@ -70,9 +70,9 @@ const OUR_REFUSALS = { reading_over_travel: "wiz_T531", invalid_check: "wiz_T575
 /** How long before the session's idle expiry the wizard warns (M3). */
 export const LEASE_WARNING_MS = 120000;
 
-/** Texts with a count: the zero and one forms of the sheet's plural texts (PROVVISORIO rows T305–T317). */
-const PLURALS = { wiz_T110: ["wiz_T305", "wiz_T306"], wiz_T112: ["wiz_T307", null], wiz_T165: ["wiz_T308", "wiz_T309"],
-  wiz_T285: ["wiz_T310", "wiz_T311"], wiz_T286: ["wiz_T312", "wiz_T313"], wiz_T287: ["wiz_T314", "wiz_T315"], wiz_T288: ["wiz_T316", "wiz_T317"] };
+/** Texts with a count: the zero and one forms of the sheet's plural texts (PROVVISORIO rows T305–T317; T307 and T310–T313 retired with T112, T285 and T286). */
+const PLURALS = { wiz_T110: ["wiz_T305", "wiz_T306"], wiz_T165: ["wiz_T308", "wiz_T309"],
+  wiz_T287: ["wiz_T314", "wiz_T315"], wiz_T288: ["wiz_T316", "wiz_T317"] };
 export function counted(t, key, count, values = {}) {
   const [zero, one] = PLURALS[key] || [];
   return fill(t(count === 0 && zero ? zero : count === 1 && one ? one : key), { ...values, count });
