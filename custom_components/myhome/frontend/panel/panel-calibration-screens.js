@@ -954,6 +954,8 @@ function problemScreen(screen, ctx, reason, step = false) {
     screen.body = reason === "not_stopped" ? t("wiz_T460") : reason === "stopped" && ctx.local?.misbehaved ? t("wiz_T442")
       : reason === "stopped" && ctx.local && !ctx.local.stopSent ? t("wiz_T524")
       : reason === "unexpected_stop" && ctx.view?.step === "lift" ? t("wiz_T443")
+      // R-7: our words for an unexpected stop (the maintainer's text speaks of an endpoint not yet confirmed).
+      : reason === "unexpected_stop" ? t("wiz_T577")
         : t(key) === key ? t("calPhase_interrupted") : t(key);
     screen.actions = [{ id: "start-over", label: t("wiz_T261"), kind: "primary" }, { id: "close", label: t("wiz_T390"), kind: "secondary" }];
     // L-10: a session interrupted (a Stop from another tab, say) stays open in Home Assistant, holding the cover, until

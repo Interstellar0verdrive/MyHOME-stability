@@ -2721,7 +2721,7 @@ test("S-01 after the lift-off run stopped before ② says how to redo it; other 
   const body = (step) => buildScreen({ t, stage: "session", path: "A", cover: { name: "K" }, local: {},
     view: { mode: "geometry", phase: "interrupted", reason: "unexpected_stop", step, values: {}, samples: {}, readings: {}, owner: true, sequence: 9 } }).body;
   assert.equal(body("lift"), "The cover stopped before you pressed ②. Restart the calibration and press ② as soon as the bottom edge lifts off the rest.");
-  assert.equal(body("half_open"), translations.en.calReason_unexpected_stop);
+  assert.equal(body("half_open"), translations.en.wiz_T577, "R-7: our words, the maintainer's text left as it was");
 });
 
 test("when the motor stops by itself on A-05 the end stop does not flicker disabled", async () => {
