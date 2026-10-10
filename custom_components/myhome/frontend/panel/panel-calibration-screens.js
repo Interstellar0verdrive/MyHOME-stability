@@ -9,7 +9,7 @@ const asset = (name) => { const url = new URL(name, import.meta.url); url.search
 const { fill, number, fixed, readingRange, RANGE_SLACK_CM, dateText, shortDate, followedBy } = await import(asset("panel-calibration-text.js"));
 
 const PHASES = {
-  intro: "wiz_T007", prep: "wiz_T008", ascent: "wiz_T009", descent: "wiz_T010", readings: "wiz_T011", summary: "wiz_T012", finetune: "wiz_T013",
+  intro: "wiz_T007", prep: "wiz_T008", ascent: "wiz_T009", descent: "wiz_T010", readings: "wiz_T011", check: "wiz_T556", summary: "wiz_T012", finetune: "wiz_T013",
 };
 
 /** The phases each path shows, in order (C depends on what is remeasured). */
@@ -17,8 +17,10 @@ export function phasesFor(path, scope, refining) {
   if (path === "B") return ["intro", "readings", "summary"];
   if (path === "C" && scope === "times_only") return ["intro", "prep", "ascent", "descent", "summary"];
   if (path === "C" && scope === "points_only") return ["intro", "prep", "readings", "summary"];
-  // N-10: fine-tuning's own summary is part of «Perfezionamento» (the last step): the count stays 7, «Riepilogo» once.
-  return ["intro", "prep", "ascent", "descent", "readings", "summary", "finetune"];
+  // N-10: fine-tuning's own summary is part of «Perfezionamento» (the last step), «Riepilogo» once. L-43: the base
+  // calibration's check is a step of its own, between the readings and the summary (fine-tuning has its own check).
+  if (refining) return ["intro", "prep", "ascent", "descent", "readings", "summary", "finetune"];
+  return ["intro", "prep", "ascent", "descent", "readings", "check", "summary", "finetune"];
 }
 
 const MEASURED_RUN = (view) => view && ((view.mode === "geometry" && ["opening", "closing"].includes(view.phase) && ["lift", "opening", "closing"].includes(view.step))
@@ -363,10 +365,11 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
   // L-37: the base calibration ends with an optional check of the model just measured (the backend's check: the end
   // stop, a timed run to half the travel descending from the top, a tape reading); its gap is the precision shown in
   // the summary, and the reading anchors Home Assistant's estimate.
-  if (phase === "review" && local.checkOffer && !view.check && !view.check_interrupted && !local.checkSkipped && !local.refining && view.travel_cm > 0) {
-    screen.phase = "readings";
+  // L-43: it is part of the path (not skippable): its own step «Verifica», in a live view as in a reopened or read one.
+  if (phase === "review" && !view.check && !view.check_interrupted && !local.refining && view.travel_cm > 0) {
+    screen.phase = "check";
     return Object.assign(screen, { code: p("21v"), title: t("wiz_T544"), body: t("wiz_T545"), illustration: false,
-      actions: [{ id: "check-start", label: t("wiz_T546"), kind: "primary" }, { id: "check-skip", label: t("wiz_T547"), kind: "secondary" }] });
+      actions: [{ id: "check-start", label: t("wiz_T546"), kind: "primary" }] });
   }
   if (phase === "review" || phase === "saving") return summaryScreen(screen, ctx, tx, n, values);
   if (step === "home") {
@@ -538,15 +541,15 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     // The return to the top is a positioning run: Home Assistant needs its end stop confirmed.
     if (first && ["starting_open", "opening"].includes(phase)) screen.actions = returnEnd("wiz_T432", "opening", topTime);
     // L-37: the return to the top before the check run says so (not the half descent's stages).
-    if (first && view.check) { screen.code = p("30"); screen.wait = { text: t("wiz_T553"), stages: [], progress: waitBar(view, elapsed, topTime) }; }
+    if (first && view.check) { screen.code = p("30"); screen.phase = "check"; screen.wait = { text: t("wiz_T553"), stages: [], progress: waitBar(view, elapsed, topTime) }; }
     if (first && phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
     if (!first && phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
     return screen;
   }
   if (step === "check") {
-    // A check of the measured model (the wizard does not offer one yet): its run is stopped by Home Assistant like the
-    // intermediate runs, so no elapsed time; then the tape reading, from 0.1 cm to the measured travel.
-    screen.phase = "readings";
+    // The check of the measured model (L-37/L-43): its run is stopped by Home Assistant like the intermediate runs, so
+    // no elapsed time; then the tape reading, from 0.1 cm to the measured travel.
+    screen.phase = "check";
     // L-9: the final check says which reading was kept far from the model.
     if (phase === "reading") return Object.assign(screen, { code: p("31"), title: t("wiz_T138"), body: t("wiz_T139"), notices: [...screen.notices, ...discrepancyNotes(ctx, tx, n)],
       field: { label: t("wiz_T064"), hint: expectedHint(t, tx, n, view.check?.target_cm, view.travel_cm), min: 0.1, max: view.travel_cm ?? 10000, kind: "height" },
@@ -1069,6 +1072,8 @@ function finalize(screen, ctx) {
       [t("wiz_T119"), (view?.check ?? local.fineReadings?.check) ? `${(view?.check ?? local.fineReadings.check).gap_cm} cm` : "—"]]
       : path === "C" && scope === "points_only" ? fineSub(t, view, cm, local.fineReadings)
         : [[t("wiz_T077"), cm(readings.half_open)], [t("wiz_T078"), cm(readings.half_close)]],
+    // L-43: the check's result once done, as the summary's precision says it.
+    check: source?.check?.gap_cm != null ? [[t("wiz_T557"), `${source.check.gap_cm} cm`]] : [],
     finetune: refining ? fineSub(t, view, cm, local.fineReadings) : [],
   };
   const finetuneLabel = refining ? t("wiz_T114") : t("wiz_T013");

@@ -467,7 +467,7 @@ export const translations = {
     wiz_T542: "The measurement was cancelled from another device",
     wiz_T543: "Nothing was saved and the cover is free again.",
     wiz_T544: "Check the calibration",
-    wiz_T545: "Last step, optional: the cover goes to the top, then descends to half its travel with the values just measured; read on the tape where the bottom edge stopped. The gap tells how precise the calibration is, and Home Assistant's position estimate starts again from there.",
+    wiz_T545: "Last step: the cover goes to the top, then descends to half its travel with the values just measured; read on the tape where the bottom edge stopped. The gap tells how precise the calibration is, and Home Assistant's position estimate starts again from there.",
     wiz_T546: "Start the check",
     wiz_T547: "Skip the check",
     wiz_T548: "This cover has only its base calibration: fine-tuning adds the readings at a quarter and three quarters of the travel.",
@@ -478,6 +478,8 @@ export const translations = {
     wiz_T553: "The cover goes to its top end stop, then positions itself. Wait for it to stop.",
     wiz_T554: "The cover goes to its bottom end stop, then positions itself. Wait for it to stop.",
     wiz_T555: "current",
+    wiz_T556: "Check",
+    wiz_T557: "Gap",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1409,7 +1411,7 @@ export const translations = {
     wiz_T542: "La misurazione è stata annullata da un altro dispositivo",
     wiz_T543: "Niente è stato salvato e la tapparella è di nuovo libera.",
     wiz_T544: "Verifica della calibrazione",
-    wiz_T545: "Ultimo passo, facoltativo: la tapparella va in alto e poi scende fino a metà corsa con i valori appena misurati; leggi col metro dove si è fermato il bordo. Lo scarto dice quanto è precisa la calibrazione, e la posizione stimata da Home Assistant riparte da lì.",
+    wiz_T545: "Ultimo passo: la tapparella va in alto e poi scende fino a metà corsa con i valori appena misurati; leggi col metro dove si è fermato il bordo. Lo scarto dice quanto è precisa la calibrazione, e la posizione stimata da Home Assistant riparte da lì.",
     wiz_T546: "Avvia la verifica",
     wiz_T547: "Salta la verifica",
     wiz_T548: "Questa tapparella ha solo la calibrazione di base: il perfezionamento aggiunge le letture a un quarto e a tre quarti della corsa.",
@@ -1420,6 +1422,8 @@ export const translations = {
     wiz_T553: "La tapparella va al finecorsa in alto e poi si posiziona da sola. Aspetta che si fermi.",
     wiz_T554: "La tapparella va al finecorsa in basso e poi si posiziona da sola. Aspetta che si fermi.",
     wiz_T555: "attuale",
+    wiz_T556: "Verifica",
+    wiz_T557: "Scarto",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

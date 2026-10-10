@@ -144,6 +144,10 @@ export function createFakeBackend({ language = "en", inventory = coverInventory(
         session.geometry.closing_roll = 1.91; session.readings.half_close = number; session.phase = "review"; refresh(); return;
       }
       session.phase = "briefing";
+    } else if (action === "check" && session.phase === "review") {
+      // L-37/L-43: the whole check (end stop, timed run, reading) at once: a passed check, 1 cm off.
+      session.check = { direction: message.direction, target_cm: message.target_cm, predicted_cm: message.target_cm, measured_cm: message.target_cm + 1,
+        gap_cm: 1, passed: true, check_seconds: 10.5 };
     } else if (action === "repeat" && repeatable()) {
       const target = session.gap_warning ? "lift" : session.phase === "briefing" && session.step === "half_open" ? "closing" : session.step;
       session.step = ["half_close", "closing"].includes(target) ? "top" : session.slats ? "reset" : "home";

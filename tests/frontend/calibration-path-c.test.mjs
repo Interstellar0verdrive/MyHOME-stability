@@ -150,7 +150,7 @@ test("remeasuring everything runs the geometry session with the C texts and wait
   await press("next"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
   await press("ack:descent"); await press("ack:readings"); await move(backend, { auto: true, stop: true });
   await type("54"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
-  await move(backend, { auto: true, stop: true }); await type("56"); await press("check-skip");
+  await move(backend, { auto: true, stop: true }); await type("56"); await press("check-start");
   assert.equal(code(), "C-21");
   assert.match(wiz().querySelector(".wiz-body").textContent, /quelli del profilo «tall_two_leaf» adattati alla corsa del telo di Kitchen shutter 2/);
   assert.equal(wiz().querySelector('[name="save_profile"]').checked, false);

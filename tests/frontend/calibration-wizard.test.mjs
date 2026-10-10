@@ -18,7 +18,8 @@ test("bold spans, paragraphs and line breaks are rendered from escaped text only
   assert.equal(parseReading("2,8"), 2.8);
   assert.ok(Number.isNaN(parseReading("")));
   assert.equal(slug("Tapparella Sala 1"), "tapparella_sala_1");
-  assert.deepEqual(phasesFor("A", null, false), ["intro", "prep", "ascent", "descent", "readings", "summary", "finetune"]);
+  assert.deepEqual(phasesFor("A", null, false), ["intro", "prep", "ascent", "descent", "readings", "check", "summary", "finetune"], "L-43: the check is a step");
+  assert.deepEqual(phasesFor("A", null, true), ["intro", "prep", "ascent", "descent", "readings", "summary", "finetune"], "fine-tuning has its own check");
   assert.deepEqual(phasesFor("A", null, true).length, 7, "N-10: fine-tuning's summary is part of its step");
   assert.deepEqual(phasesFor("B"), ["intro", "readings", "summary"]);
 });
@@ -141,7 +142,7 @@ test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothin
   assert.equal(sent(), before, "choosing a path sends nothing");
   await choosePath("A");
   assert.equal(code(), "A-03");
-  assert.equal(wiz().querySelector(".wiz-steps-line").textContent, "Preparation · 2 of 7");
+  assert.equal(wiz().querySelector(".wiz-steps-line").textContent, "Preparation · 2 of 8");
   assert.equal(wiz().querySelector('.wiz-steps li[data-step-state="current"] .wiz-step-label').textContent, "Preparation");
   assert.equal(wiz().querySelector('input[name="slats"][value="yes"]').checked, true);
   assert.equal(backend.calls.filter((message) => message.type.startsWith("myhome/cover_calibration/")).length, 0);
@@ -232,7 +233,7 @@ test("path A runs the live geometry session from the first close to Save, one me
   await press("endpoint");
   backend.stopped(); await tick();
   assert.equal(code(), "A-06");
-  assert.equal(wiz().querySelector(".wiz-steps-line").textContent, "Ascent · 3 of 7");
+  assert.equal(wiz().querySelector(".wiz-steps-line").textContent, "Ascent · 3 of 8");
   // "Ⓐ first of its type" is the introduction's sub-line, not a caption under the phase line.
   const intro = wiz().querySelector(".wiz-steps ol > li");
   assert.deepEqual([intro.querySelector(".wiz-step-label").textContent, intro.querySelector("ul > li").textContent], ["Introduction", "First of its type"]);
@@ -283,7 +284,7 @@ test("path A runs the live geometry session from the first close to Save, one me
   assert.match(wiz().querySelector(".wiz-body").textContent, /^If both presses came at the right moment, continue\./);
   await press("ack:ascent");
   assert.equal(code(), "A-14");
-  assert.equal(wiz().querySelector(".wiz-steps-line").textContent, "Descent · 4 of 7");
+  assert.equal(wiz().querySelector(".wiz-steps-line").textContent, "Descent · 4 of 8");
   await press("next");
   await move(backend, { seconds: 21.7 });
   await press("endpoint");
@@ -334,9 +335,9 @@ test("path A runs the live geometry session from the first close to Save, one me
   assert.equal(actions().at(-1), "next", "the half descent starts by itself after the top");
   await move(backend, { auto: true, stop: true });
   assert.equal(code(), "A-20");
-  await type("101"); await press("check-skip");
+  await type("101"); await press("check-start");
   assert.equal(code(), "A-21");
-  assert.equal(wiz().querySelector(".wiz-steps-line").textContent, "Summary · 6 of 7");
+  assert.equal(wiz().querySelector(".wiz-steps-line").textContent, "Summary · 7 of 8");
   const rows = [...wiz().querySelectorAll(".wiz-table:not(.wiz-technical .wiz-table) tbody tr")].map((row) => [...row.children].map((cell) => cell.textContent));
   assert.deepEqual(rows[3], ["Curtain travel", "195 cm", "198 cm"]);
   assert.equal(wiz().querySelector('[name="save_profile"]').checked, true);
@@ -349,7 +350,7 @@ test("path A runs the live geometry session from the first close to Save, one me
   assert.equal(code(), "A-34");
   assert.match(wiz().querySelector(".wiz-body").textContent, /The profile "living_room_shutter_1" was created/);
   assert.deepEqual(actions(), ["next", "endpoint", "next", "lift", "reading", "next", "endpoint", "next", "endpoint", "reading", "next", "endpoint",
-    "repeat", "next", "endpoint", "next", "endpoint", "next", "reading", "next", "endpoint", "next", "reading", "save"]);
+    "repeat", "next", "endpoint", "next", "endpoint", "next", "reading", "next", "endpoint", "next", "reading", "check", "save"]);
 });
 
 test("without slats the lift-off is skipped and the slat choice is sent", async () => {
@@ -503,7 +504,7 @@ test("a cover that follows a profile saves only on itself by default, which wait
   await press("next"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
   await press("ack:descent"); await press("ack:readings"); await move(backend, { auto: true, stop: true });
   await type("54"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
-  await move(backend, { auto: true, stop: true }); await type("56"); await press("check-skip");
+  await move(backend, { auto: true, stop: true }); await type("56"); await press("check-start");
   assert.equal(code(), "A-21c");
   assert.equal(wiz().querySelector('[name="save_profile"]').checked, false);
   assert.match(wiz().querySelector(".wiz-profile-block").textContent, /follows the profile "tall_two_leaf"/);
@@ -561,14 +562,14 @@ async function runToSaved({ backend, press, type, startFor, code, tab, choosePat
   await press("next"); await move(backend, { seconds: 21.7 }); await press("endpoint"); backend.stopped(); await tick();
   await press("ack:descent"); await press("ack:readings"); await move(backend, { auto: true, stop: true });
   await type("97"); await move(backend, { seconds: 24 }); await press("endpoint"); backend.stopped(); await tick();
-  await move(backend, { auto: true, stop: true }); await type("101"); await press("check-skip");
+  await move(backend, { auto: true, stop: true }); await type("101"); await press("check-start");
   assert.equal(code(), "A-21");
   await press("save");
   assert.equal(code(), "A-34");
 }
 
-test("L-37: the base calibration ends with an optional check from the top to half the travel; its gap is the summary's precision", async () => {
-  const { backend, press, type, startFor, code, title, actions } = await mount();
+test("L-37/L-43: the base calibration ends with its check, a step of its own, from the top to half the travel; its gap is the summary's precision", async () => {
+  const { backend, press, type, startFor, code, title, actions, wiz } = await mount();
   await startFor("cover.living_one");
   await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
   await press("ack:lift"); await press("next"); await move(backend, { seconds: 4.4 }); await press("lift"); backend.stopped(); await tick();
@@ -580,11 +581,17 @@ test("L-37: the base calibration ends with an optional check from the top to hal
   await type("97"); await move(backend, { seconds: 24 }); await press("endpoint"); backend.stopped(); await tick();
   await move(backend, { auto: true, stop: true }); await type("101");
   assert.deepEqual([code(), title()], ["A-21v", "Check the calibration"]);
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => item.dataset.wiz), ["check-start"], "L-43: not skippable");
+  assert.equal(wiz().querySelector(".wiz-compact-line").textContent, "Check · 6 of 8");
   const sent = actions().length;
   await press("check-start");
   const check = backend.calls.filter((message) => message.action === "check").at(-1);
   assert.deepEqual([check.direction, check.target_cm], ["closing", 99], "descending from the top to half the travel");
   assert.equal(actions().length, sent + 1);
+  assert.equal(code(), "A-21", "once checked, the summary");
+  const step = [...wiz().querySelectorAll(".wiz-steps ol > li")].find((item) => item.querySelector(".wiz-step-label").textContent === "Check");
+  assert.equal(step.dataset.stepState, "done");
+  assert.match(step.textContent.replace(/\s+/g, " "), /Gap: 1 cm/, "its result under it");
 });
 
 test("L-18: a tap on the cover already chosen in A-01 un-chooses it", async () => {
@@ -630,7 +637,7 @@ test("A-34 offers fine-tuning once the calibration is saved: path C on the same 
   await press("next"); await move(backend, { seconds: 21.7 }); await press("endpoint"); backend.stopped(); await tick();
   await press("ack:descent"); await press("ack:readings"); await move(backend, { auto: true, stop: true });
   await type("97"); await move(backend, { seconds: 24 }); await press("endpoint"); backend.stopped(); await tick();
-  await move(backend, { auto: true, stop: true }); await type("101"); await press("check-skip");
+  await move(backend, { auto: true, stop: true }); await type("101"); await press("check-start");
   assert.equal(code(), "A-21");
   assert.equal(wiz().querySelector('[data-wiz="refine"]'), null, "the summary only saves");
   await press("save");
@@ -660,7 +667,7 @@ test("A-34 offers fine-tuning once the calibration is saved: path C on the same 
     "Want to fine-tune the calibration? Four tape readings at a quarter and three quarters of the travel, plus a final check, will make the position estimate more precise along the whole travel. A few minutes; the cover will move.");
   const finetune = wiz().querySelector('.wiz-steps li[data-step-state]:last-of-type');
   assert.deepEqual([finetune.querySelector(".wiz-step-label").textContent, finetune.dataset.stepState], ["Fine-tuning (optional)", "future"], "still ahead, not ticked");
-  assert.deepEqual([...wiz().querySelectorAll(".wiz-steps ol > li")].slice(0, -1).map((item) => item.dataset.stepState), Array(6).fill("done"));
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-steps ol > li")].slice(0, -1).map((item) => item.dataset.stepState), Array(7).fill("done"));
   const sent = actions().length, saves = backend.calls.filter((message) => message.action === "save").length;
   await press("refine");
   // Straight to the quarter readings (A-22…), in the same wizard: no C-01/C-02 in between.
@@ -787,7 +794,7 @@ test("L-9: an intermediate reading names the expected height in Italian, refuses
   // Kept although far: the summary says so, as the final check does.
   const review = buildScreen({ t, language: "it", stage: "session", path: "A", cover: { name: "Cucina 2" }, view: { ...view, phase: "review", reading_range: null, reading_band: null,
     geometry: { slat_time_s: 4, opening_roll: 5, closing_roll: 1.9 }, readings: { gap: 3, half_open: 40, half_close: 97 },
-    reading_discrepancy: { half_open: { reading_cm: 40, expected_cm: 82.55, min_cm: 46.3, max_cm: 118.8 } } } });
+    reading_discrepancy: { half_open: { reading_cm: 40, expected_cm: 82.55, min_cm: 46.3, max_cm: 118.8 } }, check: { gap_cm: 1, passed: true, check_seconds: 10.5 } } });
   assert.deepEqual(review.notices.map((notice) => [notice.tone, notice.text]), [["warning",
     "Metà tempo salita: la lettura (40 cm) era lontana da quella attesa (circa 83 cm). È stata tenuta e il modello si è fermato al suo limite: la verifica finale dirà se le posizioni sono giuste."]]);
   const running = buildScreen({ t, language: "it", stage: "session", path: "A", view: { ...view, phase: "closing", reading_range: null, reading_band: null }, elapsed: 3.2,
@@ -824,7 +831,8 @@ test("each mockup gets its drawing by code: readings after the text, steps and b
   assert.deepEqual(drawn({ step: "top", phase: "opening" }), ["A-09", null], "the return to the top reuses A-09: no drawing either");
   assert.deepEqual(drawn({ step: "half_close", phase: "reading" }, { ackReadings: true }), ["A-20", "curtain-partial-tape after-body"]);
   assert.deepEqual(drawn({ step: "closing", phase: "closing" }, {}, "C"), ["C-14", "descent-sequence before-body"], "clones follow their A screen");
-  assert.deepEqual(drawn({ phase: "review" }), ["A-21", null]);
+  assert.deepEqual(drawn({ phase: "review" }), ["A-21v", null], "L-43: the check first");
+  assert.deepEqual(drawn({ phase: "review", check: { gap_cm: 1, passed: true, check_seconds: 10.5 } }), ["A-21", null]);
 });
 
 test("every drawing a screen can pick is a themed inline SVG, and A-09 has none", async () => {
@@ -2037,7 +2045,7 @@ test("the preview is announced before it starts and its end never says that some
   assert.equal(buildScreen({ t, stage: "before", path: "C", scope: "points_only", cover: { name: "Cucina 2" } }).actions[0].note, translations.it.wiz_T318);
   assert.equal(buildScreen({ t, stage: "before", path: "C", scope: "times_only", cover: { name: "Cucina 2" } }).actions[0].note, undefined, "times only is live");
   const review = buildScreen({ t, language: "it", stage: "session", path: "A", cover: { name: "Cucina 2" },
-    view: { mode: "geometry", phase: "review", values: { opening_time: 22, closing_time: 21 }, geometry: {}, travel_cm: 198, owner: true, sequence: 2 } });
+    view: { mode: "geometry", phase: "review", values: { opening_time: 22, closing_time: 21 }, geometry: {}, travel_cm: 198, owner: true, sequence: 2, check: { gap_cm: 1, passed: true, check_seconds: 10.5 } } });
   assert.deepEqual(review.actions.map((action) => action.id), ["save"], "the summary only saves");
   const real = buildScreen({ t, language: "it", stage: "saved", path: "A", cover: { name: "Cucina 2" }, local: { saved: { target: "profile_new", name: "cucina_2" } } });
   assert.equal(real.actions.find((action) => action.id === "refine").note, undefined, "no note under the button");
@@ -2112,7 +2120,7 @@ test("A-02 advises a path from the cover and the gateway's profiles, and presele
 
 test("A-21d defaults to updating the profile on the cover it was measured on, and A-34 says when a profile is left alone", () => {
   const t = (key) => translations.en[key] || key;
-  const view = { mode: "geometry", phase: "review", values: { opening_time: 22, closing_time: 21 }, geometry: {}, travel_cm: 110, owner: true, sequence: 2 };
+  const view = { mode: "geometry", phase: "review", values: { opening_time: 22, closing_time: 21 }, geometry: {}, travel_cm: 110, owner: true, sequence: 2, check: { gap_cm: 1, passed: true, check_seconds: 10.5 } };
   const cover = (origin) => ({ name: "Kitchen 2", entity_id: "cover.kitchen_two", profile: { name: "tall", provenance: { opening: { origin_entity_id: origin } } }, followers: [], effective: {} });
   const choice = (origin, supports) => buildScreen({ t, stage: "session", path: "A", cover: cover(origin), view, local: { saveProfile: true }, supports })
     .profileBlock.choice.value;
@@ -2126,7 +2134,7 @@ test("A-21d defaults to updating the profile on the cover it was measured on, an
 
 test("counts of zero and one use their own forms", () => {
   const t = (key) => translations.it[key] || key;
-  const view = { mode: "geometry", phase: "review", values: { opening_time: 22, closing_time: 21 }, geometry: {}, travel_cm: 110, owner: true, sequence: 2 };
+  const view = { mode: "geometry", phase: "review", values: { opening_time: 22, closing_time: 21 }, geometry: {}, travel_cm: 110, owner: true, sequence: 2, check: { gap_cm: 1, passed: true, check_seconds: 10.5 } };
   const cover = (followers) => ({ name: "Cucina 2", profile: { name: "alte" }, followers, effective: {} });
   const review = (followers, local = {}) => buildScreen({ t, language: "it", stage: "session", path: "C", scope: "times_only", cover: cover(followers),
     view: { ...view, mode: "guided" }, local: { ackDescent: true, ...local } });
@@ -2193,7 +2201,7 @@ test("the panel's entity states never overwrite the wizard's stepper", async () 
   await startFor("cover.living_one");
   const labels = () => [...wiz().querySelectorAll(".wiz-steps .wiz-step-label")].map((item) => item.textContent);
   const before = labels();
-  assert.deepEqual(before, ["Introduction", "Preparation", "Ascent", "Descent", "Tape measure readings", "Summary", "Fine-tuning (optional)"]);
+  assert.deepEqual(before, ["Introduction", "Preparation", "Ascent", "Descent", "Tape measure readings", "Check", "Summary", "Fine-tuning (optional)"]);
   // Home Assistant pushes a state update: the panel refreshes every [data-state] element it owns.
   panel.hass = { ...panel.hass, states: { ...panel.hass.states } };
   assert.deepEqual(labels(), before);
@@ -2476,23 +2484,23 @@ test("an ended session keeps the step it reached, greyed, in the stepper and the
   await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
   await press("ack:lift"); await press("next"); await move(backend); await press("lift"); backend.stopped(); await tick();
   await type("3"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
-  assert.equal(wiz().querySelector(".wiz-compact-line").textContent, "Salita · 3 di 7");
+  assert.equal(wiz().querySelector(".wiz-compact-line").textContent, "Salita · 3 di 8");
   const gateway = panel._calibrationTab._wizard._gateway, callWS = backend.hass.callWS;
   backend.hass.callWS = async (message) => { if (message.action === "heartbeat") throw Object.assign(new Error("expired"), { code: "calibration_expired" }); return callWS(message); };
   backend.session.session_id = "gone";
   await gateway._engine._perform("heartbeat"); await settle();
   backend.hass.callWS = callWS;
   assert.equal(code(), "S-06");
-  assert.equal(wiz().querySelector(".wiz-compact-line").textContent, "Interrotta · Salita 3 di 7");
+  assert.equal(wiz().querySelector(".wiz-compact-line").textContent, "Interrotta · Salita 3 di 8");
   assert.ok(wiz().querySelector(".wiz-compact").hasAttribute("data-interrupted"));
   const steps = wiz().querySelector(".wiz-steps");
   assert.ok(steps.hasAttribute("data-interrupted"));
   assert.equal(steps.querySelector('li[data-step-state="current"] > .wiz-step-label').textContent, "Salita");
-  assert.match(steps.querySelector(".wiz-steps-line").textContent, /^Interrotta · Salita 3 di 7$/);
+  assert.match(steps.querySelector(".wiz-steps-line").textContent, /^Interrotta · Salita 3 di 8$/);
   // Starting over clears it.
   await press("start-over");
   assert.equal(wiz().querySelector(".wiz-steps").hasAttribute("data-interrupted"), false);
-  assert.equal(wiz().querySelector(".wiz-compact-line").textContent, "Preparazione · 2 di 7");
+  assert.equal(wiz().querySelector(".wiz-compact-line").textContent, "Preparazione · 2 di 8");
 });
 
 test("choosing a cover on A-01 patches the list in place: same content area, same rows (M3-4)", async () => {
@@ -2765,7 +2773,7 @@ test("D-21: on A-02 the stepper shows the steps of the path ticked so far", asyn
   await tick_("B");
   assert.equal(phases(), 3, "path B: introduction, readings, summary");
   await tick_("A");
-  assert.equal(phases(), 7);
+  assert.equal(phases(), 8);
   // (Fine-tuning needs a calibrated cover: here it is offered only when enabled.)
   if (!wiz().querySelector('input[name="path"][value="C"]').disabled) {
     await tick_("C");
@@ -2817,7 +2825,7 @@ test("D-31: an ended session with a measurement out of range is titled as such, 
 test("D-32: in the summary a cover without slats reads «No» for the slat time, not «0 s»", async () => {
   const t = (key) => translations.it[key] || key;
   const view = { mode: "geometry", phase: "review", step: "check", values: { opening_time: 22, closing_time: 21 }, samples: {}, readings: { half_open: 99, half_close: 98 },
-    geometry: { slat_time_s: 0, opening_roll: 1.8, closing_roll: 1.9 }, slats: false, travel_cm: 198, owner: true, sequence: 9 };
+    geometry: { slat_time_s: 0, opening_roll: 1.8, closing_roll: 1.9 }, slats: false, travel_cm: 198, owner: true, sequence: 9, check: { gap_cm: 1, passed: true, check_seconds: 10.5 } };
   const screen = buildScreen({ t, language: "it", stage: "session", path: "A", view, local: {}, cover: { name: "K", effective: {} } });
   const slat = screen.table.rows.find((row) => row.label === t("wiz_T095"));
   assert.deepEqual([slat.before, slat.after], ["—", "No"]);
