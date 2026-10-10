@@ -330,7 +330,7 @@ test("path A runs the live geometry session from the first close to Save, one me
   assert.equal(actions().at(-1), "next", "the half descent starts by itself after the top");
   await move(backend, { auto: true, stop: true });
   assert.equal(code(), "A-20");
-  await type("101");
+  await type("101"); await press("check-skip");
   assert.equal(code(), "A-21");
   assert.equal(wiz().querySelector(".wiz-steps-line").textContent, "Summary · 6 of 7");
   const rows = [...wiz().querySelectorAll(".wiz-table:not(.wiz-technical .wiz-table) tbody tr")].map((row) => [...row.children].map((cell) => cell.textContent));
@@ -499,7 +499,7 @@ test("a cover that follows a profile saves only on itself by default, which wait
   await press("next"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
   await press("ack:descent"); await press("ack:readings"); await move(backend, { auto: true, stop: true });
   await type("54"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
-  await move(backend, { auto: true, stop: true }); await type("56");
+  await move(backend, { auto: true, stop: true }); await type("56"); await press("check-skip");
   assert.equal(code(), "A-21c");
   assert.equal(wiz().querySelector('[name="save_profile"]').checked, false);
   assert.match(wiz().querySelector(".wiz-profile-block").textContent, /follows the profile "tall_two_leaf"/);
@@ -557,11 +557,31 @@ async function runToSaved({ backend, press, type, startFor, code, tab, choosePat
   await press("next"); await move(backend, { seconds: 21.7 }); await press("endpoint"); backend.stopped(); await tick();
   await press("ack:descent"); await press("ack:readings"); await move(backend, { auto: true, stop: true });
   await type("97"); await move(backend, { seconds: 24 }); await press("endpoint"); backend.stopped(); await tick();
-  await move(backend, { auto: true, stop: true }); await type("101");
+  await move(backend, { auto: true, stop: true }); await type("101"); await press("check-skip");
   assert.equal(code(), "A-21");
   await press("save");
   assert.equal(code(), "A-34");
 }
+
+test("L-37: the base calibration ends with an optional check from the top to half the travel; its gap is the summary's precision", async () => {
+  const { backend, press, type, startFor, code, title, actions } = await mount();
+  await startFor("cover.living_one");
+  await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  await press("ack:lift"); await press("next"); await move(backend, { seconds: 4.4 }); await press("lift"); backend.stopped(); await tick();
+  await type("3"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  await press("next"); await move(backend, { seconds: 22.2 }); await press("endpoint"); backend.stopped(); await tick();
+  await press("ack:ascent"); await type("198");
+  await press("next"); await move(backend, { seconds: 21.7 }); await press("endpoint"); backend.stopped(); await tick();
+  await press("ack:descent"); await press("ack:readings"); await move(backend, { auto: true, stop: true });
+  await type("97"); await move(backend, { seconds: 24 }); await press("endpoint"); backend.stopped(); await tick();
+  await move(backend, { auto: true, stop: true }); await type("101");
+  assert.deepEqual([code(), title()], ["A-21v", "Check the calibration"]);
+  const sent = actions().length;
+  await press("check-start");
+  const check = backend.calls.filter((message) => message.action === "check").at(-1);
+  assert.deepEqual([check.direction, check.target_cm], ["closing", 99], "descending from the top to half the travel");
+  assert.equal(actions().length, sent + 1);
+});
 
 test("L-16: «Open the cover's details» closes the wizard and opens the cover's row in the list, never the maintainer's dialog", async () => {
   const context = await mount();
@@ -594,7 +614,7 @@ test("A-34 offers fine-tuning once the calibration is saved: path C on the same 
   await press("next"); await move(backend, { seconds: 21.7 }); await press("endpoint"); backend.stopped(); await tick();
   await press("ack:descent"); await press("ack:readings"); await move(backend, { auto: true, stop: true });
   await type("97"); await move(backend, { seconds: 24 }); await press("endpoint"); backend.stopped(); await tick();
-  await move(backend, { auto: true, stop: true }); await type("101");
+  await move(backend, { auto: true, stop: true }); await type("101"); await press("check-skip");
   assert.equal(code(), "A-21");
   assert.equal(wiz().querySelector('[data-wiz="refine"]'), null, "the summary only saves");
   await press("save");

@@ -356,6 +356,14 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     const ready = MOTOR_STOPPED(view) || !(seconds > 0) || (elapsed ?? 0) >= seconds;
     return [{ id: "endpoint", label: t(label), kind: "primary", disabled: phase !== running || !ready, settling: phase === running && !ready }, ...whileRunning(view, stop)];
   };
+  // L-37: the base calibration ends with an optional check of the model just measured (the backend's check: the end
+  // stop, a timed run to half the travel descending from the top, a tape reading); its gap is the precision shown in
+  // the summary, and the reading anchors Home Assistant's estimate.
+  if (phase === "review" && local.checkOffer && !view.check && !view.check_interrupted && !local.checkSkipped && !local.refining && view.travel_cm > 0) {
+    screen.phase = "readings";
+    return Object.assign(screen, { code: p("21v"), title: t("wiz_T544"), body: t("wiz_T545"), illustration: false,
+      actions: [{ id: "check-start", label: t("wiz_T546"), kind: "primary" }, { id: "check-skip", label: t("wiz_T547"), kind: "secondary" }] });
+  }
   if (phase === "review" || phase === "saving") return summaryScreen(screen, ctx, tx, n, values);
   if (step === "home") {
     screen.phase = "prep";
@@ -520,6 +528,8 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
       progress: waitBar(view, elapsed, first ? topTime : down) }, actions: phase === "geometry_wait_stop" ? [{ id: "stopping", label: t("wiz_T459"), kind: "status" }] : [stop] });
     // The return to the top is a positioning run: Home Assistant needs its end stop confirmed.
     if (first && ["starting_open", "opening"].includes(phase)) screen.actions = returnEnd("wiz_T432", "opening", topTime);
+    // L-37: the return to the top before the check run says so (not the half descent's stages).
+    if (first && view.check) { screen.code = p("30"); screen.wait = { text: t("wiz_T086"), stages: [], progress: waitBar(view, elapsed, topTime) }; }
     if (first && phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
     if (!first && phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
     return screen;

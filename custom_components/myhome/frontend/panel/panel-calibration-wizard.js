@@ -674,6 +674,9 @@ export class CalibrationWizard {
     const local = this._local, gateway = this._gateway;
     if (id === "steps") { const sheet = this._frame.querySelector(".wiz-sheet"); sheet.hidden = false; focusOnOpen(sheet.querySelector(".wiz-sheet-card"), sheet.querySelector("button")); return; }
     if (id === "more") { local.moreOpen = !local.moreOpen; return this._render(); }
+    // L-37: the optional check at the end of the base calibration: descending from the top to half the travel.
+    if (id === "check-start") { const travel = gateway?.view?.travel_cm; return this._send("check", { direction: "closing", target_cm: travel / 2 }); }
+    if (id === "check-skip") { local.checkSkipped = true; return this._render(); }
     if (id === "steps-close") { this._slideAway(this._frame.querySelector(".wiz-sheet")); this._frame.querySelector('[data-wiz="steps"]').focus(); return; }
     if (id === "exit") { this._exit(); return; }
     if (id === "back") { this._back(); return; }
@@ -1008,6 +1011,9 @@ export class CalibrationWizard {
 
   _viewChanged() {
     const view = this._gateway?.view, local = this._local;
+    // L-37: the check is offered when the last tape reading has just led to the review (not on a review reopened later).
+    if (view && !view.preview && view.mode === "geometry" && view.phase === "review" && local.lastPhase === "reading" && !view.check) local.checkOffer = true;
+    if (view) local.lastPhase = view.phase;
     // L-40: the session was cancelled by the tab or device that guided it: for a reader it is over, said as such, once.
     // The gateway is closed (no more heartbeats against a session that is gone, so no «expired» and no flicker).
     if (view && !view.preview && view.read_only && view.phase === "cancelled") {
@@ -1338,7 +1344,7 @@ function accepted(input) {
  * Fine-tuning keeps its base on purpose (`_startRefine` passes it again).
  */
 function freshFlags() {
-  return { ackLift: false, ackAscent: false, ackDescent: false, ackReadings: false, arm: null, run: null, fullRun: null, invalidRun: null, repeatQueued: false, moreOpen: false, discarded: null, misbehaved: false, stopSent: false,
+  return { ackLift: false, ackAscent: false, ackDescent: false, ackReadings: false, arm: null, run: null, fullRun: null, invalidRun: null, repeatQueued: false, moreOpen: false, checkSkipped: false, checkOffer: false, lastPhase: null, discarded: null, misbehaved: false, stopSent: false,
     review: null, pendingSave: null, fieldError: null, fieldSequence: undefined, errorPhase: undefined, saveProfile: undefined, saveChoice: undefined,
     profileName: undefined, refining: false, lastGap: null, liftOrigin: null, baseReadings: null, fineReadings: null, pathChoice: null, reachedPhase: null };
 }
