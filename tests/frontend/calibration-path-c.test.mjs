@@ -235,6 +235,25 @@ test("L-4: a «solo tempi» session the wizard started opens in the wizard's rea
   assert.equal(devices.wiz(), null);
 });
 
+test("a cover shown closed at an unknown position is positioned for real: its old «closed» does not end the run", async () => {
+  const context = await mount();
+  const { backend, code, press, panel } = context;
+  await toCase(context, "times_only");
+  backend.hass.states["cover.kitchen_two"] = { state: "closed", attributes: { current_position: null } };
+  await press("begin");
+  assert.equal(code(), "C-04");
+  const wizard = panel._calibrationTab._wizard;
+  wizard.updateHass(backend.hass); await tick(4);
+  const started = () => backend.subscriptions.some((message) => message.type === "myhome/cover_calibration/start");
+  assert.equal(started(), false, "the state it had before the close does not count");
+  backend.hass.states["cover.kitchen_two"] = { state: "closing", attributes: { current_position: 40 } };
+  wizard.updateHass(backend.hass); await tick(4);
+  backend.hass.states["cover.kitchen_two"] = { state: "closed", attributes: { current_position: 0 } };
+  wizard.updateHass(backend.hass); await tick(6);
+  assert.equal(started(), true, "closed after the run: the session starts");
+  assert.equal(code(), "C-11");
+});
+
 test("L-38: times only first closes an open cover, as path A does, then starts on «check that it is fully closed»", async () => {
   const context = await mount();
   const { backend, wiz, code, press, panel } = context;

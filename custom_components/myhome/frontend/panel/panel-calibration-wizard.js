@@ -995,7 +995,7 @@ export class CalibrationWizard {
     if (state?.state === "closed" && state.attributes?.current_position === 0) return false;
     const position = state?.attributes?.current_position, closing = item.cover.effective?.closing?.value;
     const seconds = closing > 0 ? closing * (Number.isFinite(position) ? position / 100 : 1) : null;
-    this._local.homing = { entity, started: Date.now(), seconds };
+    this._local.homing = { entity, started: Date.now(), seconds, moved: state?.state !== "closed" };
     Promise.resolve(hass.callService?.("cover", "close_cover", { entity_id: entity })).catch(() => {});
     clearInterval(this._homeTimer);
     this._homeTimer = setInterval(() => this._homeTick(), 500);
@@ -1007,7 +1007,10 @@ export class CalibrationWizard {
     if (!homing || !this._root) { clearInterval(this._homeTimer); this._homeTimer = null; return; }
     const state = this._context.hass.states?.[homing.entity], elapsed = (Date.now() - homing.started) / 1000;
     const still = state && !["closing", "opening"].includes(state.state);
-    const done = (still && state.state === "closed") || (homing.seconds != null && elapsed >= homing.seconds + Math.max(2, homing.seconds * 0.15) && still);
+    // Review nit: a cover already shown «closed» (at an unknown position) is still «closed» before its run starts:
+    // that «closed» counts only once Home Assistant has reported the close under way; otherwise the run's time decides.
+    if (state && ["closing", "opening"].includes(state.state)) homing.moved = true;
+    const done = (still && state.state === "closed" && homing.moved) || (homing.seconds != null && elapsed >= homing.seconds + Math.max(2, homing.seconds * 0.15) && still);
     if (!done) { this._patch(this._screen()); return; }
     clearInterval(this._homeTimer); this._homeTimer = null;
     local.homing = null;
