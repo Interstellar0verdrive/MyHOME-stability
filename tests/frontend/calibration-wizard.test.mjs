@@ -634,6 +634,8 @@ test("L-44: the check runs as the half readings do: to the top (confirmed by the
   assert.equal(tile.querySelector(".wiz-result-caption").textContent, "gap at half travel");
   const note = tile.parentElement.querySelector(".wiz-result-note");
   assert.ok(note.classList.contains("is-success"));
+  assert.equal(tile.className, "wiz-result is-success", "L-69: the tile in the note's colours");
+  assert.equal(note.firstElementChild.tagName, "SPAN", "L-70: one box for the text, centred in the note's height");
   assert.match(note.textContent, /Check at half travel: the cover stopped at 97 cm, about 99 cm was expected\. Gap 2 cm: up to 4 cm the calibration counts as precise\./);
   assert.doesNotMatch(wiz().textContent, /\{\w+\}/, "no placeholder left on screen");
   await press("save");
@@ -742,7 +744,8 @@ test("L-57: a red button keeps its red border under the pointer, pressed and foc
 test("L-59: the check note beside the «Precision» tile is as tall as the tile", async () => {
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /\.wiz-result-row \{ display: flex; flex-wrap: wrap; gap: 12px; align-items: stretch;/);
-  assert.match(css, /\.wiz-result-note \{ flex: 1 1 260px; align-self: stretch; box-sizing: border-box; \}/);
+  assert.match(css, /\.wiz-result-note \{ flex: 0 1 280px; min-width: 200px; max-width: 280px; align-self: stretch; box-sizing: border-box; display: flex; align-items: center; \}/, "L-70/L-71");
+  assert.match(css, /@container wiz-result-row \(max-width: 479px\) \{ \.wiz-result-note \{ flex: 1 1 100%; max-width: none; \} \}/, "stacked: full width");
   assert.doesNotMatch(css, /\.wiz-result-note \{[^}]*align-self: center/);
 });
 
@@ -881,6 +884,25 @@ test("L-68: every step with a drawing reads title → drawing → text → field
   // The table of drawings has a single place for them now: under the title.
   const table = readFileSync(new URL("../../custom_components/myhome/frontend/panel/panel-calibration-screens.js", import.meta.url), "utf8");
   assert.doesNotMatch(table, /AFTER|after-body/);
+});
+
+test("L-69: the «Precision» tile takes its note's colours, green within the threshold and yellow beyond, in both themes", () => {
+  const doc = dom.window.document;
+  for (const theme of ["light", "dark"]) {
+    const host = doc.createElement("div"); host.dataset.theme = theme; doc.body.append(host);
+    host.innerHTML = `<div class="wiz-result is-success"><span class="wiz-result-label"></span></div><p class="cal-note is-success"></p>
+      <div class="wiz-result is-warning"><span class="wiz-result-caption"></span></div><p class="cal-note is-warning"></p><div class="wiz-result"></div>`;
+    const [good, goodNote, bad, badNote, plain] = host.children;
+    for (const [tile, note, tone] of [[good, goodNote, "success"], [bad, badNote, "warning"]]) {
+      assert.equal(winner(tile, "background"), winner(note, "background"), `${theme}: ${tone} fill as its note`);
+      assert.equal(winner(tile, "color"), winner(note, "color"), `${theme}: ${tone} text as its note`);
+      assert.match(winner(tile, "box-shadow"), new RegExp(`--panel-${tone}`), `${theme}: ${tone} border`);
+    }
+    assert.equal(winner(good.firstElementChild, "color"), "inherit");
+    assert.equal(winner(bad.firstElementChild, "color"), "inherit");
+    assert.equal(winner(plain, "background"), "var(--panel-accent-soft)", "other tiles unchanged");
+    host.remove();
+  }
 });
 
 test("L-18: a tap on the cover already chosen in A-01 un-chooses it", async () => {

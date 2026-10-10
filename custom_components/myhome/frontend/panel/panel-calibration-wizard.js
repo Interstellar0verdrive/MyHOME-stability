@@ -267,10 +267,11 @@ export class CalibrationWizard {
             ${drawing("before-body")}
             ${screen.wait ? this._waitMarkup(screen.wait) : ""}
             ${screen.results?.length ? `<div class="wiz-results">${screen.results.map((tile) => {
-              const box = `<div class="wiz-result${tile.invalid ? " is-invalid" : ""}"><span class="wiz-result-label">${esc(tile.label)}</span>
+              // L-69: a tile with a note (the check's precision) takes the note's colours: green within the threshold, yellow beyond.
+              const box = `<div class="wiz-result${tile.invalid ? " is-invalid" : ""}${tile.note ? ` is-${tile.note.tone}` : ""}"><span class="wiz-result-label">${esc(tile.label)}</span>
               <span class="wiz-result-value"><span class="wiz-result-number">${esc(tile.value)}</span><small> ${esc(tile.unit)}</small>${tile.extra ? `<span class="wiz-result-extra"> · ${esc(tile.extra)}</span>` : ""}</span>${tile.caption ? `<span class="wiz-result-caption">${esc(tile.caption)}</span>` : ""}</div>`;
               // L-55: a tile with its own note (the check's precision): the note beside it, under it where narrow.
-              return tile.note ? `<div class="wiz-result-row">${box}<p class="cal-note is-${tile.note.tone} wiz-result-note">${text.units(esc(tile.note.text))}</p></div>` : box;
+              return tile.note ? `<div class="wiz-result-row">${box}<p class="cal-note is-${tile.note.tone} wiz-result-note"><span>${text.units(esc(tile.note.text))}</span></p></div>` : box;
             }).join("")}</div>${resultNotices}` : ""}
             ${screen.body ? `<div class="wiz-body">${rich(screen.body)}</div>` : ""}
             ${screen.help && !screen.choice ? this._helpMarkup(screen.help) : ""}
