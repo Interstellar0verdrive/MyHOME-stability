@@ -1576,6 +1576,16 @@ test("every drawing a screen can pick is a themed inline SVG, and A-09 has none"
       ids.add(match[1]);
     }
   }
+  // L-91: every drawing of the module, used by a screen or not, themes every paint (no literal colour outside masks
+  // and clip paths) and draws its masks and clip paths only in black and white or their grey.
+  for (const [id, markup] of Object.entries(SVG)) {
+    const outside = markup.replace(/<(mask|clipPath)\b[\s\S]*?<\/\1>/g, "");
+    assert.doesNotMatch(outside.replace(/var\(--wiz-ill-[a-z0-9-]+,#[0-9A-Fa-f]{3,6}\)/g, "THEMED"), /(?:fill|stroke|stop-color)="(?!none"|url\(|THEMED")/,
+      `${id}: a paint outside its masks that is not a --wiz-ill-* property`);
+    for (const inside of markup.matchAll(/<(mask|clipPath)\b[\s\S]*?<\/\1>/g)) {
+      for (const paint of inside[0].matchAll(/(?:fill|stroke)="([^"]+)"/g)) assert.match(paint[1], /^(?:#000|#fff|#D9D9D9|none)$/i, `${id}: mask paint ${paint[1]}`);
+    }
+  }
   const bytes = statSync(new URL("panel-calibration-illustrations-svg.js", panel)).size;
   assert.ok(bytes <= 110 * 1024, `${bytes} bytes of drawings (16 since Z-14)`);
   assert.match(table, /"05": \["window-closed"/);
@@ -1699,7 +1709,7 @@ test("the drawing is one inline SVG at its Figma size, placed by its position, a
   assert.equal(figure.tagName.toLowerCase(), "svg");
   assert.equal(figure.dataset.illustration, "window-closed");
   assert.equal(figure.getAttribute("aria-label"), "Step diagram");
-  assert.deepEqual([figure.getAttribute("width"), figure.getAttribute("height"), figure.getAttribute("viewBox")], ["259", "250", "0 0 260 250"]);
+  assert.deepEqual([figure.getAttribute("width"), figure.getAttribute("height"), figure.getAttribute("viewBox")], ["259", "250", "0 0 540 521"], "L-91: the master's own size, drawn at 259 × 250");
   assert.equal(figure.getAttribute("style"), "width: min(100%, 259px); aspect-ratio: 259 / 250", "the ratio is kept when the column is narrower");
   assert.equal(figure.nextElementSibling.className, "wiz-body", "a step shows its drawing above the text");
   assert.equal(wiz().querySelector(".wiz-frame .cal-visual"), null, "the maintainer's small scene is not used by the wizard");
