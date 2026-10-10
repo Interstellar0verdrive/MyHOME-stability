@@ -112,7 +112,13 @@ export class LiveCalibrationGateway {
     this._engine = new WizardSession((kind) => this._onChange?.(kind));
     this._engine.onBeatExpired = () => this._verify();
     // L-58b: an armed «Conferma presa di controllo» goes back when the owner shows another step.
-    this._engine.onAccept = (state) => { if (this._armed && armKey(state) !== this._armed.key) this._disarm(); };
+    this._engine.onAccept = (state) => {
+      if (this._armed && armKey(state) !== this._armed.key) this._disarm();
+      // A change of owner (this tab taking control, or losing it): what this tab published before is no longer the
+      // session's screen, so the next `show` is sent even if it is the same.
+      const owns = !!state?.owner && !state.read_only;
+      if (owns !== this._owned) { this._owned = owns; this._shown = null; }
+    };
   }
 
   /** L-58b: «Conferma presa di controllo» armed: back to «Prendi il controllo» after CONFIRM_TAKE_MS, counting down. */

@@ -295,6 +295,8 @@ class CalibrationSession:
         changed = claim and sequence == self.sequence and client_id != self.owner
         if changed:
             self.owner, self.owner_seen = client_id, monotonic()
+            # The previous owner's screen is not the new owner's: readers wait for the new owner's first `show`.
+            self.shown = None
         return subscriber, changed
 
     def same_request(self, msg: dict[str, Any]) -> bool:

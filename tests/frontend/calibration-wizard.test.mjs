@@ -2245,6 +2245,22 @@ test("L-25: the owner publishes its screen and a reader shows the same step, not
   assert.equal(reader.code(), "A-13", "not A-12, the screen the owner already left");
 });
 
+test("an owner that loses control and takes it back publishes its screen again, even the same one", async () => {
+  const { backend, press, startFor, wiz } = await mount();
+  await startFor("cover.living_one");
+  await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  const shows = () => backend.calls.filter((message) => message.action === "show").length;
+  const before = shows();
+  // Another device takes control: this tab reads; then it takes control back on the same step.
+  const owned = backend.view;
+  backend.view = (extra = {}) => owned({ owner: false, read_only: true, ...extra });
+  backend.emit(); await tick(6);
+  backend.view = owned;
+  wiz().querySelector('[data-wiz="take"]').click(); await tick();
+  wiz().querySelector('[data-wiz="take"]').click(); await tick(8);
+  assert.ok(shows() > before, "the same screen is published again for the new ownership");
+});
+
 test("L-52: a reader that takes control continues on the step its former owner showed", async () => {
   const view = { phase: "briefing", step: "half_open", reading_kind: "half_open", values: { opening_time: 22, closing_time: 21 },
     screen: { code: "A-15", path: "A", scope: null, local: { ackLift: true, ackAscent: true } } };

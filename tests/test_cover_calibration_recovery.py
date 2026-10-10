@@ -494,6 +494,18 @@ async def test_the_owner_publishes_its_screen_to_readers_without_a_transition(ha
     assert session.view()["screen"] == screen
 
 
+async def test_a_new_owner_does_not_inherit_the_previous_owner_s_screen(hass, recovering):
+    """Review nit: on a claim the old owner's screen goes; the new owner's first `show` is what readers see."""
+    cal, session = recovering, recovering.session
+    owner = next(item for item in session.subscribers.values() if item.client_id == session.owner)
+    await call(hass, cal, cal.connection, owner.token, "show", screen={"code": "A-12", "path": "A"})
+    claimed = reader(cal, "second-tab", claim=True, sequence=session.sequence)
+    assert claimed.claimed and session.owner == "second-tab"
+    assert "screen" not in session.view(), "the previous owner's screen is dropped"
+    result = await call(hass, cal, claimed.connection, claimed.token, "show", screen={"code": "A-12", "path": "A"})
+    assert result["screen"] == {"code": "A-12", "path": "A"}, "the same screen, now the new owner's"
+
+
 async def test_stop_during_review_keeps_the_completed_measurements(hass, recovering):
     """Behaviour decision: in review nothing moves; Stop is written, the values stay, Cancel discards them."""
     cal, session = recovering, recovering.session
