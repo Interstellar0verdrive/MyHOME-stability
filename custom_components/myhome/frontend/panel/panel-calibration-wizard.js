@@ -915,7 +915,7 @@ export class CalibrationWizard {
     return this._gateway;
   }
 
-  _dropGateway() { clearInterval(this._leaseTimer); this._leaseTimer = null; this._gateway?.close(); this._gateway = null; }
+  _dropGateway() { clearInterval(this._leaseTimer); this._leaseTimer = null; clearInterval(this._tickTimer); this._tickTimer = null; this._gateway?.close(); this._gateway = null; }
 
   /** The idle expiry warning counts down without any message from Home Assistant: redraw it every 15 s. */
   _watchLease() {

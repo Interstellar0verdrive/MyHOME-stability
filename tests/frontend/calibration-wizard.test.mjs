@@ -666,6 +666,21 @@ test("L-46: the base summary's «What happens when I save?» says exactly what S
   assert.match(at(follows, {}).saveInfo.body, /^\*\*Salva:\*\* il profilo «alte» viene aggiornato con i valori misurati/);
 });
 
+test("L-44b: a check stopped is done again: A-21v with its notice, Stop in both of its legs", () => {
+  const t = (key) => translations.en[key] || key;
+  const base = { mode: "geometry", values: { opening_time: 22, closing_time: 21 }, samples: { lift: 4 }, readings: { gap: 3, half_open: 97, half_close: 101 },
+    geometry: { slat_time_s: 4, opening_roll: 1.8, closing_roll: 1.9 }, travel_cm: 198, slats: true, owner: true, sequence: 9 };
+  const at = (view) => buildScreen({ t, stage: "session", path: "A", view: { ...base, ...view }, local: { ackReadings: true }, elapsed: 3, cover: { name: "K", effective: {} } });
+  const again = at({ phase: "review", step: "half_close", check: null, check_interrupted: "stopped" });
+  assert.equal(again.code, "A-21v");
+  assert.equal(again.notices[0].text, "The check was stopped: do it again to complete the calibration.");
+  const check = { direction: "closing", target_cm: 99, planned_seconds: 7.4 };
+  for (const view of [{ phase: "opening", step: "top", check }, { phase: "starting_open", step: "top", check }, { phase: "closing", step: "check", check }, { phase: "starting_close", step: "check", check }]) {
+    const stop = at(view).actions.find((action) => action.id === "stop");
+    assert.deepEqual([stop?.kind, !!stop?.disabled], ["stop", false], `${view.step} ${view.phase}: «Ferma la tapparella», outlined red`);
+  }
+});
+
 test("L-18: a tap on the cover already chosen in A-01 un-chooses it", async () => {
   const { wiz, tab, pickCover, code } = await mount();
   tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
@@ -1640,6 +1655,8 @@ test("L-26: the A-34 of a reader is the owner's (what was saved, the old profile
   assert.deepEqual(screen.links, []);
   assert.match(screen.body, /kitchen_big/);
   assert.match(screen.note.text, /old_one/, "the note on the old profile, as the owner sees it");
+  assert.match(screen.body, /If the other device goes on with fine-tuning, there is nothing more to follow here\.$/, "L-49: nothing more to follow");
+  assert.deepEqual(screen.actions.map((action) => [action.id, action.label]), [["close", "Back to the list"]]);
 });
 
 test("L-40: a reader whose session is cancelled where it is guided ends on its own screen, Close only, and stops talking to the session", async () => {

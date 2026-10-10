@@ -366,8 +366,10 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
   // stop, a timed run to half the travel descending from the top, a tape reading); its gap is the precision shown in
   // the summary, and the reading anchors Home Assistant's estimate.
   // L-43: it is part of the path (not skippable): its own step «Verifica», in a live view as in a reopened or read one.
-  if (phase === "review" && !view.check && !view.check_interrupted && !local.refining && view.travel_cm > 0) {
+  // L-44b: a check stopped (Stop, or a movement it did not expect) is done again: it is part of the path.
+  if (phase === "review" && !view.check && !local.refining && view.travel_cm > 0) {
     screen.phase = "check";
+    if (view.check_interrupted) screen.notices.push({ tone: "warning", result: true, text: t("wiz_T568") });
     return Object.assign(screen, { code: p("21v"), title: t("wiz_T544"), body: `${t("wiz_T545")}\n\n${tx("wiz_T564", { threshold: n(view.check_threshold_cm ?? 4, 0) })}`, illustration: false,
       actions: [{ id: "check-start", label: t("wiz_T546"), kind: "primary" }] });
   }
@@ -880,7 +882,8 @@ function savedScreen(screen, ctx, tx, values) {
   // A new profile left the previous one without covers: it can be deleted from the Profiles tab (never by itself).
   if (saved.target === "profile_new" && saved.orphan) screen.note = { tone: "info", text: fill(t("wiz_T431"), { old: saved.orphan, tab: t("profileListTitle") }) };
   // L-26: another device saved it: the same A-34, read only: «Chiudi» alone.
-  if (saved.reader) return Object.assign(screen, { code: path === "C" ? "C-34" : "A-34", title: t("wiz_T154"), body,
+  // L-49: whatever the other device does next (fine-tuning is a preview with no session), nothing more to follow here.
+  if (saved.reader) return Object.assign(screen, { code: path === "C" ? "C-34" : "A-34", title: t("wiz_T154"), body: `${body}\n\n${t("wiz_T569")}`,
     actions: [close()], links: [] });
   // L-28 (final): fine-tuning first, then giving the new profile to other covers, another cover, this cover's details,
   // and «Chiudi» in red, last. Where the bar is one column (phone, single column) the wizard keeps the first and the

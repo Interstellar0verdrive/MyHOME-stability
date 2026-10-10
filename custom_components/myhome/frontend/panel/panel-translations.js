@@ -490,6 +490,8 @@ export const translations = {
     wiz_T565: "Preview: in this version this path saves nothing yet; {cover} keeps using its current values.",
     wiz_T566: "**Save:** the measured values become a new profile, «{name}», which {cover} follows from now on; you can then give it to other covers of the same type.\n\nIf you discard the calibration without saving, the values in use stay as they are.",
     wiz_T567: "**Save:** the profile «{profile}» is updated with the measured values: {cover} and the covers following it use them from now on.\n\nIf you discard the calibration without saving, the values in use stay as they are.",
+    wiz_T568: "The check was stopped: do it again to complete the calibration.",
+    wiz_T569: "The calibration has been saved. If the other device goes on with fine-tuning, there is nothing more to follow here.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1444,6 +1446,8 @@ export const translations = {
     wiz_T565: "Anteprima: in questa versione questo percorso non salva ancora niente; {cover} continua a usare i valori attuali.",
     wiz_T566: "**Salva:** i valori misurati diventano un profilo nuovo, «{name}», che {cover} segue da subito; potrai poi assegnarlo ad altre tapparelle dello stesso tipo.\n\nSe abbandoni la calibrazione senza salvare, i valori attualmente in uso resteranno invariati.",
     wiz_T567: "**Salva:** il profilo «{profile}» viene aggiornato con i valori misurati: {cover} e le tapparelle che lo seguono li usano da subito.\n\nSe abbandoni la calibrazione senza salvare, i valori attualmente in uso resteranno invariati.",
+    wiz_T568: "La verifica è stata interrotta: falla di nuovo per completare la calibrazione.",
+    wiz_T569: "La calibrazione è stata salvata. Se l'altro dispositivo prosegue con il perfezionamento, qui non c'è altro da seguire.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",
