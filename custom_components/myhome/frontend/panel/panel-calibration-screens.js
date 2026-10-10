@@ -1132,7 +1132,8 @@ function finalize(screen, ctx) {
       : path === "C" && scope === "points_only" ? fineSub(t, view, cm, local.fineReadings)
         : [[t("wiz_T077"), cm(readings.half_open)], [t("wiz_T078"), cm(readings.half_close)]],
     // L-43: the check's result once done, as the summary's precision says it.
-    check: checkGap(source?.check) != null ? [[t("wiz_T557"), `${n(checkGap(source.check), 0)} cm`]] : [],
+    // (On A-34 the session is closed: the check kept with what was saved.)
+    check: checkGap(source?.check ?? local.saved?.check) != null ? [[t("wiz_T557"), `${n(checkGap(source?.check ?? local.saved.check), 0)} cm`]] : [],
     finetune: refining ? fineSub(t, view, cm, local.fineReadings) : [],
   };
   const finetuneLabel = refining ? t("wiz_T114") : t("wiz_T013");

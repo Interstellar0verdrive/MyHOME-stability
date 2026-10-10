@@ -634,6 +634,7 @@ test("L-44: the check runs as the half readings do: to the top (confirmed by the
   await press("save");
   assert.equal(code(), "A-34");
   assert.ok([...wiz().querySelectorAll(".wiz-result-label")].some((item) => item.textContent === "Check"), "the tile on A-34 too");
+  assert.ok([...wiz().querySelectorAll(".wiz-steps li li")].some((item) => item.textContent.replace(/\s+/g, " ").includes("Gap: 2 cm")), "and its gap in the stepper");
   assert.doesNotMatch(wiz().textContent, /\{\w+\}/);
 });
 
