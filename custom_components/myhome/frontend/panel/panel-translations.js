@@ -477,6 +477,7 @@ export const translations = {
     wiz_T552: "Choose another profile",
     wiz_T553: "The cover goes to its top end stop, then positions itself. Wait for it to stop.",
     wiz_T554: "The cover goes to its bottom end stop, then positions itself. Wait for it to stop.",
+    wiz_T555: "current",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1418,6 +1419,7 @@ export const translations = {
     wiz_T552: "Scegli un altro profilo",
     wiz_T553: "La tapparella va al finecorsa in alto e poi si posiziona da sola. Aspetta che si fermi.",
     wiz_T554: "La tapparella va al finecorsa in basso e poi si posiziona da sola. Aspetta che si fermi.",
+    wiz_T555: "attuale",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

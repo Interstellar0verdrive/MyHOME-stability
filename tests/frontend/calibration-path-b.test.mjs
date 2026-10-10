@@ -119,6 +119,14 @@ test("L-21: a failed check of path B offers this cover from scratch, another pro
   assert.equal(document.querySelector("myhome-panel")._calibrationTab._wizard._local.keptTravel, 195, "the travel typed is kept for A-13");
 });
 
+test("L-19: B-01 marks the profile the cover follows now as «current», still selectable", async () => {
+  const { buildScreen } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-screens.js");
+  const t = (key) => translations.en[key] || key;
+  const profiles = [{ id: "p1", name: "tall", measuredOn: "Kitchen", followerNames: [] }, { id: "p2", name: "short", measuredOn: "Hall", followerNames: [] }];
+  const screen = buildScreen({ t, stage: "profile", path: "B", profiles, local: {}, cover: { name: "K", profile: { id: "p2", name: "short" } } });
+  assert.deepEqual(screen.choice.options.map((option) => [option.value, option.badge, !!option.disabled]), [["p1", "", false], ["p2", "current", false]]);
+});
+
 test("without a profile on the gateway, B is disabled and the screen says why", async () => {
   const overview = sampleOverview();
   overview.profiles = [];
