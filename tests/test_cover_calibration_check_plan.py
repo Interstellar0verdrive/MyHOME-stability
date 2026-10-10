@@ -71,20 +71,27 @@ async def test_the_portafinestra_cucina_of_the_tenth_of_october_checks_down_to_h
     assert (view["phase"], view["step"]) == ("briefing", "top")
 
 
-@pytest.mark.parametrize("lift_s", [1.0, 4.0, 8.1, 10.0])
-@pytest.mark.parametrize("gap", [1, 4, 10])
+# R-11: every combination the session accepts, and only those (the one it refuses is tested on its own below).
+ACCEPTED = [(lift_s, gap) for lift_s in (1.0, 4.0, 8.1, 10.0) for gap in (1, 4, 10) if (lift_s, gap) != (1.0, 10)]
+
+
+@pytest.mark.parametrize(("lift_s", "gap"), ACCEPTED)
 @pytest.mark.parametrize(("half_open", "half_close"), [(0.0, 0.0), (0.5, 0.5), (1.0, 1.0), (0.0, 1.0), (1.0, 0.0)])
 async def test_no_accepted_readings_leave_the_check_impossible(geometry, lift_s, gap, half_open, half_close):
     cal = geometry
-    try:
-        await measured(cal, lift_s=lift_s, gap=gap, up=22.3, down=23.8, travel=198, half_open=half_open, half_close=half_close)
-    except (ProfileError, AssertionError):
-        pytest.skip("readings the session does not accept")
+    await measured(cal, lift_s=lift_s, gap=gap, up=22.3, down=23.8, travel=198, half_open=half_open, half_close=half_close)
     travel = cal.session.view()["travel_cm"]
     view = await act(cal, "check", direction="closing", target_cm=travel / 2)
     check = view["check"]
     assert MIN_TARGET_FRACTION <= check["target_cm"] / travel <= MAX_TARGET_FRACTION
     assert check["planned_seconds"] > MIN_CURTAIN_SECONDS
+
+
+async def test_a_ten_centimetre_gap_after_one_second_of_lift_off_is_refused_before_any_check(geometry):
+    """The one combination of the sweep the session does not accept: the edge cannot rise 10 cm in a second."""
+    cal = geometry
+    with pytest.raises(ProfileError):
+        await measured(cal, lift_s=1.0, gap=10, up=22.3, down=23.8, travel=198, half_open=0.5, half_close=0.5)
 
 
 def test_a_run_too_short_moves_to_the_nearest_check_the_model_can_make():
