@@ -738,7 +738,7 @@ test("L-56: the header's «Abandon the calibration» is 44 px high, its label ce
 
 test("L-57: a red button keeps its red border under the pointer, pressed and focused; no accent", async () => {
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
-  assert.match(css, /:is\(\.wiz-discard, \.wiz-leave, \.wiz-action\.stop, \.wiz-action\.danger-outline, \.wiz-action\.danger, \.cal-abort-actions button\.danger\):is\(:hover, :active, :focus, :focus-visible\) \{ border-color: var\(--panel-error\); \}/);
+  assert.match(css, /:is\(\.wiz-discard, \.wiz-leave, \.wiz-action\.stop, \.wiz-action\.danger-outline, \.wiz-action\.danger, \.cal-abort-confirm\):is\(:hover, :active, :focus, :focus-visible\) \{ border-color: var\(--panel-error\); \}/);
   assert.match(css, /:focus-visible \{ outline-color: var\(--panel-error\); \}/);
 });
 
@@ -821,6 +821,22 @@ test("L-92: on the phone the back arrow is the ✕'s twin, centred on the title'
   const desktop = cascadeCss.slice(0, cascadeCss.search(/@media \(max-width: 719px\) \{\s*\.wiz \{ position: fixed/));
   assert.match(rule(desktop, ".wiz-back"), /^\s*flex: none; margin: -2px 0 0 -8px;\s*$/);
   assert.match(rule(desktop, ".wiz-x"), /display: none/);
+});
+
+test("L-94: every dialog of the tab has its title band as much above as below, and its buttons their own bottom padding", () => {
+  const rules = (selector) => [...cascadeCss.matchAll(/(?<=^|[{}])\s*([^{}@]+?)\s*\{([^{}]*)\}/g)]
+    .filter(([, selectors]) => topLevel(selectors).includes(selector)).map(([, , body]) => body.trim());
+  // One padding for the band, the same above and below, at every size (no sheet-only top padding left over).
+  assert.deepEqual(rules("dialog.cal-dialog .dialog-head").filter((body) => /padding/.test(body)),
+    ["justify-content: space-between; padding-block: 18px;"]);
+  assert.match(rules("dialog.cal-dialog:has(.calibration-safety-actions) .dialog-head").join(";"), /padding-block: 8px/, "the landscape sheet: tighter, still even");
+  // The buttons' row keeps its own bottom padding: the footer on desktop and on the sheets.
+  assert.match(rules(".dialog-foot").join(";"), /padding: 14px 26px 20px/);
+  assert.match(rules("dialog.cal-dialog .dialog-foot").join(";"), /padding-block: 12px/);
+  // The body ends tight only for the hosted maintainer's view, whose Stop/Cancel bar brings its own padding.
+  assert.match(rules(".cal-dialog-body").join(";"), /padding-block: 18px 4px/);
+  assert.match(rules(".calibration-safety-actions").join(";"), /padding: 14px 26px/);
+  assert.equal(rules(".cal-abort-actions").length, 0, "no buttons' row in a body any more");
 });
 
 test("L-62: the list follows Home Assistant's dark mode on every update, its dialogs too", async () => {
@@ -2319,6 +2335,12 @@ test("L-10: the row of a session in progress cancels it from its ⋮ menu, after
   const dialog = panel.shadowRoot.querySelector("dialog.cal-dialog");
   assert.equal(dialog.querySelector("#cal-dialog-title").textContent, "Cancel the calibration in progress?");
   assert.match(dialog.textContent, /whichever tab or device is guiding it: nothing measured is saved/);
+  // L-94: a confirmation on the dialog's own footer (Back, then the red action), not in the body of a hosted dialog.
+  const foot = dialog.querySelector(".dialog-foot");
+  assert.equal(foot.hidden, false);
+  assert.deepEqual([...foot.querySelectorAll("button")].map((button) => [button.textContent, button.className]),
+    [["Back", "cal-dialog-close cal-dialog-cancel"], ["Cancel the calibration", "danger cal-abort-confirm"]]);
+  assert.equal(dialog.querySelector(".cal-dialog-body button"), null);
   assert.equal(backend.calls.filter((message) => message.action === "cancel").length, 0, "nothing before the confirmation");
   dialog.querySelector("[data-abort-confirm]").click(); await new Promise((resolve) => setTimeout(resolve, 200)); await tick(8);
   assert.ok(backend.subscriptions.some((message) => message.type === "myhome/cover_calibration/resume" && message.claim && message.sequence === 9), "control taken");

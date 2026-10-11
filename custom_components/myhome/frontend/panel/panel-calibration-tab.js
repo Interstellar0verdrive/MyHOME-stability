@@ -1228,13 +1228,18 @@ export class CalibrationTab {
     if (!session || !this._context) return;
     const { hass, t } = this._context, item = this._covers().find((entry) => entry.entry.entry_id === entryId && entry.cover.entity_id === session.entity_id);
     const name = item?.name || session.entity_id;
-    const body = this._openDialog({ title: t("wiz_T535"), subtitle: name, icon: "mdi:close-octagon-outline", hosted: true });
+    // L-94: a confirmation, not the maintainer's view: its buttons on the dialog's own footer (Back in place of Close),
+    // as the other confirmations of the tab, not in the body of a hosted dialog (whose bottom is the hosted view's bar).
+    const body = this._openDialog({ title: t("wiz_T535"), subtitle: name, icon: "mdi:close-octagon-outline" });
     const dialog = this._dialog, generation = this._generation;
-    body.innerHTML = `<p class="notice error cal-abort-error" role="alert" hidden></p><p>${esc(fill(t("wiz_T536"), { cover: name }))}</p>
-      <div class="actions cal-abort-actions"><button type="button" data-abort-back>${esc(t("wiz_T403"))}</button>
-        <button type="button" class="danger" data-abort-confirm>${esc(t("wiz_T537"))}</button></div>`;
-    body.querySelector("[data-abort-back]").onclick = () => this._dialogDone();
-    const confirm = body.querySelector("[data-abort-confirm]"), box = body.querySelector(".cal-abort-error");
+    body.innerHTML = `<p class="notice error cal-abort-error" role="alert" hidden></p><p>${esc(fill(t("wiz_T536"), { cover: name }))}</p>`;
+    const back = dialog.querySelector(".cal-dialog-close");
+    back.textContent = t("wiz_T403");
+    back.classList.add("cal-dialog-cancel");
+    back.setAttribute("data-abort-back", "");
+    dialog.querySelector(".dialog-foot").insertAdjacentHTML("beforeend",
+      `<button type="button" class="danger cal-abort-confirm" data-abort-confirm>${esc(t("wiz_T537"))}</button>`);
+    const confirm = dialog.querySelector("[data-abort-confirm]"), box = body.querySelector(".cal-abort-error");
     confirm.onclick = async () => {
       if (confirm.disabled) return;
       confirm.disabled = true;
