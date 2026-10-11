@@ -838,6 +838,31 @@ async def test_open_session_reads_for_another_tab_and_gives_a_reloaded_owner_its
         session.close()
 
 
+async def test_a_profile_is_neither_assigned_nor_unlinked_while_the_cover_has_a_session(hass, plant, hass_ws_client):
+    """L-105: the panel no longer offers it; Home Assistant refuses it anyway (calibration_busy), for every cover of the gateway."""
+    from custom_components.myhome.cover_profiles import write_profile
+    from tests.test_cover_profiles import message
+
+    register_api(hass)
+    plant.gateways[0].async_queue_calibration = lambda *args: None
+    profile_id = (await write_profile(hass, message(plant, 0, index=1)))["assigned_profile_id"]
+
+    async def answer(client, message_id):
+        while (reply := await client.receive_json())["id"] != message_id or reply["type"] != "result":
+            pass
+        return reply
+
+    with patch("aiohttp.connector.DefaultResolver", ThreadedResolver):
+        owner = await hass_ws_client(hass)
+        await owner.send_json({"id": 1, "type": WS_START, "entry_id": plant.entries[0].entry_id, "entity_id": plant.records[0].entity_id,
+                               "revision": 1, "client_id": "tab-one"})
+        assert (await answer(owner, 1))["success"]
+        for index, target in ((0, profile_id), (0, None), (1, None)):
+            with pytest.raises(ProfileError, match="calibration_busy"):
+                await write_profile(hass, message(plant, 1, index=index, action="assign", profile_id=target))
+        await owner.close()
+
+
 async def test_a_read_says_whether_the_reading_client_owns_the_open_session(hass, plant, hass_ws_client):
     """L-93: the list names its action by what `resume` will do: the owner's tab resumes, any other follows."""
     from custom_components.myhome.cover_profiles import register_api as register_profiles

@@ -1740,6 +1740,19 @@ test("L-93: the session's action says what it does: «Follow session» for anoth
   }
 });
 
+test("L-105: a cover with its session open offers no «Change profile» / «Assign profile», in its menu or its details", async () => {
+  const session = { entry_id: "one", entity_id: "cover.bedroom", session_id: "s1", mode: "geometry", phase: "briefing", step: "home", sequence: 2, values: {},
+    recoverable: true, attached: false, owner_present: true };
+  const { tab } = await mount({ session });
+  const menu = (id) => { row(tab, id).querySelector('[data-action="cal-tab-menu"]').click(); return row(tab, id).querySelector(".cal-menu"); };
+  assert.equal(menu("cover.bedroom").querySelector('[data-action="cal-tab-assign"]'), null, "not in the menu of the cover in progress");
+  assert.ok(menu("cover.bedroom").querySelector('[data-action="cal-tab-abort"]'), "its cancel is still there");
+  row(tab, "cover.bedroom").querySelector(".cal-row-toggle").click(); await tick();
+  assert.equal(row(tab, "cover.bedroom").querySelector('.cal-row-details [data-action="cal-tab-assign"]'), null, "nor in its details");
+  // Another cover keeps it (its dialog says the gateway is reserved and waits, as before).
+  assert.ok(menu("cover.living_two").querySelector('[data-action="cal-tab-assign"]'));
+});
+
 test("Z-1: the details' times carry one decimal, as the wizard's", async () => {
   const data = overview();
   data.covers[0].effective.opening.value = 22;

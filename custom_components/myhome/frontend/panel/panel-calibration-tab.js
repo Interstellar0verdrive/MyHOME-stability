@@ -770,7 +770,7 @@ export class CalibrationTab {
           <span class="cal-menu" role="menu" ${menuOpen ? "" : "hidden"}>
             ${!session && this._wizard && item.rolls ? `<button type="button" role="menuitem" data-action="cal-tab-refine" data-id="${esc(key)}" ${busy ? "disabled" : ""}><ha-icon icon="mdi:target" aria-hidden="true"></ha-icon>${esc(t("calTabActionRefine"))}</button>` : ""}
             ${!session && this._wizard ? `<button type="button" role="menuitem" data-action="cal-tab-measure-cover" data-id="${esc(key)}" ${busy ? "disabled" : ""}><ha-icon icon="${item.status === "to_measure" ? "mdi:ruler" : "mdi:reload"}" aria-hidden="true"></ha-icon>${esc(t(item.status === "to_measure" ? "calTabActionMeasure" : "calTabActionRemeasure"))}</button>` : ""}
-            <button type="button" role="menuitem" data-action="cal-tab-assign" data-id="${esc(key)}"><ha-icon icon="mdi:link-variant" aria-hidden="true"></ha-icon>${esc(t(item.profile ? "wiz_T427" : "calTabAssign"))}</button>
+            ${session ? "" : `<button type="button" role="menuitem" data-action="cal-tab-assign" data-id="${esc(key)}"><ha-icon icon="mdi:link-variant" aria-hidden="true"></ha-icon>${esc(t(item.profile ? "wiz_T427" : "calTabAssign"))}</button>`}
             <button type="button" role="menuitem" data-action="cal-tab-toggle" data-id="${esc(key)}"><ha-icon icon="mdi:information-outline" aria-hidden="true"></ha-icon>${esc(t("calTabDetails"))}</button>
             ${session && !session.waiting_for_stop && session.recoverable !== false ? `<button type="button" role="menuitem" class="cal-menu-danger" data-action="cal-tab-abort" data-id="${esc(item.entry.entry_id)}"><ha-icon icon="mdi:close-octagon-outline" aria-hidden="true"></ha-icon>${esc(t("wiz_T534"))}</button>` : ""}
           </span></span></span>
@@ -888,8 +888,9 @@ export class CalibrationTab {
     const action = (button) => button ? `<div class="cal-block-action">${button}</div>` : "";
     const refine = this._wizard && item.rolls ? `<button type="button" class="primary" data-action="cal-tab-refine" data-id="${esc(key)}" ${busy ? "disabled" : ""}><ha-icon icon="mdi:target" aria-hidden="true"></ha-icon>${esc(t("calTabActionRefine"))}</button>` : "";
     const measure = this._wizard ? `<button type="button" class="${item.rolls ? "" : "primary"}" data-action="cal-tab-measure-cover" data-id="${esc(key)}" ${busy ? "disabled" : ""}><ha-icon icon="${item.status === "to_measure" ? "mdi:ruler" : "mdi:reload"}" aria-hidden="true"></ha-icon>${esc(t(item.status === "to_measure" ? "calTabActionMeasure" : "calTabActionRemeasure"))}</button>` : "";
-    // A cover that follows a profile changes it (or unlinks it); one that follows none is assigned one.
-    const assign = `<button type="button" data-action="cal-tab-assign" data-id="${esc(key)}"><ha-icon icon="mdi:link-variant" aria-hidden="true"></ha-icon>${esc(t(item.profile ? "wiz_T427" : "calTabAssign"))}</button>`;
+    // A cover that follows a profile changes it (or unlinks it); one that follows none is assigned one. L-105: not while
+    // the cover has a session open (Home Assistant would refuse it: calibration_busy).
+    const assign = this._running(item) ? "" : `<button type="button" data-action="cal-tab-assign" data-id="${esc(key)}"><ha-icon icon="mdi:link-variant" aria-hidden="true"></ha-icon>${esc(t(item.profile ? "wiz_T427" : "calTabAssign"))}</button>`;
     // A cover in progress is yellow throughout: its notes take the warning variant (icon and primary stay accent).
     const note = this._running(item) ? "cal-note is-warning" : "cal-note";
     return `<div class="cal-details-grid">
