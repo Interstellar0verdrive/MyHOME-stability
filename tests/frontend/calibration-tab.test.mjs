@@ -226,6 +226,26 @@ test("row menu items move with the arrow keys", async () => {
   assert.equal(root.activeElement, items[0]);
 });
 
+test("review S2: the menu's focus and arrows skip disabled items, on a cover in progress and on a gateway busy with another", async () => {
+  const session = { entry_id: "one", entity_id: "cover.bedroom", session_id: "s1", mode: "geometry", phase: "briefing", step: "home", sequence: 2, values: {},
+    recoverable: true, attached: false, owner_present: true };
+  const { root, tab } = await mount({ session });
+  for (const id of ["cover.bedroom", "cover.living_two"]) {
+    row(tab, id).querySelector('[data-action="cal-tab-menu"]').click(); await tick();
+    const all = [...row(tab, id).querySelectorAll('[role="menuitem"]')], items = all.filter((item) => !item.disabled);
+    assert.ok(all.some((item) => item.disabled), `${id}: has a disabled item`);
+    assert.ok(items.length >= 1);
+    assert.equal(root.activeElement, items[0], `${id}: the focus opens on the first usable item`);
+    for (let i = 1; i <= items.length; i++) {
+      root.activeElement.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+      assert.equal(root.activeElement, items[i % items.length], `${id}: ArrowDown never stops on a disabled item`);
+    }
+    root.activeElement.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+    assert.equal(root.activeElement, items.at(-1), `${id}: ArrowUp wraps to the last usable item`);
+    root.activeElement.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); await tick();
+  }
+});
+
 test("the row menu closes with Escape back on its button", async () => {
   const { root, tab } = await mount();
   const menuButton = row(tab, "cover.bedroom").querySelector('[data-action="cal-tab-menu"]');

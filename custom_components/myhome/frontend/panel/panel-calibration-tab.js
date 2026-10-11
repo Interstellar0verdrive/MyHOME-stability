@@ -942,8 +942,9 @@ export class CalibrationTab {
     if (this._page && this._menu === null && this._mode.kind === "list" && event.key === "Escape") { event.preventDefault(); this._closePage(); return; }
     if (this._menu === null || this._mode.kind !== "list") return;
     if (["ArrowDown", "ArrowUp"].includes(event.key)) {
-      // Menu items move with the arrows and wrap, as in Home Assistant's own menus.
-      const items = [...this._context.host.querySelectorAll('.cal-menu:not([hidden]) [role="menuitem"]')];
+      // Menu items move with the arrows and wrap, as in Home Assistant's own menus; a disabled one is skipped (review S2:
+      // a cover in progress, or a gateway busy with another, has some).
+      const items = [...this._context.host.querySelectorAll('.cal-menu:not([hidden]) [role="menuitem"]:not(:disabled)')];
       const index = items.indexOf(this._context.host.getRootNode().activeElement);
       if (!items.length) return;
       event.preventDefault();
@@ -1019,7 +1020,7 @@ export class CalibrationTab {
     } else if (action === "cal-tab-menu") {
       this._menu = this._menu === id ? null : id;
       this._render();
-      if (this._menu) this._context.host.querySelector('.cal-menu:not([hidden]) [role="menuitem"]')?.focus();
+      if (this._menu) this._context.host.querySelector('.cal-menu:not([hidden]) [role="menuitem"]:not(:disabled)')?.focus();
     } else if (action === "cal-tab-refresh") this.refresh();
     else if (action === "cal-tab-batch") this._selectBatch();
     else if (action === "cal-tab-session") this._openSession(id);
