@@ -204,7 +204,9 @@ export function createFakeBackend({ language = "en", inventory = coverInventory(
             cover_index: 0, results: [], targets: message.entity_ids.map((entity_id) => ({ entity_id })), _started: null };
         } else if (message.type === "myhome/cover_calibration/resume") {
           if (!session || session.session_id !== message.session_id) throw Object.assign(new Error("expired"), { code: "calibration_expired" });
-          if (message.claim) owner = true;
+          // As Home Assistant since the review nit: a claim drops the previous owner's screen (readers wait for the new
+          // owner's first `show`), so the new owner never finds it in its own first view.
+          if (message.claim && !owner) { owner = true; delete session.screen; }
         } else throw new Error(`Unexpected subscription ${message.type}`);
         listener = callback;
         callback(backend.view());

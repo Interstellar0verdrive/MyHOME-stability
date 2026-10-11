@@ -2497,6 +2497,48 @@ test("L-52: a reader that takes control continues on the step its former owner s
   assert.equal(code(), "A-16", "on the same step, not one back on A-15");
 });
 
+test("L-103: whichever step the owner shows, a reader that takes control lands on that same step, the first time too", async () => {
+  // Owner A walks path A to the check, every screen published; at each step the session (with A's screen) is copied.
+  const { backend, press, type, startFor, code } = await mount();
+  await startFor("cover.living_one");
+  const steps = [];
+  const at = () => steps.push({ code: code(), session: structuredClone(backend.session) });
+  const walk = [
+    () => press("begin"), async () => { await move(backend); await press("endpoint"); backend.stopped(); await tick(); },
+    () => press("ack:lift"), async () => { await press("next"); await move(backend, { seconds: 4.4 }); await press("lift"); backend.stopped(); await tick(); },
+    () => type("3"), async () => { await move(backend); await press("endpoint"); backend.stopped(); await tick(); },
+    async () => { await press("next"); await move(backend, { seconds: 22.2 }); await press("endpoint"); backend.stopped(); await tick(); },
+    () => type("198"), () => press("ack:ascent"),
+    async () => { await press("next"); await move(backend, { seconds: 21.7 }); await press("endpoint"); backend.stopped(); await tick(); },
+    () => press("ack:descent"), () => press("ack:readings"), () => move(backend, { auto: true, stop: true }),
+    () => type("97"), async () => { await move(backend, { seconds: 24 }); await press("endpoint"); backend.stopped(); await tick(); },
+    () => move(backend, { auto: true, stop: true }), () => type("101"),
+  ];
+  for (const step of walk) { await step(); at(); }
+  assert.ok(steps.some((step) => step.code === "A-12"), "the ascent's summary is among them");
+  for (const step of steps) assert.equal(step.session.screen?.code, step.code, `${step.code}: published by its owner`);
+  assert.equal(steps.at(-1).code, "A-21v");
+  // B: another device, reading the session since its first step and following it up to that step (A's screens reach
+  // it while it reads), then taking control: Home Assistant drops A's screen on the claim.
+  for (const step of steps) {
+    reset();
+    const b = await mount({ session: structuredClone(steps[0].session), owner: false });
+    b.tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
+    assert.equal(b.code(), steps[0].code);
+    const live = b.backend.session;
+    for (const name of Object.keys(live)) if (!(name in step.session)) delete live[name];
+    Object.assign(live, structuredClone(step.session));
+    b.backend.emit(); await tick(6);
+    assert.equal(b.code(), step.code, `reader follows to ${step.code}`);
+    b.wiz().querySelector('[data-wiz="take"]').click(); await tick();
+    b.wiz().querySelector('[data-wiz="take"]').click(); await tick(8);
+    assert.equal(b.wiz().querySelector(".wiz-readonly"), null, `${step.code}: B owns it`);
+    assert.equal(b.code(), step.code, `${step.code}: B continues on A's step, not one back`);
+    const published = b.backend.calls.filter((message) => message.action === "show").at(-1)?.screen;
+    assert.equal(published?.code, step.code, `${step.code}: and publishes it as its own`);
+  }
+});
+
 test("L-28: a reopened session keeps the path it was started on, so a path A on a cover with a profile ends on A-34 with fine-tuning", async () => {
   const session = resumed({ phase: "review", step: "half_close", reading_kind: "half_close", readings: { gap: 3, half_open: 97, half_close: 101 },
     geometry: { slat_time_s: 4.4, opening_roll: 1.83, closing_roll: 1.91 }, screen: { code: "A-21", path: "A", scope: null, local: { ackAscent: true, ackDescent: true, ackReadings: true } } });

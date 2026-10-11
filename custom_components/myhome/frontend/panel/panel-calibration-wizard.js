@@ -39,7 +39,9 @@ const STAGES_BEFORE_SESSION = ["choose", "path", "profile", "current", "case", "
  */
 export const CONFIRM_GUARD_MS = 700;
 /** L-25: the choices made on the owner's own screens that its readers need to show the same step. */
-const SHARED_FLAGS = ["ackLift", "ackAscent", "ackDescent", "ackReadings", "invalidRun", "discarded", "misbehaved", "travelTyped"];
+const SHARED_FLAGS = ["ackLift", "ackAscent", "ackDescent", "ackReadings", "invalidRun", "discarded", "misbehaved", "travelTyped",
+  // L-103: every other choice a session screen depends on (the check skipped, the gap's origin, the travel kept).
+  "checkSkipped", "lastGap", "liftOrigin", "keptTravel"];
 /** How long a sheet takes to slide in or out (the CSS animations use the same). */
 const SHEET_MS = 220;
 /** Home Assistant keeps a session open this long for its owner at rest (IDLE_LEASE_SECONDS) when the view does not say. */
@@ -1082,15 +1084,24 @@ export class CalibrationWizard {
 
   _viewChanged() {
     const view = this._gateway?.view, local = this._local;
-    // L-52: a reader that takes control continues on the step its former owner showed (published with `show`), not on
-    // the last transition of Home Assistant: the owner's path and choices become this tab's own.
+    // L-52/L-103: a reader that takes control continues on the step its former owner showed (published with `show`),
+    // not on the last transition of Home Assistant: the owner's path and choices become this tab's own. Home Assistant
+    // drops the old owner's screen on a claim (the new owner's view has none), so a reader keeps the last screen it
+    // was shown and adopts it whole (a choice the owner had not made is not made here either). A reader never shown one
+    // (an owner that published nothing) keeps what it judged from Home Assistant's views while it followed.
     if (view && !view.preview) {
-      if (view.read_only) local.following = true;
-      else if (local.following && view.owner) {
+      if (view.read_only) {
+        local.following = true;
+        if (view.screen) this._followed = { gateway: this._gateway, screen: view.screen };
+      } else if (local.following && view.owner) {
         local.following = false;
-        const shown = view.screen;
-        if (shown) Object.assign(local, shown.path ? { path: shown.path, scope: shown.scope ?? null } : {},
-          Object.fromEntries(SHARED_FLAGS.filter((name) => shown.local?.[name] != null).map((name) => [name, shown.local[name]])));
+        const shown = view.screen || (this._followed?.gateway === this._gateway ? this._followed.screen : null);
+        this._followed = null;
+        if (shown) {
+          const fresh = freshFlags();
+          Object.assign(local, shown.path ? { path: shown.path, scope: shown.scope ?? null } : {},
+            Object.fromEntries(SHARED_FLAGS.map((name) => [name, shown.local?.[name] ?? fresh[name]])));
+        }
       }
     }
     // L-40: the session was cancelled by the tab or device that guided it: for a reader it is over, said as such, once.
