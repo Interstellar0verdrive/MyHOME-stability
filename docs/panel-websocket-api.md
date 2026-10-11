@@ -9,7 +9,8 @@
 > check the model cannot make moves to the nearest one it can ([check](#guided-geometry-check-of-the-measured-model));
 > the overview's covers add `check_cm`, `check_measured_cm`, `check_expected_cm` and `check_at`
 > ([verified precision](#verified-precision-in-the-overview)); the gateway's profile subscription adds an empty
-> `session` event on every session transition ([below](#wizard-session-additions-0430)).
+> `session` event on every session transition, and the cover read takes an optional `client_id` and answers
+> `client_owner` ([below](#wizard-session-additions-0430)).
 
 > Panel 0.40.0 [pauses an automatic or batch cycle whose owner is absent](#pause-without-the-owner-0400) and keeps its measurements until the owner sends `continue`.
 
@@ -58,6 +59,13 @@ them, since the revision has not changed.
 ```json
 {"id":20,"type":"event","event":{"entry_id":"ENTRY","revision":4,"kind":"session"}}
 ```
+
+`myhome/cover_profiles/read` takes an optional `client_id` (the calling tab's identity, as in `start` and `resume`,
+1 to 64 characters). With it, the `calibration` view in the answer adds `client_owner`: `true` only when that client
+owns the running session (its `resume` then continues as owner, without a claim), `false` otherwise, including a
+closed session. Who the owner is is never returned; without `client_id` the field is absent. The panel names the
+session's action by it («Riprendi sessione» to the owner's tab, «Segui sessione» to everyone else). A backend older
+than 0.43.0 rejects the extra field (`extra keys not allowed`), so a 0.43.0 panel needs a 0.43.0 backend.
 
 ## Guided geometry: check of the measured model
 
@@ -739,7 +747,9 @@ not fall back.
 ```
 
 Both target fields are required. The entity must be a native MyHOME `cover` whose
-registry `config_entry_id` matches the requested MyHOME entry. Persistence uses
+registry `config_entry_id` matches the requested MyHOME entry. From 0.43.0 an optional `client_id` adds
+`client_owner` to the `calibration` view of the answer: `true` only when that client owns the running session, never
+who the owner is; older backends reject the field ([wizard session additions](#wizard-session-additions-0430)). Persistence uses
 its native unique ID internally, so an entity rename retains its assignment.
 Clients must use the new entity ID after a rename; the old request target is invalid.
 
