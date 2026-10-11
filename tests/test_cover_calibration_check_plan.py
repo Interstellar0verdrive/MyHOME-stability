@@ -105,3 +105,12 @@ def test_a_run_too_short_moves_to_the_nearest_check_the_model_can_make():
     for direction, target in (("sideways", None), ("closing", 250), ("closing", float("nan"))):
         with pytest.raises(ProfileError, match="invalid_check"):
             CalibrationCheck.plan_possible(slow, 200, direction, target)
+
+
+def test_a_model_that_can_make_no_check_at_all_is_refused_in_every_direction():
+    """L-78: a full run of about a second (up and down) leaves no fraction of 10-90 % with a second of curtain either
+    way: no nearest check exists, so `invalid_check` stays, and the session lets the calibration be saved without one."""
+    brief = CoverMotionModel(opening_time_s=1.0, closing_time_s=1.0, slat_time_s=0)
+    for direction in (None, "opening", "closing"):
+        with pytest.raises(ProfileError, match="invalid_check"):
+            CalibrationCheck.plan_possible(brief, 200, direction)

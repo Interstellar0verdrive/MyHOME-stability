@@ -494,6 +494,41 @@ async def test_the_owner_publishes_its_screen_to_readers_without_a_transition(ha
     assert session.view()["screen"] == screen
 
 
+async def test_a_screen_too_large_to_travel_with_every_view_is_refused(hass, plant, hass_ws_client):
+    """L-25: `show` takes a small description only (2048 bytes of JSON): a larger one fails the schema, nothing kept."""
+    import asyncio
+
+    register_api(hass)
+    plant.gateways[0].async_queue_calibration = lambda *args: None
+    entry_id = plant.entries[0].entry_id
+
+    async def answer(client, message_id):
+        while (message := await asyncio.wait_for(client.receive_json(), 2))["id"] != message_id or message["type"] != "result":
+            pass
+        return message
+
+    async def event(client):
+        while (message := await asyncio.wait_for(client.receive_json(), 2))["type"] != "event":
+            pass
+        return message["event"]
+
+    with patch("aiohttp.connector.DefaultResolver", ThreadedResolver):
+        owner = await hass_ws_client(hass)
+        await owner.send_json({"id": 1, "type": WS_START, "entry_id": entry_id, "entity_id": plant.records[0].entity_id,
+                               "revision": 0, "client_id": "tab-one"})
+        state = await event(owner)
+        session = get_store(hass, entry_id).calibration
+        show = {"type": WS_ACTION, "entry_id": entry_id, "session_id": session.id, "attachment": state["attachment"], "action": "show"}
+        await owner.send_json({"id": 2, **show, "screen": {"code": "A-12", "local": {"note": "x" * 2100}}})
+        refused = await answer(owner, 2)
+        assert not refused["success"] and refused["error"]["code"] == "invalid_format"
+        assert "screen" not in session.view(), "nothing kept"
+        await owner.send_json({"id": 3, **show, "screen": {"code": "A-12", "path": "A"}})
+        assert (await answer(owner, 3))["result"]["screen"] == {"code": "A-12", "path": "A"}, "a small one goes through"
+        await owner.close()
+        session.close()
+
+
 async def test_a_new_owner_does_not_inherit_the_previous_owner_s_screen(hass, recovering):
     """Review nit: on a claim the old owner's screen goes; the new owner's first `show` is what readers see."""
     cal, session = recovering, recovering.session
