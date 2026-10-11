@@ -38,6 +38,9 @@ const STAGES_BEFORE_SESSION = ["choose", "path", "profile", "current", "case", "
  * Stop is never held back.
  */
 export const CONFIRM_GUARD_MS = 700;
+/** L-108: what counts as the user touching the page, and how long this tab's own press may wait for its answer. */
+const TOUCHES = ["pointerdown", "touchstart", "mousedown", "click", "keydown"];
+const OWN_PRESS_MS = 10000;
 /** L-25: the choices made on the owner's own screens that its readers need to show the same step. */
 const SHARED_FLAGS = ["ackLift", "ackAscent", "ackDescent", "ackReadings", "invalidRun", "discarded", "misbehaved", "travelTyped",
   // L-103: every other choice a session screen depends on (the check skipped, the gap's origin, the travel kept).
@@ -75,6 +78,8 @@ export class CalibrationWizard {
     clearInterval(this._tickTimer); this._tickTimer = null;
     if (this._onVisible) document.removeEventListener("visibilitychange", this._onVisible);
     this._onVisible = null;
+    if (this._onTouch) for (const type of TOUCHES) document.removeEventListener(type, this._onTouch, true);
+    this._onTouch = null;
     this._moreObserver?.disconnect();
     this._moreObserver = null;
     this._moreUpdate = null;
@@ -117,6 +122,12 @@ export class CalibrationWizard {
     this._undock = dockBar(this._root);
     this._theme();
     this._root.addEventListener("click", (event) => this._click(event));
+    // L-108: when the user last touched the page (the wizard opens from a tap too): the hold after a change of the bar
+    // only follows a recent touch, or this tab's own press.
+    this._touchedAt = performance.now();
+    this._ownPress = null;
+    this._onTouch = () => { this._touchedAt = performance.now(); };
+    for (const type of TOUCHES) document.addEventListener(type, this._onTouch, true);
     this._root.addEventListener("keydown", (event) => this._keydown(event));
     this._root.addEventListener("input", (event) => this._input(event));
     this._root.addEventListener("change", (event) => this._change(event));
@@ -501,7 +512,7 @@ export class CalibrationWizard {
       // (Stop when the motor stops by itself) holds nothing back: the end stop never flickers disabled.
       const ids = screen.actions.map((action) => `${action.id}|${action.label}|${action.kind}`);
       const readOnly = JSON.stringify(readOnlyKey);
-      if (!this._actionIds || readOnly !== this._readOnlySignature || ids.some((id) => !this._actionIds.includes(id))) this._guard();
+      if (!this._actionIds || readOnly !== this._readOnlySignature || ids.some((id) => !this._actionIds.includes(id))) this._guardIfTouched();
       this._actionIds = ids;
       this._readOnlySignature = readOnly;
       const focused = column.contains(root.getRootNode().activeElement) ? root.getRootNode().activeElement.dataset.wiz : null;
@@ -549,6 +560,18 @@ export class CalibrationWizard {
       const label = takeLabel(screen.readOnly);
       if (take.textContent !== label) take.textContent = label;
     }
+  }
+
+  /**
+   * L-108: the hold protects only a tap meant for the old bar: it follows a touch of the page in the last
+   * CONFIRM_GUARD_MS, or this tab's own press (until the change that answers it, within OWN_PRESS_MS). A bar changed by
+   * data alone (the owner's bar moved on by Home Assistant, a reader following, a step entered by a timer) is enabled
+   * at once. The hold while a request is in flight (click → answer) is separate and unchanged.
+   */
+  _guardIfTouched() {
+    const now = performance.now(), own = this._ownPress != null && now - this._ownPress < OWN_PRESS_MS;
+    if (own && !this._gateway?.status.busy) this._ownPress = null;
+    if (own || now - (this._touchedAt ?? -Infinity) < this._guardMs) this._guard();
   }
 
   /** Hold the confirming buttons for CONFIRM_GUARD_MS, then draw them enabled again. */
@@ -694,6 +717,7 @@ export class CalibrationWizard {
     const button = event.target.closest("button[data-wiz]");
     if (!button || button.disabled) return;
     event.preventDefault();
+    this._ownPress = performance.now();
     this._act(button.dataset.wiz);
   }
 

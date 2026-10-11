@@ -3029,6 +3029,32 @@ test("S-01 after the lift-off run stopped before ② says how to redo it; other 
   assert.equal(body("half_open"), translations.en.wiz_T577, "R-7: our words, the maintainer's text left as it was");
 });
 
+test("L-108: a bar changed by data alone, with no recent touch, is enabled at once; right after a touch it waits", async () => {
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const view = { phase: "briefing", step: "lift", values: {}, screen: { code: "A-06", path: "A", scope: null, local: {} } };
+  for (const touched of [false, true]) {
+    reset();
+    const { backend, tab, wiz, code } = await mount({ session: resumed(view), guardMs: 700 });
+    tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
+    assert.equal(code(), "A-06");
+    await wait(720);
+    // Home Assistant moves the session on (a timer, another device): this page touched just now, or not at all.
+    if (touched) document.body.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    Object.assign(backend.session, { phase: "briefing", step: "half_open", reading_kind: "half_open" });
+    backend.emit(); await tick(6);
+    assert.equal(code(), "A-15");
+    const primary = wiz().querySelector(".wiz-actions .wiz-action.primary");
+    if (!touched) {
+      assert.equal(primary.disabled, false, "no recent touch: enabled at once");
+      assert.equal(primary.classList.contains("is-settling"), false);
+    } else {
+      assert.equal(primary.disabled, true, "a touch 0 ms ago: the tap was meant for the old bar, held back");
+      await wait(720); await tick();
+      assert.equal(primary.isConnected ? primary.disabled : wiz().querySelector(".wiz-actions .wiz-action.primary").disabled, false);
+    }
+  }
+});
+
 test("when the motor stops by itself on A-05 the end stop does not flicker disabled", async () => {
   const { backend, tab, wiz, code, press } = await mount({ guardMs: 700 });
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
