@@ -2370,22 +2370,35 @@ const interrupted = (extra = {}) => resumed({ phase: "interrupted", reason: "sto
 const cancels = (backend) => backend.calls.filter((message) => message.action === "cancel").length;
 const claims = (backend) => backend.subscriptions.filter((message) => message.type === "myhome/cover_calibration/resume" && message.claim).length;
 
-test("L-10: S-01 of an interrupted session cancels it, also from a tab that only reads it", async () => {
-  const { backend, tab, wiz, code, actions } = await mount({ session: interrupted(), owner: false });
+test("L-113: a reader of an interrupted session never restarts or cancels it: the reader's bar, Take control only while it can be claimed", async () => {
+  const { backend, tab, wiz, code, panel } = await mount({ session: interrupted(), owner: false });
   tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
   assert.equal(code(), "S-01");
-  const buttons = [...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((button) => [button.dataset.wiz, button.className.replace("wiz-action ", "")]);
-  assert.deepEqual(buttons, [["start-over", "primary"], ["close", "secondary"], ["abort", "danger-outline"]], "«Cancel the measurement», outlined red (L-47)");
-  assert.equal(wiz().querySelector('[data-wiz="abort"]').textContent, "Cancel the measurement");
+  const bar = () => [...wiz().querySelectorAll(".wiz-actions .wiz-action, .wiz-actions .wiz-take")].map((button) => button.dataset.wiz);
+  assert.deepEqual(bar(), ["take", "close"], "the note, Take control and «Back to the list»: no Start over, no Cancel the measurement");
+  assert.ok(wiz().querySelector(".wiz-readonly-note"));
+  assert.ok(wiz().querySelector(".wiz-head .wiz-unfollow"), "the header keeps «Stop following»");
+  // Even sent by other means, Start over and Cancel do nothing for a reader: no claim, no cancel.
+  const wizard = panel._calibrationTab._wizard;
+  await wizard._act("start-over"); await wizard._act("abort"); await tick(8);
+  assert.deepEqual([claims(backend), cancels(backend)], [0, 0]);
+  // Take control: now the owner, its own bar (Start over, Back to the list, Cancel the measurement); cancelling works.
+  wiz().querySelector('[data-wiz="take"]').click(); await tick();
+  wiz().querySelector('[data-wiz="take"]').click(); await tick(8);
+  assert.equal(wiz().querySelector(".wiz-readonly"), null);
+  assert.deepEqual(bar(), ["start-over", "close", "abort"]);
   wiz().querySelector('[data-wiz="abort"]').click(); await tick(12);
-  assert.equal(claims(backend), 1, "control taken first (a reader cannot cancel)");
   assert.equal(cancels(backend), 1);
-  assert.equal(backend.session.phase, "cancelled", "the cover is free");
-  assert.equal(wiz(), null, "back to the list");
-  assert.equal(tab().querySelector('[data-action="cal-tab-session"]'), null, "no session left in the list");
-  void actions;
+  assert.equal(backend.session.phase, "cancelled");
+  // A session Home Assistant no longer keeps (lease run out): no Take control, only the way back.
+  reset();
+  const gone = await mount({ session: interrupted(), owner: false });
+  const view = gone.backend.view;
+  gone.backend.view = (extra = {}) => view({ recoverable: false, ...extra });
+  gone.tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
+  const goneBar = [...gone.wiz().querySelectorAll(".wiz-actions .wiz-action, .wiz-actions .wiz-take")].map((button) => button.dataset.wiz);
+  assert.deepEqual(goneBar, ["close"], "not claimable: no Take control");
 });
-
 test("R-2: a refused cancel on «Start over» leaves the wizard alive: the next views still reach it", async () => {
   const { backend, tab, wiz, code, panel } = await mount({ session: interrupted() });
   tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
@@ -2430,16 +2443,45 @@ test("S-2: «Start over» while «Cancel the measurement» is still on its way: 
   assert.equal(wiz(), null, "the wizard closed");
 });
 
+for (const [label, owner] of [["the owner starts again, its reader", false], ["a reader that took control starts again, the former owner", true]]) {
+  test(`L-113: ${label} is not left on «cancelled from another device»: it can follow the new session`, async () => {
+    const { backend, tab, wiz, code, title, panel } = await mount({ session: resumed({ phase: "briefing", step: "half_open", reading_kind: "half_open" }), owner });
+    tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
+    // The other device guides (or takes control: this tab reads), then cancels and starts a new session on the same cover.
+    const view = backend.view;
+    backend.view = (extra = {}) => view({ owner: false, read_only: true, ...extra });
+    backend.emit(); await tick(6);
+    backend.session.phase = "cancelled"; backend.emit(); await tick(6);
+    assert.equal(title(), translations.en.wiz_T542, "first: cancelled from another device");
+    // A plain cancel: the event comes, no new session: the screen stays.
+    backend.sessionEvent(); await new Promise((resolve) => setTimeout(resolve, 300)); await tick(6);
+    assert.equal(title(), translations.en.wiz_T542);
+    backend.replaceSession(resumed({ session_id: "session-2", phase: "briefing", step: "home", sequence: 1 }));
+    backend.sessionEvent(); await new Promise((resolve) => setTimeout(resolve, 300)); await tick(6);
+    assert.equal(code(), "S-01r");
+    assert.equal(title(), "The calibration was restarted from another device.");
+    assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((button) => [button.dataset.wiz, button.textContent]),
+      [["follow-new", "Follow session"], ["close", "Back to the list"]]);
+    // «Follow session»: this tab joins the new session as a reader (no claim).
+    wiz().querySelector('[data-wiz="follow-new"]').click(); await tick(8);
+    const resume = backend.subscriptions.filter((message) => message.type === "myhome/cover_calibration/resume").at(-1);
+    assert.deepEqual([resume.session_id, !!resume.claim], ["session-2", false]);
+    assert.ok(wiz().querySelector(".wiz-readonly"), "a reader of the new session");
+    assert.notEqual(code(), "S-01r");
+    void panel;
+  });
+}
+
 test("L-10: Start over and Abandon from S-01 cancel the interrupted session first; the exit of a live one cancels it", async () => {
   // Start over: the session is cancelled, then the wizard starts again from «Before you begin».
-  const a = await mount({ session: interrupted(), owner: false });
+  const a = await mount({ session: interrupted() });
   a.tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
   a.wiz().querySelector('[data-wiz="start-over"]').click(); await tick(12);
-  assert.deepEqual([claims(a.backend), cancels(a.backend), a.backend.session.phase], [1, 1, "cancelled"]);
+  assert.deepEqual([cancels(a.backend), a.backend.session.phase], [1, "cancelled"], "the owner's Start over (L-113: a reader has none)");
   assert.ok(a.wiz(), "the wizard stays open to start again");
   // Abandon (the header's exit) on S-01: cancelled too, not only the view closed.
   reset();
-  const b = await mount({ session: interrupted(), owner: false });
+  const b = await mount({ session: interrupted() });
   b.tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
   // (S-01's header has «Close»; «Abandon the calibration» is the same exit, as Escape reaches it.)
   await b.panel._calibrationTab._wizard._act("exit"); await tick(12);

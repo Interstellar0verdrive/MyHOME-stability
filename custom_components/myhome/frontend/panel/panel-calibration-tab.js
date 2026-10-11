@@ -294,8 +294,13 @@ export class CalibrationTab {
         // once (a burst of transitions makes one read), instead of at the next 15 s refresh. Only while the list shows:
         // the way back to it reads everything again anyway.
         if (event.kind === "session") {
-          if (this._mode.kind !== "list") return;
           clearTimeout(row.sessionTimer);
+          // L-113: an open wizard left behind by another device (its session cancelled there) learns of the new one.
+          if (this._mode.kind === "wizard") {
+            row.sessionTimer = setTimeout(() => { if (this._current(generation)) this._wizard?.gatewaySession?.(entryId); }, SESSION_READ_MS);
+            return;
+          }
+          if (this._mode.kind !== "list") return;
           row.sessionTimer = setTimeout(() => this._read(entryId, generation), SESSION_READ_MS);
           return;
         }

@@ -282,6 +282,9 @@ export function createFakeBackend({ language = "en", inventory = coverInventory(
   };
   backend.hass = hass;
   /** Home Assistant wrote the profiles store: a new revision is announced and the panel reads the overview again. */
+  // L-107/L-113: a session of the gateway changed (Home Assistant's empty `session` event); a new session in its place.
+  backend.sessionEvent = () => profilesListener?.({ entry_id: overview.entry_id, revision: overview.revision, kind: "session" });
+  backend.replaceSession = (next) => { session = next; };
   backend.publishOverview = () => { overview.revision += 1; profilesListener?.({ entry_id: overview.entry_id, revision: overview.revision }); };
   return backend;
 }

@@ -520,7 +520,7 @@ export class CalibrationWizard {
       // L-58: a reader's bar: one warning note saying who guides the calibration, then «Prendi il controllo».
       // L-67: the only action a reader has is the primary of its bar, armed or not.
       column.innerHTML = `${screen.readOnly ? `<div class="wiz-readonly"><p class="cal-note is-warning wiz-readonly-note">${esc(screen.readOnly.text)}</p>
-          <button type="button" class="wiz-take primary" data-wiz="take">${esc(takeLabel(screen.readOnly))}</button>
+          ${screen.readOnly.take ? `<button type="button" class="wiz-take primary" data-wiz="take">${esc(takeLabel(screen.readOnly))}</button>` : ""}
           ${screen.readOnly.consequence ? `<p class="muted">${esc(screen.readOnly.consequence)}</p>` : ""}</div>` : ""}
         ${(() => {
           const one = (action) => action.kind === "status" || action.kind === "state"
@@ -829,6 +829,14 @@ export class CalibrationWizard {
         name: saved.name ?? item.profile?.name ?? null });
       return;
     }
+    // L-113: the new session another device started on this cover: followed here as a reader.
+    if (id === "follow-new") {
+      const session = local.restarted, item = this._item();
+      if (!session || !item) return;
+      local.restarted = null;
+      this._resume(session, item);
+      return this._render();
+    }
     if (id === "restart") {
       // G4-6: the guided session has no repeat verb: this attempt is cancelled (nothing was saved) and the times start
       // again from the briefing, with the cover to be closed.
@@ -842,6 +850,8 @@ export class CalibrationWizard {
       });
       return;
     }
+    // L-113: restarting or cancelling is the owner's; a reader claims first (its bar has neither).
+    if ((id === "abort" || id === "start-over") && gateway?.view?.read_only && !gateway.preview) return;
     if (id === "abort") { this._abortDead(); return; }
     if (id === "start-over" && !(await this._abortDead({ stay: true }))) return;
     if (id === "start-over") {
@@ -1070,6 +1080,26 @@ export class CalibrationWizard {
     this._newGateway("live").resume({ ...this._liveContext(), session });
   }
 
+  /**
+   * L-113: a session of this tab's gateway changed (L-107's event). A tab left on «annullata da un altro dispositivo»
+   * reads its cover: a new session on it, not the one that ended, means the other device started again: the tab says
+   * so and offers to follow it, instead of a dead end. A plain cancel (no new session) keeps its screen.
+   */
+  async gatewaySession(entryId) {
+    const local = this._local, item = this._item(), context = this._context;
+    if (!this._root || local.stage !== "cancelled" || !item || item.entry.entry_id !== entryId) return;
+    const generation = this._generation;
+    let session = null;
+    try {
+      session = (await context.hass.callWS({ type: "myhome/cover_profiles/read", entry_id: entryId, entity_id: item.cover.entity_id }))?.calibration;
+    } catch { return; }
+    if (generation !== this._generation || this._local.stage !== "cancelled" || !session) return;
+    if (["saved", "cancelled"].includes(session.phase) || session.session_id === local.endedSession || session.entity_id !== item.cover.entity_id) return;
+    local.stage = "restarted";
+    local.restarted = session;
+    this._render();
+  }
+
   _baseValues(item) {
     const effective = item.cover.effective || {};
     return { opening_time: effective.opening?.value, closing_time: effective.closing?.value, slat_time_s: effective.slat_time_s?.value ?? 0,
@@ -1133,6 +1163,8 @@ export class CalibrationWizard {
     if (view && !view.preview && view.read_only && view.phase === "cancelled") {
       this._dropGateway();
       local.stage = "cancelled";
+      // L-113: the session that ended, to tell a restart (a new session on this cover) from a plain cancel.
+      local.endedSession = view.session_id ?? null;
       this._render();
       return;
     }
@@ -1367,6 +1399,8 @@ export class CalibrationWizard {
   _exit() {
     // L-10: an interrupted session still open in Home Assistant is cancelled on the way out, not left holding the cover.
     const view = this._gateway?.view;
+    // L-113: a reader's exit only stops following (it never cancels another device's session).
+    if (view?.read_only && !this._gateway.preview) { this._finish(); return; }
     if (this._gateway && !this._gateway.preview && view?.phase === "interrupted" && view.recoverable) { this._abortDead(); return; }
     if (STAGES_BEFORE_SESSION.includes(this._local.stage) || !this._sessionOpen()) { this._finish(); return; }
     const dialog = this._frame.querySelector(".wiz-dialog"), { t } = this._context;

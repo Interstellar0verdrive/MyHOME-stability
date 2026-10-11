@@ -273,6 +273,9 @@ export function buildScreen(ctx) {
   // L-40: a reader whose session was cancelled where it was guided: its own end, with «Chiudi» only.
   if (stage === "cancelled") return finish(Object.assign(screen, { code: "S-01", phase: screen.phase, title: t("wiz_T542"), body: t("wiz_T543"),
     discard: false, actions: [{ id: "close", label: t("wiz_T390"), kind: "primary" }] }));
+  // L-113: the device that guided it started again on this cover: no dead end, the new session can be followed.
+  if (stage === "restarted") return finish(Object.assign(screen, { code: "S-01r", phase: screen.phase, title: t("wiz_T582"), body: "",
+    discard: false, actions: [{ id: "follow-new", label: t("wiz_T579"), kind: "primary" }, { id: "close", label: t("wiz_T390"), kind: "secondary" }] }));
 
   // L-38: before a times-only measurement the cover is closed by Home Assistant, as path A's first positioning (C-04).
   if (local.homing && !view) {
@@ -1190,11 +1193,18 @@ function finalize(screen, ctx) {
   // run out, its state replaces Stop), and the reader keeps exactly the owner's decision.
   // The close Home Assistant makes before a session (L-38, no session yet) is a movement too.
   if (!IN_MOTION(view, status) && !(local.homing && !view)) screen.actions = screen.actions.filter((action) => action.id !== "stop");
-  if (view?.read_only && !ENDED.includes(view.phase)) {
+  // L-113: a reader never restarts or cancels: on an interrupted session it keeps the reader's bar too, with «Torna
+  // all'elenco»; «Prendi il controllo» only while Home Assistant keeps the session (`recoverable`, within its lease).
+  // «Ricomincia» and «Annulla la misurazione» are the owner's, after a claim.
+  const readerEnded = !!view?.read_only && !view.preview && view.phase === "interrupted";
+  if (view?.read_only && (!ENDED.includes(view.phase) || readerEnded)) {
+    const claimable = !readerEnded || !!view.recoverable;
     // L-58b: the armed confirmation counts its seconds down (`left`) before it goes back.
-    screen.readOnly = { text: t("wiz_T263"), take: status.confirmTake ? t("calConfirmTakeControl") : t("wiz_T264"),
-      left: status.confirmTake && status.confirmLeft ? status.confirmLeft : null, consequence: status.confirmTake ? t("wiz_T265") : null };
-    screen.actions = screen.actions.filter((action) => action.id === "stop");
+    screen.readOnly = { text: t("wiz_T263"), take: !claimable ? null : status.confirmTake ? t("calConfirmTakeControl") : t("wiz_T264"),
+      left: status.confirmTake && status.confirmLeft ? status.confirmLeft : null, consequence: claimable && status.confirmTake ? t("wiz_T265") : null };
+    screen.actions = screen.actions.filter((action) => action.id === "stop" || (readerEnded && action.id === "close"));
+    // The header keeps the reader's «Smetti di seguire».
+    if (readerEnded) screen.discard = true;
     screen.links = [];
     if (screen.field) screen.field = { ...screen.field, disabled: true };
   }
