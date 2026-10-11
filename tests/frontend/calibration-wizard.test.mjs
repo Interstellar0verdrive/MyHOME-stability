@@ -1330,6 +1330,21 @@ test("L-106: our texts never speak in the first person plural (Italian and Engli
   assert.equal(translations.it.wiz_T196.split("\n**")[1], "Nel dubbio conviene ripartire da zero, con il percorso completo: tempi e letture col metro e alla fine potrai aggiungere il perfezionamento.");
 });
 
+test("L-112: the calibration's buttons ease their paint (200 ms, ease-out) between states, never their size; instant with reduced motion", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  const scope = ":is(.wiz-actions, .wiz-head, .cal-tab-top, .cal-row-actions, .cal-block-action, .cal-page-session) button";
+  const eased = css.match(/@media \(prefers-reduced-motion: no-preference\) \{\s*([^{]+)\{\s*transition: ([^;]+);\s*\}\s*\}/);
+  assert.ok(eased, "behind the no-preference guard");
+  assert.equal(eased[1].trim(), scope, "the wizard's bar and header, the list's head, rows and blocks, a cover's page");
+  const properties = eased[2].split(",").map((part) => part.trim());
+  assert.deepEqual(properties, ["background-color 200ms ease-out", "border-color 200ms ease-out", "color 200ms ease-out", "opacity 200ms ease-out", "box-shadow 200ms ease-out"]);
+  assert.ok(!/width|height|transform|outline|padding|margin|inset|top|left/.test(eased[2]), "no size, layout, transform or focus ring");
+  assert.ok(css.includes(`@media (prefers-reduced-motion: reduce) {\n  ${scope} { transition: none; }\n}`), "reduced motion: instant");
+  // The behaviour stays instant: the disabled attribute and the hold are untouched (L-108's rules), only the paint eases.
+  const recolouring = css.indexOf("/* L-95 (Figma");
+  assert.ok(recolouring < 0 || css.indexOf(eased[0]) < recolouring, "with the generic button rules, not in L-95's block (revertable alone)");
+});
+
 test("R-8: what the tab hangs on the window is removed when it is cleared, and added once when it shows again", async () => {
   const view = dom.window;
   const active = new Map();

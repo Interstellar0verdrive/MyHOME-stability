@@ -77,6 +77,17 @@ button:hover, a.button:hover { border-color: var(--panel-accent); background: va
 button:active, a.button:active { transform: translateY(1px); }
 /* L-65: one cursor wherever a button cannot be pressed, the passing state (`is-settling`) included. */
 button:disabled { opacity: .55; cursor: not-allowed; transform: none; }
+/* L-112: the calibration's buttons (wizard bar and header, list head, rows, blocks, a cover's page) change state with a
+   200 ms ease-out of their paint only (fill, border, text, opacity, shadow): the disabled attribute still flips at once,
+   no size, layout or transform eases, the focus ring appears at once. A button drawn new starts in its state (no
+   transition on a first paint); with reduced motion every change is instant. */
+@media (prefers-reduced-motion: no-preference) {
+  :is(.wiz-actions, .wiz-head, .cal-tab-top, .cal-row-actions, .cal-block-action, .cal-page-session) button {
+    transition: background-color 200ms ease-out, border-color 200ms ease-out, color 200ms ease-out, opacity 200ms ease-out, box-shadow 200ms ease-out; }
+}
+@media (prefers-reduced-motion: reduce) {
+  :is(.wiz-actions, .wiz-head, .cal-tab-top, .cal-row-actions, .cal-block-action, .cal-page-session) button { transition: none; }
+}
 button.primary { background: var(--panel-accent); color: var(--text-primary-color, #fff); border-color: var(--panel-accent); box-shadow: 0 4px 12px -5px color-mix(in srgb, var(--panel-accent) 70%, transparent); }
 button.primary:hover { background: var(--panel-accent-strong); border-color: var(--panel-accent-strong); }
 button.ghost { background: transparent; border-color: transparent; }
