@@ -273,6 +273,9 @@ export function buildScreen(ctx) {
   // L-40: a reader whose session was cancelled where it was guided: its own end, with «Chiudi» only.
   if (stage === "cancelled") return finish(Object.assign(screen, { code: "S-01", phase: screen.phase, title: t("wiz_T542"), body: t("wiz_T543"),
     discard: false, actions: [{ id: "close", label: t("wiz_T390"), kind: "primary" }] }));
+  // Review N1: the restarted session was gone by the time it was followed (its lease ran out): said as such.
+  if (stage === "restart-expired") return finish(Object.assign(screen, { code: "S-06", phase: screen.phase, title: t("wiz_T259"), body: t("wiz_T260"),
+    discard: false, actions: [{ id: "close", label: t("wiz_T390"), kind: "primary" }] }));
   // L-113: the device that guided it started again on this cover: no dead end, the new session can be followed.
   if (stage === "restarted") return finish(Object.assign(screen, { code: "S-01r", phase: screen.phase, title: t("wiz_T582"), body: "",
     discard: false, actions: [{ id: "follow-new", label: t("wiz_T579"), kind: "primary" }, { id: "close", label: t("wiz_T390"), kind: "secondary" }] }));

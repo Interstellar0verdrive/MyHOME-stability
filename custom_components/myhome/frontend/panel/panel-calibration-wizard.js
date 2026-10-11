@@ -41,6 +41,8 @@ export const CONFIRM_GUARD_MS = 700;
 /** L-108: what counts as the user touching the page, and how long this tab's own press may wait for its answer. */
 const TOUCHES = ["pointerdown", "touchstart", "mousedown", "click", "keydown"];
 const OWN_PRESS_MS = 10000;
+/** Review N1: a new session on the cover within this time of ours ending, this tab still on that screen, is a restart. */
+const RESTART_WINDOW_MS = 600000;
 /** L-25: the choices made on the owner's own screens that its readers need to show the same step. */
 const SHARED_FLAGS = ["ackLift", "ackAscent", "ackDescent", "ackReadings", "invalidRun", "discarded", "misbehaved", "travelTyped",
   // L-103: every other choice a session screen depends on (the check skipped, the gap's origin, the travel kept).
@@ -570,7 +572,10 @@ export class CalibrationWizard {
    */
   _guardIfTouched() {
     const now = performance.now(), own = this._ownPress != null && now - this._ownPress < OWN_PRESS_MS;
-    if (own && !this._gateway?.status.busy) this._ownPress = null;
+    // Review N3: a start is answered before the motor runs (`starting_*`): the press still holds the bar that comes
+    // with the running motor (②), still within OWN_PRESS_MS.
+    const starting = /^starting_/.test(this._gateway?.view?.phase || "");
+    if (own && !this._gateway?.status.busy && !starting) this._ownPress = null;
     if (own || now - (this._touchedAt ?? -Infinity) < this._guardMs) this._guard();
   }
 
@@ -831,9 +836,20 @@ export class CalibrationWizard {
     }
     // L-113: the new session another device started on this cover: followed here as a reader.
     if (id === "follow-new") {
-      const session = local.restarted, item = this._item();
-      if (!session || !item) return;
+      const item = this._item(), restarted = local.restarted;
+      if (!restarted || !item) return;
+      // Review N1: read again right before following: a session already gone shows its end (cancelled or expired).
+      let session = null;
+      try {
+        session = (await this._context.hass.callWS({ type: "myhome/cover_profiles/read", entry_id: item.entry.entry_id, entity_id: item.cover.entity_id }))?.calibration;
+      } catch { /* As gone. */ }
+      if (local.stage !== "restarted" || local.restarted !== restarted) return;
       local.restarted = null;
+      const live = session && session.session_id === restarted.session_id && !["saved", "cancelled", "expired"].includes(session.phase);
+      if (!live) {
+        local.stage = session?.reason === "expired" || session?.phase === "expired" ? "restart-expired" : "cancelled";
+        return this._render();
+      }
       this._resume(session, item);
       return this._render();
     }
@@ -1088,6 +1104,9 @@ export class CalibrationWizard {
   async gatewaySession(entryId) {
     const local = this._local, item = this._item(), context = this._context;
     if (!this._root || local.stage !== "cancelled" || !item || item.entry.entry_id !== entryId) return;
+    // Review N1: only a session started soon after ours ended, while this tab stayed on that screen, is a restart; a
+    // calibration started later (another device, hours after) is not this one going on.
+    if (Date.now() - (local.endedAt ?? 0) > RESTART_WINDOW_MS) return;
     const generation = this._generation;
     let session = null;
     try {
@@ -1169,6 +1188,7 @@ export class CalibrationWizard {
       local.stage = "cancelled";
       // L-113: the session that ended, to tell a restart (a new session on this cover) from a plain cancel.
       local.endedSession = view.session_id ?? null;
+      local.endedAt = Date.now();
       this._render();
       return;
     }

@@ -2492,6 +2492,36 @@ test("review S1: «Esci senza salvare?» open, another device takes control, the
   assert.notEqual(backend.session.phase, "cancelled");
 });
 
+test("review N1: a new session long after ours ended is not a restart; a restarted session gone before it is followed shows its end", async () => {
+  const later = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const leftBehind = async () => {
+    const context = await mount({ session: resumed({ phase: "briefing", step: "half_open", reading_kind: "half_open" }), owner: false });
+    context.tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
+    context.backend.session.phase = "cancelled"; context.backend.emit(); await tick(6);
+    assert.equal(context.title(), translations.en.wiz_T542);
+    return context;
+  };
+  // 11 minutes after ours ended, a calibration started on the same cover is someone else's: the screen stays.
+  const late = await leftBehind();
+  late.panel._calibrationTab._wizard._local.endedAt -= 11 * 60 * 1000;
+  late.backend.replaceSession(resumed({ session_id: "session-2", phase: "briefing", step: "home", sequence: 1 }));
+  late.backend.sessionEvent(); await later(300); await tick(6);
+  assert.equal(late.title(), translations.en.wiz_T542, "not «restarted»");
+  // Restarted, then gone before «Follow session»: its end, with only the way back.
+  for (const [phase, code, title] of [["expired", "S-06", translations.en.wiz_T259], ["cancelled", "S-01", translations.en.wiz_T542]]) {
+    reset();
+    const gone = await leftBehind();
+    gone.backend.replaceSession(resumed({ session_id: "session-2", phase: "briefing", step: "home", sequence: 1 }));
+    gone.backend.sessionEvent(); await later(300); await tick(6);
+    assert.equal(gone.code(), "S-01r");
+    gone.backend.session.phase = phase;
+    gone.wiz().querySelector('[data-wiz="follow-new"]').click(); await tick(8);
+    assert.deepEqual([gone.code(), gone.title()], [code, title], `${phase}: its end`);
+    assert.deepEqual([...gone.wiz().querySelectorAll(".wiz-actions .wiz-action")].map((button) => button.dataset.wiz), ["close"]);
+    assert.equal(gone.backend.subscriptions.filter((message) => message.type === "myhome/cover_calibration/resume" && message.session_id === "session-2").length, 0, "nothing joined");
+  }
+});
+
 test("L-10: Start over and Abandon from S-01 cancel the interrupted session first; the exit of a live one cancels it", async () => {
   // Start over: the session is cancelled, then the wizard starts again from «Before you begin».
   const a = await mount({ session: interrupted() });
@@ -2640,6 +2670,28 @@ test("L-103: whichever step the owner shows, a reader that takes control lands o
     const published = b.backend.calls.filter((message) => message.action === "show").at(-1)?.screen;
     assert.equal(published?.code, step.code, `${step.code}: and publishes it as its own`);
   }
+});
+
+test("review N2: on taking control a reader adopts the owner's screen whole: a choice the owner has cleared is not kept", async () => {
+  const view = { phase: "briefing", step: "half_open", reading_kind: "half_open", values: { opening_time: 22, closing_time: 21 },
+    screen: { code: "A-15", path: "A", scope: null, local: { ackLift: true, ackAscent: true } } };
+  const { backend, tab, wiz, code, press } = await mount({ session: resumed(view) });
+  tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
+  assert.equal(code(), "A-15");
+  await press("ack:descent");
+  assert.equal(code(), "A-16", "this tab, owner, acknowledged the descent");
+  // Another device takes control and shows A-15 (the descent not acknowledged there): this tab reads it.
+  const owned = backend.view;
+  backend.session.screen = { code: "A-15", path: "A", scope: null, local: { ackLift: true, ackAscent: true, ackDescent: null } };
+  backend.view = (extra = {}) => owned({ owner: false, read_only: true, ...extra });
+  backend.emit(); await tick(6);
+  assert.equal(code(), "A-15", "the reader shows the owner's step");
+  // This tab takes control back: the owner's screen is adopted whole, its own stale acknowledgement is dropped.
+  backend.view = owned;
+  wiz().querySelector('[data-wiz="take"]').click(); await tick();
+  wiz().querySelector('[data-wiz="take"]').click(); await tick(8);
+  assert.equal(wiz().querySelector(".wiz-readonly"), null);
+  assert.equal(code(), "A-15", "not A-16 from its own earlier acknowledgement");
 });
 
 test("L-28: a reopened session keeps the path it was started on, so a path A on a cover with a profile ends on A-34 with fine-tuning", async () => {
@@ -3130,6 +3182,30 @@ test("L-108: a bar changed by data alone, with no recent touch, is enabled at on
       assert.equal(primary.isConnected ? primary.disabled : wiz().querySelector(".wiz-actions .wiz-action.primary").disabled, false);
     }
   }
+});
+
+test("review N3: the bar of a running motor that comes more than 700 ms after this tab's start is still held (②)", async () => {
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const view = { phase: "briefing", step: "lift", values: {}, screen: { code: "A-07", path: "A", scope: null, local: { ackLift: true } } };
+  const { backend, tab, wiz, code, panel } = await mount({ session: resumed(view), guardMs: 700 });
+  tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
+  assert.equal(code(), "A-07");
+  await wait(720);
+  wiz().querySelector('.wiz-actions [data-wiz="next"]').click(); await tick(6);
+  assert.match(backend.session.phase, /^starting_/, "answered: the motor is starting, not yet running");
+  // The answer may change the bar by itself (Stop held until the session answers, L-77): that change does not use up
+  // the press, the motor is not running yet.
+  const wizard = panel._calibrationTab._wizard;
+  wizard._guardIfTouched();
+  assert.notEqual(wizard._ownPress, null, "the press still counts while the motor starts");
+  await wait(800);
+  // The motor runs (Home Assistant's next view), long after the press: ② appears under the finger that pressed ①.
+  backend.started(); backend.emit(); await tick(6);
+  const lift = wiz().querySelector('.wiz-actions [data-wiz="lift"]');
+  assert.ok(lift, "② is there");
+  assert.equal(lift.disabled, true, "held: the tap may have been meant for ①");
+  await wait(720); await tick();
+  assert.equal(wiz().querySelector('.wiz-actions [data-wiz="lift"]').disabled, false);
 });
 
 test("when the motor stops by itself on A-05 the end stop does not flicker disabled", async () => {
