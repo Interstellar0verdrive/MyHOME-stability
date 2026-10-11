@@ -878,52 +878,6 @@ test("L-95: the wizard's bands and buttons in Figma 937:56699's colours, every o
   host.remove();
 });
 
-test("L-96: the fields of the wizard, the tab and its dialogs read as fields; focus, error and the sort selects keep theirs", () => {
-  const doc = dom.window.document, host = doc.createElement("div");
-  host.innerHTML = `<div class="wiz"><form class="wiz-field"><input name="reading_cm"><input name="bad" aria-invalid="true"></form>
-      <label class="wiz-switch"><input type="checkbox"></label></div>
-    <div class="cal-tab"><label class="cal-compact-sort"><select></select></label><label class="cal-batch-gateway"><select></select></label></div>
-    <dialog class="cal-dialog"><input name="profile_name"></dialog><div class="elsewhere"><input></div>`;
-  doc.body.append(host);
-  const outline = "1px solid color-mix(in srgb, var(--primary-text-color, #182b37) 35%, transparent)";
-  for (const field of host.querySelectorAll('.wiz-field [name="reading_cm"], .cal-batch-gateway select, dialog input')) {
-    assert.equal(winner(field, "border"), outline, field.outerHTML);
-    assert.equal(winner(field, "background-color"), "var(--panel-surface)");
-  }
-  assert.equal(winner(host.querySelector('[aria-invalid="true"]'), "border-color"), "var(--panel-error)", "the error keeps its red");
-  assert.equal(winner(host.querySelector(".cal-compact-sort select"), "border"), "0", "the sort select stays borderless…");
-  assert.equal(winner(host.querySelector(".cal-compact-sort"), "border-color"), "color-mix(in srgb, var(--primary-text-color, #182b37) 35%, transparent)",
-    "…its label is the box, with the same outline");
-  assert.notEqual(winner(host.querySelector(".wiz-switch input"), "border"), outline, "a switch is no field");
-  assert.notEqual(winner(host.querySelector(".elsewhere input"), "border"), outline, "only the calibration's fields");
-  // The keyboard's accent focus is the shell's, unchanged.
-  assert.match(cascadeCss, /input:focus-visible, select:focus-visible \{ outline: none; border-color: var\(--panel-accent\); box-shadow: 0 0 0 3px var\(--panel-accent-soft\); \}/);
-  host.remove();
-});
-
-test("L-95b: red has two classes: the emergency («Ferma la tapparella») filled in every layout, abandoning outlined", () => {
-  const doc = dom.window.document, host = doc.createElement("div");
-  // The Stop of the owner's bar, of a reader's bar and of the landscape column is the same button (`kind: "stop"`).
-  host.innerHTML = `<div class="wiz"><header class="wiz-head"><button class="wiz-discard"></button></header>
-      <div class="wiz-actions"><button class="wiz-action stop"></button><button class="wiz-action danger-outline"></button><button class="wiz-action danger"></button></div>
-      <div class="wiz-readonly"><div class="wiz-actions"><button class="wiz-action stop"></button></div></div>
-      <div class="wiz-dialog"><div class="wiz-dialog-card"><div class="actions"><button class="wiz-leave"></button></div></div></div></div>
-    <dialog class="cal-dialog"><footer class="dialog-foot"><button class="danger cal-abort-confirm"></button></footer></dialog>`;
-  doc.body.append(host);
-  for (const stop of host.querySelectorAll(".wiz-action.stop")) {
-    assert.equal(winner(stop, "background"), "var(--panel-error)", "emergency: filled");
-    assert.equal(winner(stop, "color"), "var(--text-primary-color, #fff)");
-  }
-  // Rules for the phone bar and the landscape column come earlier in the sheet: the filled Stop wins over them.
-  assert.match(cascadeCss, /\.wiz-action\.stop, \.wiz-action\.link \{ min-height: 44px; background: transparent; \}[\s\S]*\.wiz-action\.stop \{ border-color: var\(--panel-error\); background: var\(--panel-error\);/);
-  for (const abandon of host.querySelectorAll(".wiz-discard, .wiz-action.danger-outline, .wiz-action.danger, .wiz-leave, .cal-abort-confirm")) {
-    assert.notEqual(winner(abandon, "background"), "var(--panel-error)", `${abandon.className}: never filled`);
-    assert.match(winner(abandon, "color"), /--panel-error/, `${abandon.className}: red text`);
-    assert.match(winner(abandon, "border-color") || winner(abandon, "border"), /--panel-error/, `${abandon.className}: red outline`);
-  }
-  host.remove();
-});
-
 test("L-62: the list follows Home Assistant's dark mode on every update, its dialogs too", async () => {
   const { backend, panel, root } = await mount();
   const host = root.querySelector("#cover-calibration-tab");
@@ -1295,6 +1249,52 @@ test("L-98/L-99: an open row in the secondary background (band 65 %, details 30 
   assert.match(cascadeCss, /\.cal-row\.is-expanded \.cal-row-main:hover \{\s*background: color-mix\(in srgb, var\(--panel-accent\) 12%, color-mix\(in srgb, var\(--panel-surface-2\) 65%, var\(--panel-surface\)\)\); \}/);
   assert.match(cascadeCss, /\.cal-row\.is-running \.cal-row-main:hover \{ background: color-mix\(in srgb, var\(--panel-warning\) 14%, transparent\); \}/, "in progress: its yellow under the pointer");
   assert.doesNotMatch(cascadeCss, /\.cal-row\.is-expanded \.cal-row-(main|details) \{ background: color-mix\(in srgb, var\(--panel-accent\)/, "L-83's accent tints are gone");
+});
+
+test("L-96: the fields of the wizard, the tab and its dialogs read as fields; focus, error and the sort selects keep theirs", () => {
+  const doc = dom.window.document, host = doc.createElement("div");
+  host.innerHTML = `<div class="wiz"><form class="wiz-field"><input name="reading_cm"><input name="bad" aria-invalid="true"></form>
+      <label class="wiz-switch"><input type="checkbox"></label></div>
+    <div class="cal-tab"><label class="cal-compact-sort"><select></select></label><label class="cal-batch-gateway"><select></select></label></div>
+    <dialog class="cal-dialog"><input name="profile_name"></dialog><div class="elsewhere"><input></div>`;
+  doc.body.append(host);
+  const outline = "1px solid color-mix(in srgb, var(--primary-text-color, #182b37) 35%, transparent)";
+  for (const field of host.querySelectorAll('.wiz-field [name="reading_cm"], .cal-batch-gateway select, dialog input')) {
+    assert.equal(winner(field, "border"), outline, field.outerHTML);
+    assert.equal(winner(field, "background-color"), "var(--panel-surface)");
+  }
+  assert.equal(winner(host.querySelector('[aria-invalid="true"]'), "border-color"), "var(--panel-error)", "the error keeps its red");
+  assert.equal(winner(host.querySelector(".cal-compact-sort select"), "border"), "0", "the sort select stays borderless…");
+  assert.equal(winner(host.querySelector(".cal-compact-sort"), "border-color"), "color-mix(in srgb, var(--primary-text-color, #182b37) 35%, transparent)",
+    "…its label is the box, with the same outline");
+  assert.notEqual(winner(host.querySelector(".wiz-switch input"), "border"), outline, "a switch is no field");
+  assert.notEqual(winner(host.querySelector(".elsewhere input"), "border"), outline, "only the calibration's fields");
+  // The keyboard's accent focus is the shell's, unchanged.
+  assert.match(cascadeCss, /input:focus-visible, select:focus-visible \{ outline: none; border-color: var\(--panel-accent\); box-shadow: 0 0 0 3px var\(--panel-accent-soft\); \}/);
+  host.remove();
+});
+
+test("L-95b: red has two classes: the emergency («Ferma la tapparella») filled in every layout, abandoning outlined", () => {
+  const doc = dom.window.document, host = doc.createElement("div");
+  // The Stop of the owner's bar, of a reader's bar and of the landscape column is the same button (`kind: "stop"`).
+  host.innerHTML = `<div class="wiz"><header class="wiz-head"><button class="wiz-discard"></button></header>
+      <div class="wiz-actions"><button class="wiz-action stop"></button><button class="wiz-action danger-outline"></button><button class="wiz-action danger"></button></div>
+      <div class="wiz-readonly"><div class="wiz-actions"><button class="wiz-action stop"></button></div></div>
+      <div class="wiz-dialog"><div class="wiz-dialog-card"><div class="actions"><button class="wiz-leave"></button></div></div></div></div>
+    <dialog class="cal-dialog"><footer class="dialog-foot"><button class="danger cal-abort-confirm"></button></footer></dialog>`;
+  doc.body.append(host);
+  for (const stop of host.querySelectorAll(".wiz-action.stop")) {
+    assert.equal(winner(stop, "background"), "var(--panel-error)", "emergency: filled");
+    assert.equal(winner(stop, "color"), "var(--text-primary-color, #fff)");
+  }
+  // Rules for the phone bar and the landscape column come earlier in the sheet: the filled Stop wins over them.
+  assert.match(cascadeCss, /\.wiz-action\.stop, \.wiz-action\.link \{ min-height: 44px; background: transparent; \}[\s\S]*\.wiz-action\.stop \{ border-color: var\(--panel-error\); background: var\(--panel-error\);/);
+  for (const abandon of host.querySelectorAll(".wiz-discard, .wiz-action.danger-outline, .wiz-action.danger, .wiz-leave, .cal-abort-confirm")) {
+    assert.notEqual(winner(abandon, "background"), "var(--panel-error)", `${abandon.className}: never filled`);
+    assert.match(winner(abandon, "color"), /--panel-error/, `${abandon.className}: red text`);
+    assert.match(winner(abandon, "border-color") || winner(abandon, "border"), /--panel-error/, `${abandon.className}: red outline`);
+  }
+  host.remove();
 });
 
 test("R-8: what the tab hangs on the window is removed when it is cleared, and added once when it shows again", async () => {
