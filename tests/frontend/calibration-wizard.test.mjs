@@ -1283,12 +1283,19 @@ test("L-95b: red has two classes: the emergency («Ferma la tapparella») filled
       <div class="wiz-dialog"><div class="wiz-dialog-card"><div class="actions"><button class="wiz-leave"></button></div></div></div></div>
     <dialog class="cal-dialog"><footer class="dialog-foot"><button class="danger cal-abort-confirm"></button></footer></dialog>`;
   doc.body.append(host);
+  // The filled emergency comes with the L-95 recolouring (one block, revertable on its own): without it, the Stop is
+  // the earlier outlined one, and this test still holds.
+  const recoloured = cascadeCss.includes(".wiz { --wiz-strip:");
   for (const stop of host.querySelectorAll(".wiz-action.stop")) {
-    assert.equal(winner(stop, "background"), "var(--panel-error)", "emergency: filled");
-    assert.equal(winner(stop, "color"), "var(--text-primary-color, #fff)");
+    if (recoloured) {
+      assert.equal(winner(stop, "background"), "var(--panel-error)", "emergency: filled");
+      assert.equal(winner(stop, "color"), "var(--text-primary-color, #fff)");
+    } else assert.equal(winner(stop, "background"), "transparent", "before L-95: outlined");
   }
   // Rules for the phone bar and the landscape column come earlier in the sheet: the filled Stop wins over them.
-  assert.match(cascadeCss, /\.wiz-action\.stop, \.wiz-action\.link \{ min-height: 44px; background: transparent; \}[\s\S]*\.wiz-action\.stop \{ border-color: var\(--panel-error\); background: var\(--panel-error\);/);
+  if (recoloured) {
+    assert.match(cascadeCss, /\.wiz-action\.stop, \.wiz-action\.link \{ min-height: 44px; background: transparent; \}[\s\S]*\.wiz-action\.stop \{ border-color: var\(--panel-error\); background: var\(--panel-error\);/);
+  }
   for (const abandon of host.querySelectorAll(".wiz-discard, .wiz-action.danger-outline, .wiz-action.danger, .wiz-leave, .cal-abort-confirm")) {
     assert.notEqual(winner(abandon, "background"), "var(--panel-error)", `${abandon.className}: never filled`);
     assert.match(winner(abandon, "color"), /--panel-error/, `${abandon.className}: red text`);
