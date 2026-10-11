@@ -19,7 +19,7 @@ from .cover_calibration_fit import (
     opening_roll_range,
 )
 from .cover_geometry import profile_motion
-from .cover_motion import CoverMotionModel
+from .cover_motion import ECHO_WINDOW, CoverMotionModel
 from .cover_profile_provenance import evidence
 from .cover_profiles import ProfileError, travel_time, write_profile
 from .cover_settings import centimetres
@@ -37,6 +37,9 @@ LIFT_REPEAT_BELOW_TOUCHING = True
 RANGE_SLACK_CM = 1e-9
 # During a check these end it and return to review instead of ending the session.
 CHECK_RETURNS = frozenset({"stopped", "unexpected_stop", "unexpected_movement"})
+# Steps whose run ends at an end stop that the operator confirms with `endpoint`. A stop
+# status from the bus there dates the end of the run instead of interrupting it.
+ENDPOINT_STEPS = frozenset({"home", "reset", "opening", "closing", "top"})
 
 
 class GeometryCalibrationSession(guided.CalibrationSession):
@@ -56,6 +59,9 @@ class GeometryCalibrationSession(guided.CalibrationSession):
         self.gap_warning = False
         self.after_stop = "briefing"
         self.stop_written = False
+        # The Stop is written and the deadline waits ECHO_WINDOW for a movement status (see
+        # `_await_stop_status`); False while it waits for the write or for the stop status.
+        self.stop_grace = False
         self.samples: dict[str, float] = {}
         self.readings: dict[str, float] = {}
         self.geometry: dict[str, float] = {}
@@ -118,7 +124,7 @@ class GeometryCalibrationSession(guided.CalibrationSession):
             written.add_done_callback(self._bound(self._movement_delivered))
         elif action == "lift" and self.step == "lift" and self.phase == "opening":
             self._sample_stop()
-        elif action == "endpoint" and self.phase in {"opening", "closing"} and self.step in {"home", "reset", "opening", "closing", "top"}:
+        elif action == "endpoint" and self.phase in {"opening", "closing"} and self.step in ENDPOINT_STEPS:
             self._endpoint()
         elif action == "reading" and self.phase == "reading":
             try:
@@ -131,6 +137,16 @@ class GeometryCalibrationSession(guided.CalibrationSession):
             self._check(msg)
         else:
             raise ProfileError("calibration_step")
+
+    def stop_awaits_endpoint(self) -> bool:
+        """Only the end stop runs, the returns of a check included, wait for `endpoint`.
+
+        `lift` keeps the motor running while the operator marks the edge leaving its rest:
+        a stop before that press is a genuine early stop and still interrupts
+        (`unexpected_stop`). The intermediate runs and the check run are stopped by the
+        session itself, so a stop before its Stop is unexpected there too.
+        """
+        return self.step in ENDPOINT_STEPS
 
     def _rising(self) -> bool:
         """The direction of the current step's run."""
@@ -159,7 +175,8 @@ class GeometryCalibrationSession(guided.CalibrationSession):
         if self.deadline:
             self.deadline.cancel()
         self.started_at = None
-        self.stop_written = self.checking = False
+        self.forget_motor_stop()
+        self.stop_written = self.stop_grace = self.checking = False
         self.check, self.check_before = self.check_before if keep else None, None
         self.check_interrupted = reason
         self.step = self.after_position = "half_close"
@@ -209,6 +226,10 @@ class GeometryCalibrationSession(guided.CalibrationSession):
                 self.interrupt("unexpected_movement")
             elif event.state == 0 and self.stop_written:
                 self._stopped()
+            elif self.stop_grace and (event.is_opening or event.is_closing):
+                # The run is still reported after our Stop: only its stop status ends it now.
+                self.stop_grace = False
+                self.arm_deadline(guided.STOP_QUEUE_SECONDS, "not_stopped")
             return
         starting = self.phase.startswith("starting_")
         super().on_event(event)
@@ -222,6 +243,7 @@ class GeometryCalibrationSession(guided.CalibrationSession):
 
     def _sample_stop(self) -> None:
         self.phase, self.after_stop, self.stop_written = "geometry_wait_stop", "reading", False
+        self.stop_grace = False
         self.arm_deadline(guided.STOP_QUEUE_SECONDS, "not_stopped")
         written = self.queue_stop()
         if written is None:
@@ -248,33 +270,70 @@ class GeometryCalibrationSession(guided.CalibrationSession):
         if not self.reservation.pending:
             self._stopped()
         else:
+            self._await_stop_status(future.result())
             self.emit()
+
+    def _endpoint_written(self, future: asyncio.Future[float]) -> None:
+        self._movement_delivered(future)
+        if not future.cancelled() and not self.closed and self.phase == "geometry_wait_stop":
+            self._await_stop_status(future.result())
+
+    def _await_stop_status(self, written_at: float) -> None:
+        """The Stop is on the bus: without a movement status ECHO_WINDOW after it, the motor has stopped.
+
+        A MyHOMEServer1 sometimes relays only the translation of our Stop (`*2*1000#0*WHERE##`,
+        which the gateway handler drops) and never the stop status itself, so the step would
+        wait for the `not_stopped` deadline with a delivered Stop. The stop status still ends
+        the wait as soon as it arrives; an opposite movement status still interrupts; a
+        movement status in the run's direction gives the `not_stopped` deadline back. The
+        sample was already taken from the write. That deadline stays armed until the write
+        is acknowledged, so a Stop that is never written still ends in `not_stopped`.
+        """
+        self.stop_grace = True
+        cast(asyncio.TimerHandle, self.deadline).cancel()
+        self.deadline = self.hass.loop.call_later(max(0.0, written_at + ECHO_WINDOW - guided.monotonic()),
+                                                  self._stopped)
 
     def _endpoint(self) -> None:
         old_step = self.step
         if old_step in {"opening", "closing"}:
+            # As `run_time()`, except that a press time stays unrounded here, as it always has.
+            if self.motor_stopped:  # Confirmed after the bus reported the stop: the stop ends the run.
+                seconds, ended_by = cast(float, self.stopped_elapsed), "bus_stop"
+            else:
+                seconds, ended_by = guided.monotonic() - cast(float, self.started_at), "press"
             try:
-                value = travel_time(guided.monotonic() - cast(float, self.started_at))
+                value = travel_time(seconds)
             except vol.Invalid as error:
                 self.interrupt("invalid_measurement")
                 raise ProfileError("invalid_profile") from error
             self.values[f"{old_step}_time"] = value
-            self.provenance[old_step] = evidence("guided", self.cover.unique_id)
+            self.provenance[old_step] = evidence("guided", self.cover.unique_id, ended_by)
         self.edge_position = 0 if old_step in {"home", "reset", "closing"} else 100
         self.confirm_position(self.edge_position)
         self.after_stop = "reading" if old_step == "opening" else "briefing"
-        self.phase, self.stop_written = "geometry_wait_stop", True
+        if self.motor_stopped:
+            # The bus has already reported the stop, so no second stop status is awaited. Stop
+            # is still written, as after every confirmed end stop, but the step does not
+            # depend on its delivery: the motor is known to be stationary. As in the base
+            # `endpoint`, a full queue only leaves `stop_queue_full` as the reason.
+            self.forget_motor_stop()
+            self.queue_stop()
+            self._stopped()
+            return
+        self.phase, self.stop_written, self.stop_grace = "geometry_wait_stop", True, False
         self.started_at = None
         self.arm_deadline(guided.STOP_QUEUE_SECONDS, "not_stopped")
         written = self.queue_stop()
         if written is None:
             self.interrupt("stop_queue_full", send_stop=False)
             return
-        written.add_done_callback(self._bound(self._movement_delivered))
+        written.add_done_callback(self._bound(self._endpoint_written))
         self.emit()
 
     def _stopped(self) -> None:
         cast(asyncio.TimerHandle, self.deadline).cancel()
+        self.stop_grace = False
         self.started_at = None
         self.phase = self.after_stop
         if self.phase == "briefing":
