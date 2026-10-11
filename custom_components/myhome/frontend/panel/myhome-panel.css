@@ -880,6 +880,8 @@ dialog.cal-dialog :is(button, select, input):focus:not(:focus-visible) { outline
 .cal-menu button { display: grid; grid-template-columns: 18px minmax(0, 1fr); align-content: center; align-items: start;
   justify-content: stretch; text-align: start; line-height: 18px; }
 .cal-menu button:hover, .cal-menu button:focus-visible { background: var(--panel-accent-soft); }
+/* L-110: an item that cannot be used now (Change profile on a cover in progress) stays, off, with no tint under the pointer. */
+.cal-menu button:disabled, .cal-menu button:disabled:hover { background: transparent; cursor: not-allowed; }
 /* L-10: cancelling the calibration in progress, in the row's menu, in red; its confirmation's two buttons on one row. */
 .cal-menu button.cal-menu-danger { color: var(--panel-error); }
 .cal-menu button.cal-menu-danger:hover, .cal-menu button.cal-menu-danger:focus-visible { background: color-mix(in srgb, var(--panel-error) 8%, transparent); }

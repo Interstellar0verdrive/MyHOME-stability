@@ -1740,19 +1740,27 @@ test("L-93: the session's action says what it does: «Follow session» for anoth
   }
 });
 
-test("L-105: a cover with its session open offers no «Change profile» / «Assign profile», in its menu or its details", async () => {
+test("L-105/L-110: on a cover with its session open «Change profile» / «Assign profile» stays, disabled, in its menu and its details", async () => {
   const session = { entry_id: "one", entity_id: "cover.bedroom", session_id: "s1", mode: "geometry", phase: "briefing", step: "home", sequence: 2, values: {},
     recoverable: true, attached: false, owner_present: true };
-  const { tab } = await mount({ session });
+  const { tab, root, calls } = await mount({ session });
   const menu = (id) => { row(tab, id).querySelector('[data-action="cal-tab-menu"]').click(); return row(tab, id).querySelector(".cal-menu"); };
-  assert.equal(menu("cover.bedroom").querySelector('[data-action="cal-tab-assign"]'), null, "not in the menu of the cover in progress");
+  const item = menu("cover.bedroom").querySelector('[data-action="cal-tab-assign"]');
+  assert.ok(item, "still in the menu of the cover in progress");
+  assert.equal(item.disabled, true, "but off");
   assert.ok(menu("cover.bedroom").querySelector('[data-action="cal-tab-abort"]'), "its cancel is still there");
   row(tab, "cover.bedroom").querySelector(".cal-row-toggle").click(); await tick();
-  assert.equal(row(tab, "cover.bedroom").querySelector('.cal-row-details [data-action="cal-tab-assign"]'), null, "nor in its details");
-  // Another cover keeps it (its dialog says the gateway is reserved and waits, as before).
-  assert.ok(menu("cover.living_two").querySelector('[data-action="cal-tab-assign"]'));
+  const block = row(tab, "cover.bedroom").querySelector('.cal-row-details [data-action="cal-tab-assign"]');
+  assert.equal(block?.disabled, true, "in its details too, off as Refine is");
+  // Even a click that reaches it opens nothing.
+  block.disabled = false; block.click(); await tick();
+  assert.equal(root.querySelector("#dialog-host dialog"), null);
+  assert.equal(calls.filter((message) => message.type === "myhome/cover_profiles/write").length, 0);
+  // Another cover keeps it enabled (its dialog says the gateway is reserved and waits, as before).
+  assert.equal(menu("cover.living_two").querySelector('[data-action="cal-tab-assign"]').disabled, false);
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.cal-menu button:disabled, \.cal-menu button:disabled:hover \{ background: transparent; cursor: not-allowed; \}/);
 });
-
 test("L-107: a session started, moved on or ended elsewhere reaches the list at once: a burst makes one read", async () => {
   const { subscriptions, calls } = await mount();
   const subscription = subscriptions.find((item) => item.request.type === "myhome/cover_profiles/subscribe" && item.request.entry_id === "one");
