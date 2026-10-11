@@ -35,6 +35,8 @@ const sessionLabel = (session) => (session?.client_owner ? "wiz_T580" : "wiz_T57
 export const FILTERS = ["all", "to_measure", "calibrated", "profile"];
 // Covers read in turn to find the gateway's session when a read fails.
 const SESSION_PROBES = 3;
+/** L-107: a burst of session transitions within this time makes one read of the list. */
+export const SESSION_READ_MS = 250;
 export const SORT_KEYS = ["cover", "status", "profile"];
 /** The Assign profile dialog's "No profile" entry (a profile id is never this). */
 const NO_PROFILE = "__no_profile__";
@@ -288,6 +290,15 @@ export class CalibrationTab {
         if (!this._current(generation) || event.entry_id !== entryId) return;
         const row = this._rows.get(entryId);
         if (event.kind === "removed") { row.removed = true; row.data = null; this._render(); return; }
+        // L-107: a session started, moved on or ended on this gateway (any tab or device): the list reads it again at
+        // once (a burst of transitions makes one read), instead of at the next 15 s refresh. Only while the list shows:
+        // the way back to it reads everything again anyway.
+        if (event.kind === "session") {
+          if (this._mode.kind !== "list") return;
+          clearTimeout(row.sessionTimer);
+          row.sessionTimer = setTimeout(() => this._read(entryId, generation), SESSION_READ_MS);
+          return;
+        }
         if (Number.isInteger(event.revision) && event.revision > (row.data?.revision ?? -1)) this._read(entryId, generation);
       }, { type: "myhome/cover_profiles/subscribe", entry_id: entryId });
       if (!this._current(generation)) { await unsubscribe(); return; }

@@ -229,6 +229,19 @@ class CalibrationSession:
         self.touch()
         for subscriber in list(self.subscribers.values()):
             self.send_to(subscriber)
+        self.notify_list()
+
+    def notify_list(self) -> None:
+        """L-107: the panel's lists learn of every transition (a session started, moved on, closed) at once.
+
+        Sent on the profiles subscription they already hold, without data: each list reads the session again.
+        """
+        from homeassistant.helpers.dispatcher import async_dispatcher_send
+
+        from .cover_profiles import WS_SUBSCRIBE
+
+        async_dispatcher_send(self.hass, f"{WS_SUBSCRIBE}:{self.entry_id}", {
+            "entry_id": self.entry_id, "revision": self.store.data["revision"], "kind": "session"})
 
     def announce(self, connection: Any, subscription_id: Any) -> None:
         """A new session's first view is a transition; a replayed subscription only reads it."""
@@ -414,10 +427,14 @@ class CalibrationSession:
         if self.shutdown is not None:
             unsubscribe, self.shutdown = self.shutdown, None
             unsubscribe()
-        if self.store.calibration is self:
+        released = self.store.calibration is self
+        if released:
             self.store.calibration = None
         if self.cover._calibration is self:
             self.cover._calibration = None
+        if released and self.client_id:
+            # L-107: the gateway is free (possibly after the last Stop): the lists drop the session at once.
+            self.notify_list()
 
     def move(self, direction: Any) -> None:
         expected = "confirm_closed" if direction == "open" else "confirm_open"

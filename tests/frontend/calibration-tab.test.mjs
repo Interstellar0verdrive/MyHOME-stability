@@ -1753,6 +1753,16 @@ test("L-105: a cover with its session open offers no «Change profile» / «Assi
   assert.ok(menu("cover.living_two").querySelector('[data-action="cal-tab-assign"]'));
 });
 
+test("L-107: a session started, moved on or ended elsewhere reaches the list at once: a burst makes one read", async () => {
+  const { subscriptions, calls } = await mount();
+  const subscription = subscriptions.find((item) => item.request.type === "myhome/cover_profiles/subscribe" && item.request.entry_id === "one");
+  const reads = () => calls.filter((message) => message.type === "myhome/cover_profiles/overview" && message.entry_id === "one").length;
+  const before = reads();
+  for (let i = 0; i < 3; i++) subscription.callback({ entry_id: "one", revision: 7, kind: "session" });
+  await new Promise((resolve) => setTimeout(resolve, 400)); await tick(4);
+  assert.equal(reads(), before + 1, "one read, within a quarter of a second, not at the next 15 s refresh");
+});
+
 test("Z-1: the details' times carry one decimal, as the wizard's", async () => {
   const data = overview();
   data.covers[0].effective.opening.value = 22;

@@ -863,6 +863,35 @@ async def test_a_profile_is_neither_assigned_nor_unlinked_while_the_cover_has_a_
         await owner.close()
 
 
+async def test_the_lists_learn_of_a_session_at_once_on_their_profiles_subscription(hass, plant, hass_ws_client):
+    """L-107: a session's transitions (start, moves, close) reach the gateway's profiles subscription without data."""
+    from custom_components.myhome.cover_profiles import register_api as register_profiles
+
+    register_profiles(hass)
+    plant.gateways[0].async_queue_calibration = lambda *args: None
+    entry_id = plant.entries[0].entry_id
+
+    async def next_event(client, subscription):
+        while (message := await client.receive_json())["id"] != subscription or message["type"] != "event":
+            pass
+        return message["event"]
+
+    with patch("aiohttp.connector.DefaultResolver", ThreadedResolver):
+        listing = await hass_ws_client(hass)
+        await listing.send_json({"id": 1, "type": "myhome/cover_profiles/subscribe", "entry_id": entry_id})
+        assert (await next_event(listing, 1))["kind"] == "ready"
+        owner = await hass_ws_client(hass)
+        await owner.send_json({"id": 1, "type": WS_START, "entry_id": entry_id, "entity_id": plant.records[0].entity_id,
+                               "revision": 0, "client_id": "tab-one"})
+        event = await next_event(listing, 1)
+        assert event == {"entry_id": entry_id, "revision": 0, "kind": "session"}, "the start, at once"
+        get_store(hass, entry_id).calibration.close()
+        await hass.async_block_till_done()
+        assert (await next_event(listing, 1))["kind"] == "session", "the close too"
+        await owner.close()
+        await listing.close()
+
+
 async def test_a_read_says_whether_the_reading_client_owns_the_open_session(hass, plant, hass_ws_client):
     """L-93: the list names its action by what `resume` will do: the owner's tab resumes, any other follows."""
     from custom_components.myhome.cover_profiles import register_api as register_profiles
