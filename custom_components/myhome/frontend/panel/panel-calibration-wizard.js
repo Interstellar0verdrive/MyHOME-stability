@@ -1404,7 +1404,7 @@ function takeLabel(readOnly) { return readOnly.left ? `${readOnly.take} · ${rea
 
 function key(item) { return JSON.stringify([item.entry.entry_id, item.cover.entity_id]); }
 
-/** The red actions (outlined): emergencies and abandoning a process (Stop, Cancel the measurement, Exit without saving). */
+/** The red actions: the emergency (Stop, filled) and abandoning a process (Cancel the measurement, Exit without saving: outlined). */
 const RED_KINDS = ["danger", "danger-outline", "stop"];
 /**
  * L-47 (revised), the rule of every wizard bar of one column: at most three actions in view, the primary and up to two

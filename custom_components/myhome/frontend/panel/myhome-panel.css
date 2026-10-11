@@ -1439,8 +1439,9 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 /* L-47: outlined actions answer the pointer as the primary does: the accent at 8 % under the pointer, 12 % pressed. */
 @media (hover: hover) { .wiz-action.secondary:hover:not(:disabled) { background: color-mix(in srgb, var(--panel-accent) 8%, transparent); } }
 .wiz-action.secondary:active:not(:disabled) { background: color-mix(in srgb, var(--panel-accent) 12%, transparent); }
-/* L-47 (revised, HANDOFF §9.122): red is only for emergencies and abandoning a process, always outlined («Ferma la
-   tapparella», «Annulla la misurazione», «Esci senza salvare», «Abbandona la calibrazione»); no red text, no red fill. */
+/* L-47 (revised, HANDOFF §9.122) and L-95b: red is only for emergencies and abandoning a process. Abandoning is outlined,
+   red text and border («Annulla la misurazione», «Esci senza salvare», «Abbandona la calibrazione»); the emergency
+   («Ferma la tapparella») is filled, in every layout (the L-95 block at the end of the sheet). */
 .wiz-action.stop, .wiz-action.danger-outline { min-height: 44px; border: 1px solid var(--panel-error); color: var(--panel-error); background: transparent; box-shadow: none; }
 .wiz-action.link { min-height: 44px; border: 0; background: transparent; box-shadow: none; color: var(--panel-accent); }
 @media (hover: hover) { :is(.wiz-action.stop, .wiz-action.danger-outline, .wiz-action.danger):hover:not(:disabled) { background: color-mix(in srgb, var(--panel-error) 8%, transparent); } }
