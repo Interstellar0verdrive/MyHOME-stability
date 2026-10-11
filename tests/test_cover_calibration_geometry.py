@@ -678,6 +678,20 @@ def test_opening_range_has_no_heights_for_inconsistent_timings(args):
     assert opening_range(*args) is None
 
 
+@pytest.mark.parametrize("args", [
+    # Readings the rolls cannot explain, held at the end of the rolls the full closing allows: before, the end was the
+    # bisection's midpoint, whose slat time could round onto the closing time (5.1 >= 5.1) and be refused.
+    (24.0, 5.8, 5.0, 200.0, 14.9, 199.8, 5.1),
+    (22.0, 1.0, 0.5, 150.0, 3.1, 149.85, 0.8),
+    (22.0, 1.0, 0.5, 150.0, 3.1, 0.51, 0.8),
+])
+def test_a_clamped_opening_fit_keeps_the_slat_time_below_the_full_closing(args):
+    total, lift_time, gap, travel, elapsed, height, closing = args
+    low, high = opening_rolls(total, lift_time, gap, travel, closing)
+    slat, roll = opening_fit(total, lift_time, gap, travel, elapsed, height, clamp=True, closing=closing)
+    assert 0 <= slat < closing and low <= roll <= high
+
+
 async def test_intermediate_readings_accept_every_physical_height_and_report_those_far_from_the_model(geometry):
     """L-9: only a height above the travel plus the tape's error is refused; the model's heights only warn."""
     cal = geometry

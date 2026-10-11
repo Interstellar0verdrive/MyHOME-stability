@@ -441,8 +441,7 @@ class GeometryCalibrationSession(guided.CalibrationSession):
             else:
                 slat, roll = 0.0, opening_roll_fit(self.values["opening_time"], 0.0, self.samples["half_open"],
                                                    number, cast(float, self.measured_travel), clamp=True)
-            if slat >= self.values["closing_time"]:
-                raise vol.Invalid("Slat time exceeds closing time")
+            # The clamped fit keeps the slat time from 0 to below both full times (`opening_rolls`); without slats it is 0.
             self.geometry = {"slat_time_s": slat, "opening_roll": roll}
             self.geometry_provenance = {key: evidence("guided", self.cover.unique_id) for key in self.geometry}
             self.readings["half_open"] = number

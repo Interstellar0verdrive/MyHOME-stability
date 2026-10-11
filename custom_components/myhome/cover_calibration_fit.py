@@ -125,15 +125,15 @@ def opening_rolls(total: float, lift: float, gap: float, travel: float, closing:
     """The rolls (low, high) within 1-5 whose slat time from the lift-off is from 0 to below both full times.
 
     The slat time falls as the roll grows, so they form one interval; its ends are found by bisection where a slat
-    limit cuts the 1-5 range. None when no roll gives a possible slat time.
+    limit cuts the 1-5 range, each taken on its own side of the limit (a slat time from 0, below the cap), never at a
+    midpoint that rounding could put across it. None when no roll gives a possible slat time. Its callers have
+    already checked the gap below the travel and the lift-off within the full time.
     """
-    if not 0 <= gap < travel or not 0 <= lift < total:
-        return None
-
     def slat(roll: float) -> float:
         return _slat(total, lift, gap, travel, roll)
 
-    def roll_where(limit: float) -> float:
+    def roll_where(limit: float) -> tuple[float, float]:
+        """The two rolls 2⁻⁴⁸ apart around `limit`: (slat time at or above it, slat time below it)."""
         low, high = ROLL_RANGE
         for _ in range(48):
             middle = (low + high) / 2
@@ -141,13 +141,13 @@ def opening_rolls(total: float, lift: float, gap: float, travel: float, closing:
                 low = middle
             else:
                 high = middle
-        return (low + high) / 2
+        return low, high
 
     cap = min(total, closing)
     if slat(ROLL_RANGE[0]) < 0 or slat(ROLL_RANGE[1]) >= cap:
         return None
-    high = ROLL_RANGE[1] if slat(ROLL_RANGE[1]) >= 0 else roll_where(0.0)
-    low = ROLL_RANGE[0] if slat(ROLL_RANGE[0]) < cap else roll_where(cap)
+    high = ROLL_RANGE[1] if slat(ROLL_RANGE[1]) >= 0 else roll_where(0.0)[0]
+    low = ROLL_RANGE[0] if slat(ROLL_RANGE[0]) < cap else roll_where(cap)[1]
     return low, high
 
 
