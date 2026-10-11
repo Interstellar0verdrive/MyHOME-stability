@@ -873,6 +873,29 @@ test("L-95: the wizard's bands and buttons in Figma 937:56699's colours, every o
   host.remove();
 });
 
+test("L-96: the fields of the wizard, the tab and its dialogs read as fields; focus, error and the sort selects keep theirs", () => {
+  const doc = dom.window.document, host = doc.createElement("div");
+  host.innerHTML = `<div class="wiz"><form class="wiz-field"><input name="reading_cm"><input name="bad" aria-invalid="true"></form>
+      <label class="wiz-switch"><input type="checkbox"></label></div>
+    <div class="cal-tab"><label class="cal-compact-sort"><select></select></label><label class="cal-batch-gateway"><select></select></label></div>
+    <dialog class="cal-dialog"><input name="profile_name"></dialog><div class="elsewhere"><input></div>`;
+  doc.body.append(host);
+  const outline = "1px solid color-mix(in srgb, var(--primary-text-color, #182b37) 35%, transparent)";
+  for (const field of host.querySelectorAll('.wiz-field [name="reading_cm"], .cal-batch-gateway select, dialog input')) {
+    assert.equal(winner(field, "border"), outline, field.outerHTML);
+    assert.equal(winner(field, "background-color"), "var(--panel-surface)");
+  }
+  assert.equal(winner(host.querySelector('[aria-invalid="true"]'), "border-color"), "var(--panel-error)", "the error keeps its red");
+  assert.equal(winner(host.querySelector(".cal-compact-sort select"), "border"), "0", "the sort select stays borderless…");
+  assert.equal(winner(host.querySelector(".cal-compact-sort"), "border-color"), "color-mix(in srgb, var(--primary-text-color, #182b37) 35%, transparent)",
+    "…its label is the box, with the same outline");
+  assert.notEqual(winner(host.querySelector(".wiz-switch input"), "border"), outline, "a switch is no field");
+  assert.notEqual(winner(host.querySelector(".elsewhere input"), "border"), outline, "only the calibration's fields");
+  // The keyboard's accent focus is the shell's, unchanged.
+  assert.match(cascadeCss, /input:focus-visible, select:focus-visible \{ outline: none; border-color: var\(--panel-accent\); box-shadow: 0 0 0 3px var\(--panel-accent-soft\); \}/);
+  host.remove();
+});
+
 test("L-62: the list follows Home Assistant's dark mode on every update, its dialogs too", async () => {
   const { backend, panel, root } = await mount();
   const host = root.querySelector("#cover-calibration-tab");

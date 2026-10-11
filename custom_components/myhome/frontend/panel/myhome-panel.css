@@ -776,6 +776,8 @@ dialog.cal-dialog :is(button, select, input):focus:not(:focus-visible) { outline
   padding: 0 8px 0 12px; border: 1px solid var(--panel-border); border-radius: var(--cal-btn-radius); background: var(--panel-surface);
   color: var(--primary-text-color, #182b37); font-size: 14px; font-weight: 400; }
 .cal-compact-sort { flex-direction: row; white-space: nowrap; }
+/* L-96: the box of these selects is their label: the same outline as the other fields. */
+.cal-compact-filter, .cal-compact-sort { border-color: color-mix(in srgb, var(--primary-text-color, #182b37) 35%, transparent); }
 .cal-compact-sort > span { flex: none; }
 .cal-compact-sort select { flex: 1; min-width: 0; width: auto; min-height: 42px; padding: 0 18px 0 0;
   background-position: calc(100% - 9px) 50%, calc(100% - 4px) 50%; border: 0; background-color: transparent;
@@ -1350,6 +1352,11 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-field input[aria-invalid="true"] { border-color: var(--panel-error); box-shadow: 0 0 0 3px color-mix(in srgb, var(--panel-error) 20%, transparent); }
 /* Z-2: in error only the field's border, its unit and the message are red; the help line stays grey. */
 .wiz-field input[aria-invalid="true"] ~ span { color: var(--panel-error); }
+/* L-96: the fields of the wizard, the tab and its dialogs read as fields: the surface with a 1 px outline of the text
+   colour at 35 % (the divider's 12 % was barely visible), both themes. Low weight on purpose: hover, the keyboard's
+   accent focus, the error's red and the borderless sort selects all keep their own rules. */
+:where(.wiz, .cal-tab, dialog.cal-dialog) :where(input, select, textarea):not([type="checkbox"], [type="radio"]) {
+  background-color: var(--panel-surface); border: 1px solid color-mix(in srgb, var(--primary-text-color, #182b37) 35%, transparent); }
 .input-suffix { display: flex; align-items: center; gap: 8px; }
 .wiz-precision { margin: 0; font-size: 13px; }
 .wiz-table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
