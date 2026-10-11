@@ -2460,6 +2460,10 @@ for (const [label, owner] of [["the owner starts again, its reader", false], ["a
     backend.sessionEvent(); await new Promise((resolve) => setTimeout(resolve, 300)); await tick(6);
     assert.equal(code(), "S-01r");
     assert.equal(title(), "The calibration was restarted from another device.");
+    // L-114: its body, under the title and above the actions.
+    assert.equal(wiz().querySelector(".wiz-main .wiz-body").textContent.trim(), translations.en.wiz_T583);
+    assert.ok(wiz().querySelector(".wiz-title").compareDocumentPosition(wiz().querySelector(".wiz-body")) & 4, "after the title");
+    assert.match(translations.it.wiz_T583, /^La misurazione che stavi seguendo è stata annullata/);
     assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((button) => [button.dataset.wiz, button.textContent]),
       [["follow-new", "Follow session"], ["close", "Back to the list"]]);
     // «Follow session»: this tab joins the new session as a reader (no claim).
