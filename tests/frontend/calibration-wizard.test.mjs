@@ -584,6 +584,11 @@ test("L-37/L-43: the base calibration ends with its check, a step of its own, fr
   await type("97"); await move(backend, { seconds: 24 }); await press("endpoint"); backend.stopped(); await tick();
   await move(backend, { auto: true, stop: true }); await type("101");
   assert.deepEqual([code(), title()], ["A-21v", "Check the calibration"]);
+  // L-97: the drawing of the reading with the tape, between the title and the text, as on the other steps.
+  const drawing = wiz().querySelector(".wiz-main .wiz-illustration");
+  assert.equal(drawing?.dataset.illustration, "curtain-tape-half", "the check reads at half the travel: the half-height drawing");
+  assert.deepEqual([...wiz().querySelector(".wiz-main").querySelectorAll(".wiz-title, .wiz-illustration, .wiz-body")].map((item) => item.getAttribute("class").split(" ")[0]),
+    ["wiz-title", "wiz-illustration", "wiz-body"], "title → drawing → text");
   assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => item.dataset.wiz), ["check-start"], "L-43: not skippable");
   assert.equal(wiz().querySelector(".wiz-compact-line").textContent, "Check · 6 of 8");
   const sent = actions().length;
@@ -1650,7 +1655,7 @@ test("each mockup gets its drawing by code, always under the title and before th
   assert.deepEqual(drawn({ step: "top", phase: "opening" }), ["A-09", null], "the return to the top reuses A-09: no drawing either");
   assert.deepEqual(drawn({ step: "half_close", phase: "reading" }, { ackReadings: true }), ["A-20", "curtain-partial-tape before-body"]);
   assert.deepEqual(drawn({ step: "closing", phase: "closing" }, {}, "C"), ["C-14", "descent-sequence before-body"], "clones follow their A screen");
-  assert.deepEqual(drawn({ phase: "review" }), ["A-21v", null], "L-43: the check first");
+  assert.deepEqual(drawn({ phase: "review" }), ["A-21v", "curtain-partial-tape before-body"], "L-43: the check first; L-97: with the tape drawing");
   assert.deepEqual(drawn({ phase: "review", check: { gap_cm: 1, passed: true, check_seconds: 10.5 } }), ["A-21", null]);
 });
 

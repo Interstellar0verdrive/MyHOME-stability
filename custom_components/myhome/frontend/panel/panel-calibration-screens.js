@@ -383,7 +383,9 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     if (view.check_interrupted) screen.notices.push({ tone: "warning", result: true, text: t("wiz_T568") });
     // L-78: never a dead end: a model Home Assistant can plan no check for may be saved without one (no «Verificata»).
     const impossible = ctx.status?.error?.code === "invalid_check";
-    return Object.assign(screen, { code: p("21v"), title: t("wiz_T544"), body: `${t("wiz_T545")}\n\n${tx("wiz_T564", { threshold: n(view.check_threshold_cm ?? 4, 0) })}`, illustration: false,
+    // L-97: the drawing of the reading with the tape at part height (what the check asks for), between title and text.
+    return Object.assign(screen, { code: p("21v"), title: t("wiz_T544"), body: `${t("wiz_T545")}\n\n${tx("wiz_T564", { threshold: n(view.check_threshold_cm ?? 4, 0) })}`,
+      illustration: { id: "curtain-partial-tape", position: BEFORE },
       actions: [{ id: "check-start", label: t("wiz_T546"), kind: "primary" },
         ...(impossible ? [{ id: "skip-check", label: t("wiz_T576"), kind: "secondary" }] : [])] });
   }
