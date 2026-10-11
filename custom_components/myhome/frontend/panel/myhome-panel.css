@@ -831,14 +831,16 @@ dialog.cal-dialog :is(button, select, input):focus:not(:focus-visible) { outline
 /* L-7: the tints under the pointer only with a real pointer: a tap on a phone leaves no tinted card behind (iOS keeps
    :hover after a tap), no tap flash; the keyboard's ring stays (:focus-visible). */
 .cal-row-main { cursor: pointer; transition: background var(--panel-ease); -webkit-tap-highlight-color: transparent; }
-@media (hover: hover) { .cal-row-main:hover { background: var(--panel-accent-soft); } }
+/* L-99: under the pointer a row (table row or card) takes the accent at 12 % over the surface. */
+@media (hover: hover) { .cal-row-main:hover { background: color-mix(in srgb, var(--panel-accent) 12%, var(--panel-surface)); } }
 .cal-row.is-running { background: color-mix(in srgb, var(--panel-warning) 7%, var(--panel-surface)); }
-/* An expanded cover: its title row at accent 8 % (12 % under the pointer, as closed rows), its details at 4 %. */
-/* L-83: an open row stands out: its band in the accent at 20 % over the surface (24 % under the pointer), its details at
-   10 %, in both themes. A row with a session in progress keeps its yellow (below). */
-.cal-row.is-expanded .cal-row-main { background: color-mix(in srgb, var(--panel-accent) 20%, var(--panel-surface)); }
-@media (hover: hover) { .cal-row.is-expanded .cal-row-main:hover { background: color-mix(in srgb, var(--panel-accent) 24%, var(--panel-surface)); } }
-.cal-row.is-expanded .cal-row-details { background: color-mix(in srgb, var(--panel-accent) 10%, var(--panel-surface)); }
+/* L-98 (in place of L-83's accent tints): an open row's band in the secondary background at 65 % over the surface, its
+   details at 30 %, in both themes. L-99: under the pointer the open band keeps its grey with the hover's accent 12 % laid
+   over it (the stronger of the two, so the pointer still shows on it). A row in progress keeps its yellow (below). */
+.cal-row.is-expanded .cal-row-main { background: color-mix(in srgb, var(--panel-surface-2) 65%, var(--panel-surface)); }
+@media (hover: hover) { .cal-row.is-expanded .cal-row-main:hover {
+  background: color-mix(in srgb, var(--panel-accent) 12%, color-mix(in srgb, var(--panel-surface-2) 65%, var(--panel-surface))); } }
+.cal-row.is-expanded .cal-row-details { background: color-mix(in srgb, var(--panel-surface-2) 30%, var(--panel-surface)); }
 /* A cover in progress keeps its yellow in every state (pointer, expanded title, details): no blue over the yellow. */
 @media (hover: hover) { .cal-row.is-running .cal-row-main:hover { background: color-mix(in srgb, var(--panel-warning) 14%, transparent); } }
 .cal-row.is-running.is-expanded .cal-row-main { background: color-mix(in srgb, var(--panel-warning) 12%, transparent); }

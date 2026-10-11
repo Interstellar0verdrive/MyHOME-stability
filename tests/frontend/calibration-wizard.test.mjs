@@ -1254,19 +1254,24 @@ test("L-80/L-82: notes by tone and theme: a 2 px solid bar, square; in light inf
   host.remove();
 });
 
-test("L-83: an open row's band in the accent at 20 %, its details at 10 %, both themes; a row in progress keeps its yellow", () => {
+test("L-98/L-99: an open row in the secondary background (band 65 %, details 30 %), the pointer's accent 12 % on every row, both themes; a row in progress keeps its yellow", () => {
   const doc = dom.window.document;
   for (const theme of ["light", "dark"]) {
     const host = doc.createElement("div"); host.className = "cal-tab"; host.dataset.theme = theme; doc.body.append(host);
     host.innerHTML = `<div class="cal-row is-expanded"><div class="cal-row-main"></div><div class="cal-row-details"></div></div>
       <div class="cal-row is-expanded is-running"><div class="cal-row-main"></div><div class="cal-row-details"></div></div>`;
     const [open, running] = host.querySelectorAll(".cal-row");
-    assert.equal(winner(open.querySelector(".cal-row-main"), "background"), "color-mix(in srgb, var(--panel-accent) 20%, var(--panel-surface))", theme);
-    assert.equal(winner(open.querySelector(".cal-row-details"), "background"), "color-mix(in srgb, var(--panel-accent) 10%, var(--panel-surface))", theme);
+    assert.equal(winner(open.querySelector(".cal-row-main"), "background"), "color-mix(in srgb, var(--panel-surface-2) 65%, var(--panel-surface))", theme);
+    assert.equal(winner(open.querySelector(".cal-row-details"), "background"), "color-mix(in srgb, var(--panel-surface-2) 30%, var(--panel-surface))", theme);
     assert.match(winner(running.querySelector(".cal-row-main"), "background"), /--panel-warning/, `${theme}: in progress stays yellow`);
     assert.match(winner(running.querySelector(".cal-row-details"), "background"), /--panel-warning/);
     host.remove();
   }
+  // The pointer (jsdom has no :hover): a closed row, and the open one with the accent laid over its grey.
+  assert.match(cascadeCss, /@media \(hover: hover\) \{ \.cal-row-main:hover \{ background: color-mix\(in srgb, var\(--panel-accent\) 12%, var\(--panel-surface\)\); \} \}/);
+  assert.match(cascadeCss, /\.cal-row\.is-expanded \.cal-row-main:hover \{\s*background: color-mix\(in srgb, var\(--panel-accent\) 12%, color-mix\(in srgb, var\(--panel-surface-2\) 65%, var\(--panel-surface\)\)\); \}/);
+  assert.match(cascadeCss, /\.cal-row\.is-running \.cal-row-main:hover \{ background: color-mix\(in srgb, var\(--panel-warning\) 14%, transparent\); \}/, "in progress: its yellow under the pointer");
+  assert.doesNotMatch(cascadeCss, /\.cal-row\.is-expanded \.cal-row-(main|details) \{ background: color-mix\(in srgb, var\(--panel-accent\)/, "L-83's accent tints are gone");
 });
 
 test("R-8: what the tab hangs on the window is removed when it is cleared, and added once when it shows again", async () => {
