@@ -814,7 +814,8 @@ test("L-92: on the phone the back arrow is the ✕'s twin, centred on the title'
   assert.match(rule(portrait, ".wiz-x"), target);
   assert.match(rule(portrait, ".wiz-back ha-icon"), /--mdc-icon-size: 24px/, "24 px glyph");
   assert.match(rule(portrait, ".wiz-x ha-icon"), /--mdc-icon-size: 24px/);
-  // A 24 px first line: -10 px above and below centre both 44 px targets on it without growing the header.
+  // -10 px above and below keep the header's height; L-102: arrow, ✕ and title block centred on the band's height.
+  assert.match(rule(portrait, ".wiz-head"), /align-items: center/);
   assert.match(rule(portrait, ".wiz-cover"), /line-height: 24px/);
   assert.match(rule(portrait, ".wiz-back"), /margin: -10px 0 -10px -10px/);
   assert.match(rule(portrait, ".wiz-x"), /margin: -10px -10px -10px 0/);
@@ -1244,9 +1245,10 @@ test("L-98/L-99: an open row in the secondary background (band 65 %, details 30 
     assert.match(winner(running.querySelector(".cal-row-details"), "background"), /--panel-warning/);
     host.remove();
   }
-  // The pointer (jsdom has no :hover): a closed row, and the open one with the accent laid over its grey.
+  // The pointer (jsdom has no :hover): a closed row takes the accent; L-101: the open one's grey intensifies instead.
   assert.match(cascadeCss, /@media \(hover: hover\) \{ \.cal-row-main:hover \{ background: color-mix\(in srgb, var\(--panel-accent\) 12%, var\(--panel-surface\)\); \} \}/);
-  assert.match(cascadeCss, /\.cal-row\.is-expanded \.cal-row-main:hover \{\s*background: color-mix\(in srgb, var\(--panel-accent\) 12%, color-mix\(in srgb, var\(--panel-surface-2\) 65%, var\(--panel-surface\)\)\); \}/);
+  assert.match(cascadeCss, /\.cal-row\.is-expanded \.cal-row-main:hover \{\s*background: color-mix\(in srgb, var\(--primary-text-color, #182b37\) 6%, color-mix\(in srgb, var\(--panel-surface-2\) 65%, var\(--panel-surface\)\)\); \}/);
+  assert.doesNotMatch(cascadeCss, /\.cal-row\.is-expanded \.cal-row-main:hover \{[^}]*--panel-accent/, "no accent on the open row's hover");
   assert.match(cascadeCss, /\.cal-row\.is-running \.cal-row-main:hover \{ background: color-mix\(in srgb, var\(--panel-warning\) 14%, transparent\); \}/, "in progress: its yellow under the pointer");
   assert.doesNotMatch(cascadeCss, /\.cal-row\.is-expanded \.cal-row-(main|details) \{ background: color-mix\(in srgb, var\(--panel-accent\)/, "L-83's accent tints are gone");
 });
@@ -1301,6 +1303,19 @@ test("L-95b: red has two classes: the emergency («Ferma la tapparella») filled
     assert.match(winner(abandon, "color"), /--panel-error/, `${abandon.className}: red text`);
     assert.match(winner(abandon, "border-color") || winner(abandon, "border"), /--panel-error/, `${abandon.className}: red outline`);
   }
+  host.remove();
+});
+
+test("L-104: a ⋮ menu item reads from the start at every width, its icon on the first line, centred in its height", () => {
+  const doc = dom.window.document, host = doc.createElement("div");
+  host.innerHTML = `<div class="cal-tab"><span class="cal-menu" role="menu"><button role="menuitem" class="cal-menu-danger"><ha-icon></ha-icon>Annulla la calibrazione in corso</button></span></div>`;
+  doc.body.append(host);
+  const item = host.querySelector("button");
+  assert.equal(winner(item, "text-align"), "start");
+  assert.equal(winner(item, "display"), "grid");
+  assert.equal(winner(item, "align-items"), "start", "the icon on the first line");
+  assert.equal(winner(item, "align-content"), "center", "the whole centred in the item's height");
+  assert.equal(winner(item, "line-height"), "18px", "a line as tall as the icon");
   host.remove();
 });
 

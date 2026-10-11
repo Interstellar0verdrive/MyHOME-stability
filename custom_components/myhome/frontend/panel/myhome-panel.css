@@ -835,11 +835,11 @@ dialog.cal-dialog :is(button, select, input):focus:not(:focus-visible) { outline
 @media (hover: hover) { .cal-row-main:hover { background: color-mix(in srgb, var(--panel-accent) 12%, var(--panel-surface)); } }
 .cal-row.is-running { background: color-mix(in srgb, var(--panel-warning) 7%, var(--panel-surface)); }
 /* L-98 (in place of L-83's accent tints): an open row's band in the secondary background at 65 % over the surface, its
-   details at 30 %, in both themes. L-99: under the pointer the open band keeps its grey with the hover's accent 12 % laid
-   over it (the stronger of the two, so the pointer still shows on it). A row in progress keeps its yellow (below). */
+   details at 30 %, in both themes. L-101: under the pointer the open band's grey intensifies (the text colour at 6 % over
+   it), as the yellow of a row in progress does; closed rows take the accent (L-99). A row in progress keeps its yellow. */
 .cal-row.is-expanded .cal-row-main { background: color-mix(in srgb, var(--panel-surface-2) 65%, var(--panel-surface)); }
 @media (hover: hover) { .cal-row.is-expanded .cal-row-main:hover {
-  background: color-mix(in srgb, var(--panel-accent) 12%, color-mix(in srgb, var(--panel-surface-2) 65%, var(--panel-surface))); } }
+  background: color-mix(in srgb, var(--primary-text-color, #182b37) 6%, color-mix(in srgb, var(--panel-surface-2) 65%, var(--panel-surface))); } }
 .cal-row.is-expanded .cal-row-details { background: color-mix(in srgb, var(--panel-surface-2) 30%, var(--panel-surface)); }
 /* A cover in progress keeps its yellow in every state (pointer, expanded title, details): no blue over the yellow. */
 @media (hover: hover) { .cal-row.is-running .cal-row-main:hover { background: color-mix(in srgb, var(--panel-warning) 14%, transparent); } }
@@ -875,6 +875,10 @@ dialog.cal-dialog :is(button, select, input):focus:not(:focus-visible) { outline
 .cal-menu-wrap { position: relative; }
 .cal-menu { position: absolute; inset-inline-end: 0; top: calc(100% + 4px); z-index: 3; display: grid; min-width: 200px; padding: 6px; border: 1px solid var(--panel-border); border-radius: var(--cal-btn-radius); background: var(--panel-surface); box-shadow: var(--panel-shadow-hover); }
 .cal-menu button { justify-content: start; border: 0; background: transparent; }
+/* L-104: a label that wraps («Annulla la calibrazione in corso») reads from the start, at every width, its icon on the
+   first line (lines as tall as the 18 px icon); the whole stays centred in the item's height, 40 or 44 px. */
+.cal-menu button { display: grid; grid-template-columns: 18px minmax(0, 1fr); align-content: center; align-items: start;
+  justify-content: stretch; text-align: start; line-height: 18px; }
 .cal-menu button:hover, .cal-menu button:focus-visible { background: var(--panel-accent-soft); }
 /* L-10: cancelling the calibration in progress, in the row's menu, in red; its confirmation's two buttons on one row. */
 .cal-menu button.cal-menu-danger { color: var(--panel-error); }
@@ -1598,8 +1602,10 @@ dialog.cal-dialog .dialog-head { justify-content: space-between; padding-block: 
   /* M2-1: every ✕ of a title bar or sheet is a 44 px touch target with a 24 px icon. */
   .wiz-x, .wiz-sheet-close, .cal-page-close { width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0; justify-content: center; }
   .wiz-x ha-icon, .wiz-sheet-close ha-icon, .cal-page-close ha-icon { --mdc-icon-size: 24px; }
-  /* L-92: the back arrow is the ✕'s twin: the same 44 px target, 24 px glyph and colour, both centred on the title's
-     first line (a 24 px line; -10 px above and below keep the header's height), each glyph 16 px from its edge. */
+  /* L-92: the back arrow is the ✕'s twin: the same 44 px target, 24 px glyph and colour (-10 px above and below keep
+     the header's height), each glyph 16 px from its edge. L-102: the arrow, the ✕ and the title block all centred on
+     the band's height (below the status bar's safe area). */
+  .wiz-head { align-items: center; }
   .wiz-cover { line-height: 24px; }
   .wiz-back { display: inline-flex; width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0; justify-content: center; align-items: center;
     margin: -10px 0 -10px -10px; }
