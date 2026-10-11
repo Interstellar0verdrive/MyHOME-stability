@@ -16,7 +16,7 @@ function holdScroll(host) {
 
 /** WHO 2 "Calibration" view: what each timed cover uses, its measurement state and the ways to measure it. */
 const asset = (name) => { const url = new URL(name, import.meta.url); url.search = new URL(import.meta.url).search; return url.href; };
-const [{ escapeHtml: esc }, model, text, { CoverCalibration, checkedCalibrationClient }, { CalibrationWizard }, { ProfileCatalogueEditor }, { morph }, { layout, SHEETS, PHONE, SHORT, listBand, contentWidth, fitBars, fitRows, dockBar, keepScrollOnPick, focusOnOpen, revealHead }, { cancelSession, CHECK_THRESHOLD_CM }] = await Promise.all([
+const [{ escapeHtml: esc }, model, text, { CoverCalibration, checkedCalibrationClient }, { CalibrationWizard }, { ProfileCatalogueEditor }, { morph }, { layout, SHEETS, PHONE, SHORT, listBand, contentWidth, fitBars, fitRows, fitActions, dockBar, keepScrollOnPick, focusOnOpen, revealHead }, { cancelSession, CHECK_THRESHOLD_CM }] = await Promise.all([
   import(asset("panel-dom.js")), import(asset("panel-model.js")), import(asset("panel-calibration-text.js")),
   import(asset("panel-cover-calibration.js")), import(asset("panel-calibration-wizard.js")), import(asset("panel-profile-catalogue-editor.js")),
   import(asset("panel-calibration-morph.js")), import(asset("panel-calibration-layout.js")), import(asset("panel-calibration-gateway.js")),
@@ -605,6 +605,7 @@ export class CalibrationTab {
     morph(host, html);
     fitBars(host);
     fitRows(host);
+    fitActions(host);
     this._band();
     this._alignCards();
     this._syncHold();
@@ -674,6 +675,7 @@ export class CalibrationTab {
     this._alignCards();
     fitBars(host);
     fitRows(host);
+    fitActions(host);
   }
 
   /**

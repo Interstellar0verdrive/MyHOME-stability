@@ -169,6 +169,26 @@ export const ROW_NAME_MIN = 200;
  * the other while it still does (`is-beside is-stacked`), under the name otherwise. Measured again when a list's
  * width changes.
  */
+/**
+ * L-109: the table's actions column (CTA and ⋮) as wide as its widest row needs, 158 px at least: a label never wraps
+ * («Segui sessione», «Riprendi sessione»). One width for every row, so the columns stay aligned.
+ */
+export function fitActions(root) {
+  for (const list of root?.querySelectorAll?.(".cal-list") || []) {
+    let widest = 0;
+    for (const cell of list.querySelectorAll(".cal-row-actions")) {
+      const parts = [...cell.children].filter((child) => child.getClientRects().length);
+      if (!parts.length) continue;
+      const gap = parseFloat(cell.ownerDocument.defaultView.getComputedStyle(cell).columnGap) || 0;
+      widest = Math.max(widest, parts.reduce((sum, child) => sum + child.getBoundingClientRect().width, 0) + gap * (parts.length - 1));
+    }
+    const value = widest ? `${Math.ceil(widest)}px` : "";
+    if (list.style.getPropertyValue("--cal-actions-w") !== value) {
+      if (value) list.style.setProperty("--cal-actions-w", value); else list.style.removeProperty("--cal-actions-w");
+    }
+  }
+}
+
 export function fitRows(root) {
   for (const list of root?.querySelectorAll?.(".cal-batch-rows") || []) {
     for (const row of list.querySelectorAll(":scope > .cal-batch-row")) fitRow(row);

@@ -1239,7 +1239,7 @@ test("the list's bands by content width (1200/1016/700) and the wizard's layouts
   assert.match(calibration, /\.cal-list-head > \.cal-sort-cell:nth-child\(2\) \{ grid-column: 1; grid-row: 1; padding-inline-start: calc\(18px \+ 40px \+ 2 \* var\(--cal-lead-gap\)\); \}/);
   // Q-3/Q-5: three equal columns (cover with its chevron and icon, status, profile), from 1200 px the 158 px actions too.
   assert.match(calibration, /--cal-cols: repeat\(3, minmax\(0, 1fr\)\);/);
-  assert.match(calibration, /@container caltab \(min-width: 1200px\) \{\s*\.cal-list \{ --cal-cols: repeat\(3, minmax\(0, 1fr\)\) 158px; \}/);
+  assert.match(calibration, /@container caltab \(min-width: 1200px\) \{\s*(\/\*[\s\S]*?\*\/\s*)?\.cal-list \{ --cal-cols: repeat\(3, minmax\(0, 1fr\)\) max\(158px, var\(--cal-actions-w, 158px\)\); \}/);
   for (const n of [1, 2, 3]) assert.match(calibration, new RegExp(`\\.cal-details-grid > section:nth-child\\(${n}\\) \\{ grid-column: ${n}; \\}`));
   const address = row(tab, "cover.kitchen_two").querySelector(".cal-row-address");
   assert.equal(address.textContent.replace(/\u00a0/g, " "), "Address: 91 · A: 9 · PL: 1", "always whole (Q-15)");
@@ -1546,7 +1546,7 @@ test("D-03: from 1016 to 1199 the profile chip keeps clear of the CTA and ⋮ sh
   const { readFileSync } = await import("node:fs");
   const css = readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   const table = css.slice(css.indexOf("@container caltab (min-width: 1016px) {\n  /* One grid"));
-  assert.match(table, /\.cal-row-profile \{ min-width: 0; max-width: calc\(100% - 158px - 12px\); \}\s*\.cal-row-profile \.cal-profile-chip \{ max-width: min\(180px, 100%\); \}/);
+  assert.match(table, /\.cal-row-profile \{ min-width: 0; max-width: calc\(100% - max\(158px, var\(--cal-actions-w, 158px\)\) - 12px\); \}\s*\.cal-row-profile \.cal-profile-chip \{ max-width: min\(180px, 100%\); \}/);
   const wide = css.slice(css.indexOf("@container caltab (min-width: 1200px) {"));
   assert.match(wide.slice(0, wide.indexOf("\n}\n")), /\.cal-row-profile \{ max-width: none; \}/, "with its own actions column the profile has the whole column");
 });
@@ -1761,6 +1761,25 @@ test("L-107: a session started, moved on or ended elsewhere reaches the list at 
   for (let i = 0; i < 3; i++) subscription.callback({ entry_id: "one", revision: 7, kind: "session" });
   await new Promise((resolve) => setTimeout(resolve, 400)); await tick(4);
   assert.equal(reads(), before + 1, "one read, within a quarter of a second, not at the next 15 s refresh");
+});
+
+test("L-109: the table's actions column is as wide as its widest row (158 px at least) and its labels never wrap", async () => {
+  const { fitActions } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-layout.js");
+  const host = document.createElement("div");
+  host.innerHTML = `<div class="cal-list">${["Segui sessione", "Calibra"].map((label) => `<div class="cal-row"><span class="cal-row-actions" style="column-gap: 8px">
+    <button class="cal-row-action">${label}</button><span class="cal-menu-wrap"></span></span></div>`).join("")}</div>`;
+  document.body.append(host);
+  const size = (element, width) => { element.getBoundingClientRect = () => ({ width, height: 40 }); element.getClientRects = () => [{}]; };
+  const [follow, measure] = host.querySelectorAll(".cal-row-action");
+  size(follow, 118); size(measure, 71);
+  for (const menu of host.querySelectorAll(".cal-menu-wrap")) size(menu, 40);
+  fitActions(host);
+  assert.equal(host.querySelector(".cal-list").style.getPropertyValue("--cal-actions-w"), "166px", "118 + 8 + 40");
+  host.remove();
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.cal-list \{ --cal-cols: repeat\(3, minmax\(0, 1fr\)\) max\(158px, var\(--cal-actions-w, 158px\)\); \}/);
+  assert.match(css, /\.cal-row-action \{[^}]*white-space: nowrap;/);
+  assert.match(css, /\.cal-row-profile \{ min-width: 0; max-width: calc\(100% - max\(158px, var\(--cal-actions-w, 158px\)\) - 12px\); \}/, "1016–1199: the profile keeps clear of the same width");
 });
 
 test("Z-1: the details' times carry one decimal, as the wizard's", async () => {

@@ -869,7 +869,7 @@ dialog.cal-dialog :is(button, select, input):focus:not(:focus-visible) { outline
 .cal-row-profile > .muted { display: none; }
 /* Row actions as the maintainer's outlined buttons: 40 px, divider border, radius 10, text colour; ⋮ a 40 px square. */
 .cal-row-actions { grid-area: actions; display: flex; gap: 8px; align-items: center; justify-content: end; }
-.cal-row-action { min-height: 40px; padding-inline: 14px; background: transparent; font-weight: 600; }
+.cal-row-action { min-height: 40px; padding-inline: 14px; background: transparent; font-weight: 600; white-space: nowrap; }
 .cal-row-actions .icon-button { width: 40px; min-width: 40px; height: 40px; min-height: 40px; padding: 0; border-color: var(--panel-border); background: transparent; color: var(--panel-text-2); }
 .cal-row-actions .icon-button:hover { border-color: var(--panel-accent); background: var(--panel-accent-soft); color: var(--panel-text-2); }
 .cal-menu-wrap { position: relative; }
@@ -1175,7 +1175,7 @@ dialog.cal-dialog :is(button, select, input):focus:not(:focus-visible) { outline
   /* 1016–1199: CTA and ⋮ at the right inside the profile column. D-03: the profile keeps clear of them, the room of the
      158 px actions column of the wider table and a 12 px gap; the chip is cut sooner (Q-22's 180 px stays the most). */
   .cal-row-actions { grid-column: 3; justify-self: end; }
-  .cal-row-profile { min-width: 0; max-width: calc(100% - 158px - 12px); }
+  .cal-row-profile { min-width: 0; max-width: calc(100% - max(158px, var(--cal-actions-w, 158px)) - 12px); }
   .cal-row-profile .cal-profile-chip { max-width: min(180px, 100%); }
   .cal-row-profile > .muted { display: block; font-size: 13px; }
   .cal-row-last-inline { display: none; }
@@ -1190,7 +1190,8 @@ dialog.cal-dialog :is(button, select, input):focus:not(:focus-visible) { outline
   .cal-details-grid .cal-note { max-width: none; }
 }
 @container caltab (min-width: 1200px) {
-  .cal-list { --cal-cols: repeat(3, minmax(0, 1fr)) 158px; }
+  /* L-109: the actions column as wide as its widest row (CTA and ⋮, measured by `fitActions`), 158 px at least. */
+  .cal-list { --cal-cols: repeat(3, minmax(0, 1fr)) max(158px, var(--cal-actions-w, 158px)); }
   .cal-list-head > :nth-child(5) { display: block; grid-column: 4; }
   .cal-row-actions { grid-column: 4; }
   .cal-row-profile { max-width: none; }
