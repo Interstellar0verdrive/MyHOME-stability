@@ -1145,6 +1145,10 @@ export class CalibrationWizard {
     // (an owner that published nothing) keeps what it judged from Home Assistant's views while it followed.
     if (view && !view.preview) {
       if (view.read_only) {
+        // Review S1: control went to another device: a question asked as owner («Esci senza salvare?», «Calibrazione in
+        // corso») no longer applies; it closes, and the panel stays where it was.
+        if (this._navResolve) this._navAnswer(false);
+        if (this._frame?.querySelector(".wiz-dialog:not(.wiz-nav-dialog):not([hidden])")) this._closeDialog(false);
         local.following = true;
         if (view.screen) this._followed = { gateway: this._gateway, screen: view.screen };
       } else if (local.following && view.owner) {
@@ -1430,8 +1434,11 @@ export class CalibrationWizard {
     const gateway = this._gateway;
     if (!gateway) { this._finish(); return; }
     if (gateway.preview) { this._finish(); return; }
+    // Review S1 (L-113): a tab that lost control while «Esci senza salvare?» was open only stops following: it never
+    // takes control back to cancel the session another device now guides.
+    if (gateway.view?.read_only) { this._finish(); return; }
     const discarded = this._discarded(gateway);
-    // L-10: also from a tab that only reads the session (it takes control to cancel it).
+    // L-10: an owner's interrupted session too (`abort` takes control first only where it must).
     await gateway.abort();
     if (gateway.status.cancelPending || gateway.status.error) { if (this._gateway === gateway) this._render(); return; }
     discarded();

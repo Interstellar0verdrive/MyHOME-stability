@@ -2472,6 +2472,26 @@ for (const [label, owner] of [["the owner starts again, its reader", false], ["a
   });
 }
 
+test("review S1: «Esci senza salvare?» open, another device takes control, the confirm only stops following: no claim, no cancel", async () => {
+  const { backend, tab, wiz, panel } = await mount({ session: resumed({ phase: "briefing", step: "half_open", reading_kind: "half_open" }) });
+  tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
+  const dialog = () => wiz()?.querySelector(".wiz-dialog:not(.wiz-nav-dialog)");
+  // 1. The owner asks to leave: the question opens.
+  wiz().querySelector('[data-wiz="exit"]').click(); await tick();
+  assert.equal(dialog().hidden, false);
+  // 2. Another device takes control: this tab reads; the owner's question closes at once.
+  const view = backend.view;
+  backend.view = (extra = {}) => view({ owner: false, read_only: true, ...extra });
+  backend.emit(); await tick(6);
+  assert.equal(dialog().hidden, true, "the question asked as owner is gone");
+  assert.ok(wiz().querySelector(".wiz-readonly"));
+  // 3. A confirm that still lands (a tap already on its way): it only stops following.
+  await panel._calibrationTab._wizard._act("leave"); await tick(8);
+  assert.deepEqual([claims(backend), cancels(backend)], [0, 0], "never takes control back to cancel");
+  assert.equal(wiz(), null, "back to the list");
+  assert.notEqual(backend.session.phase, "cancelled");
+});
+
 test("L-10: Start over and Abandon from S-01 cancel the interrupted session first; the exit of a live one cancels it", async () => {
   // Start over: the session is cancelled, then the wizard starts again from «Before you begin».
   const a = await mount({ session: interrupted() });
