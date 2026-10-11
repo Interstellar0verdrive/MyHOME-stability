@@ -732,7 +732,7 @@ test("L-55: the precision tile's note is green within the threshold, yellow beyo
   assert.deepEqual([good.results.at(-1).label, good.results.at(-1).value, good.results.at(-1).caption, good.results.at(-1).note.tone], ["Precisione", "2", "scarto a metà corsa", "success"]);
   const bad = at({ expected_cm: 99, measured_cm: 93, deviation_cm: -6, passed: false });
   assert.equal(bad.results.at(-1).note.tone, "warning");
-  assert.match(bad.results.at(-1).note.text, /Scarto 6 cm: sopra i 4 cm che consideriamo accettabili/);
+  assert.match(bad.results.at(-1).note.text, /Scarto 6 cm: sopra i 4 cm considerati accettabili/);
   assert.ok(bad.actions.some((action) => action.id === "check-start"), "the check can be repeated");
 });
 
@@ -1317,6 +1317,17 @@ test("L-104: a ⋮ menu item reads from the start at every width, its icon on th
   assert.equal(winner(item, "align-content"), "center", "the whole centred in the item's height");
   assert.equal(winner(item, "line-height"), "18px", "a line as tall as the icon");
   host.remove();
+});
+
+test("L-106: our texts never speak in the first person plural (Italian and English)", () => {
+  // Our keys (wiz…, cal tab texts added by this panel); calBrief_* belongs to the maintainer's view and is not ours.
+  const ours = (key) => key.startsWith("wiz") || key.startsWith("calTab");
+  const plural = { it: /\b\w+(iamo|eremo|iremo|aremo)\b|\bnoi\b|\bnostr\w*/i, en: /\b(we|we'll|us|our|ours|let's)\b/i };
+  for (const language of ["it", "en"]) {
+    const found = Object.entries(translations[language]).filter(([key, value]) => ours(key) && plural[language].test(String(value))).map(([key]) => key);
+    assert.deepEqual(found, [], language);
+  }
+  assert.equal(translations.it.wiz_T196.split("\n**")[1], "Nel dubbio conviene ripartire da zero, con il percorso completo: tempi e letture col metro e alla fine potrai aggiungere il perfezionamento.");
 });
 
 test("R-8: what the tab hangs on the window is removed when it is cleared, and added once when it shows again", async () => {

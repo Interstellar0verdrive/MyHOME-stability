@@ -37,7 +37,7 @@ test("C-01 shows what the cover uses now and C-02 preselects its first case, as 
   await press("current");
   const options = [...wiz().querySelectorAll('input[name="case"]')];
   assert.deepEqual(options.map((input) => [input.value, input.checked]), [["points_only", true], ["times_only", false], ["times_and_rolls", false]]);
-  assert.match(options[0].closest("label").innerHTML, /^<input[^>]*><span class="wiz-radio-text"><span class="wiz-radio-label"><strong>When sent halfway, it stops too high or too low; at the end stop it works correctly<\/strong> <span class="badge wiz-recommended">Recommended<\/span><\/span><span class="wiz-radio-explain">We will remeasure only/, "title and explanation apart, 4 px between them (G4-3); L-34: recommended");
+  assert.match(options[0].closest("label").innerHTML, /^<input[^>]*><span class="wiz-radio-text"><span class="wiz-radio-label"><strong>When sent halfway, it stops too high or too low; at the end stop it works correctly<\/strong> <span class="badge wiz-recommended">Recommended<\/span><\/span><span class="wiz-radio-explain">Only the tape measure readings are measured again/, "title and explanation apart, 4 px between them (G4-3); L-34: recommended");
   assert.match(wiz().querySelector(".wiz-body").textContent, /This cover has only its base calibration: fine-tuning adds the readings/, "L-34: why");
 });
 
