@@ -24,6 +24,8 @@ const [{ escapeHtml: esc }, model, text, { CoverCalibration, checkedCalibrationC
 const { fill, rich, number, dateText, names, followedBy } = text;
 
 const MEASURED = ["guided", "automatic"];
+/** L-100: a list after a colon, commas only (no «and»: one name or many read the same); a closing number stays with its name (D-41). */
+const commaList = (list) => list.map((name) => String(name).replace(/ (\d+)$/, "\u00a0$1")).join(", ");
 /**
  * L-93: the action of an open session says what it will do. Home Assistant gives it back to the tab that owns it
  * (after a reload, or once the wizard was closed with the session left running): «Riprendi sessione»; any other tab
@@ -897,7 +899,7 @@ export class CalibrationTab {
           [t("calTabMethod"), [t(`calTabMethod_${item.method || "none"}`), item.status !== "to_measure" ? t(`calTabStatusDetail_${item.detail}`) : ""].filter(Boolean).join(" · ")]])}
           ${item.profile && scaled ? `<p class="${note}">${esc(fill(t("calTabInheritedNote"), { profile: item.profile.name }))}</p>` : ""}${action(measure)}</section>
         <section><h4>${esc(t("calTabColProfile"))}</h4>${item.profile ? `<p>${this._profileChip(item.profile.name, true)}</p>
-          <p>${esc(followers.length ? fill(t("calTabFollowers"), { names: names(followers, language) }) : t("calTabFollowersNone"))}</p>
+          <p>${esc(followers.length ? fill(t("calTabFollowers"), { names: commaList(followers) }) : t("calTabFollowersNone"))}</p>
           <p class="${note}">${esc(t("calTabProfileNote"))}</p>` : `<p class="muted">${esc(t("calTabProfileNone"))}</p>`}${action(assign)}</section>
       </div>`;
   }
