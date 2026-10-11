@@ -133,6 +133,7 @@ async def test_one_leg_preserves_saved_evidence_shared_profile_and_restart(
         "source": "guided",
         "recorded_at": "2026-09-16T10:00:00+00:00",
         "origin_unique_id": quick.cover.unique_id,
+        "ended_by": "press",
     }
     assert [str(item[0]) for item in quick.queue] == [
         "*2*1*11##" if session.direction == "opening" else "*2*2*11##",
@@ -144,15 +145,16 @@ async def test_one_leg_preserves_saved_evidence_shared_profile_and_restart(
     assert profiles.get_store(hass, session.entry_id).data == persisted
 
 
-@pytest.mark.parametrize("failure", ["cancel", "unexpected_stop", "storage_error"])
+@pytest.mark.parametrize("failure", ["cancel", "unexpected_movement", "storage_error"])
 async def test_quick_failure_preserves_original_configuration(quick, failure):
     before = copy.deepcopy(quick.session.store.data)
-    if failure == "unexpected_stop":
-        await act(quick, "open" if quick.session.direction == "opening" else "close")
+    if failure == "unexpected_movement":
+        opening = quick.session.direction == "opening"
+        await act(quick, "open" if opening else "close")
         quick.queue[-1][1]()
-        bus(quick, "*2*1*11##" if quick.session.direction == "opening" else "*2*2*11##")
-        bus(quick, "*2*0*11##")
-        assert quick.session.phase == "interrupted"
+        bus(quick, "*2*1*11##" if opening else "*2*2*11##")
+        bus(quick, "*2*2*11##" if opening else "*2*1*11##")  # Reversed by a wall switch.
+        assert (quick.session.phase, quick.session.reason) == ("interrupted", "unexpected_movement")
     else:
         await measure(quick)
         if failure == "cancel":
@@ -166,6 +168,23 @@ async def test_quick_failure_preserves_original_configuration(quick, failure):
     assert quick.session.store.data == before
     if failure != "storage_error":
         assert quick.session.values == quick.session.provenance == {}
+
+
+async def test_quick_stop_status_before_the_press_records_the_stop(quick):
+    """A single-direction leg follows the same rule as a full one, then goes to review."""
+    opening = quick.session.direction == "opening"
+    await act(quick, "open" if opening else "close")
+    assert quick.queue[-1][1]()
+    quick.clock[0] += 3
+    bus(quick, "*2*1*11##" if opening else "*2*2*11##")
+    quick.clock[0] += 12.75
+    bus(quick, "*2*0*11##")
+    assert quick.session.view()["motor_stopped"] is True
+    quick.clock[0] += 1.2
+    await act(quick, "endpoint")
+    assert quick.session.phase == "review"
+    assert quick.session.values[f"{quick.session.direction}_time"] == 12.75
+    assert quick.session.provenance[quick.session.direction]["ended_by"] == "bus_stop"
 
 
 async def test_quick_requires_guided_mode_and_valid_direction(hass, plant):

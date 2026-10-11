@@ -149,7 +149,7 @@ integration rather than the next beta.
 | --- | --- | --- | --- |
 | Entry point | Experimental `myhome/cover_calibration/start` and `action` WebSockets, owned by one socket | `myhome.calibrate_cover`, native buttons, set/reset/stop operations | One backend session/controller with explicit ownership and cancellation semantics for both socket and service clients |
 | Completion | Guided endpoints remain operator-confirmed; optional automatic open/close/open completes each run on actuator stop, then requires review/Save | Automatic sequence: open to establish position, close and measure, open and measure; actuator stop ends each run | Define supported automatic/manual completion modes and their interruption rules |
-| Measurement boundary | Matching bus feedback is required; guided duration ends at operator confirmation, automatic duration at standard actuator stop (`state == 0`); no write-clock fallback | Motion anchor to actuator stop status; ordinary manually stopped runs expose duration to the Stop write through `last_run_seconds` | Agree one definition of the reported duration; retain manual endpoint evidence separately from physical Stop acknowledgement |
+| Measurement boundary | Matching bus feedback is required; guided duration ends at operator confirmation, or at the standard actuator stop if the confirmation follows it, automatic duration at standard actuator stop (`state == 0`); no write-clock fallback | Motion anchor to actuator stop status; ordinary manually stopped runs expose duration to the Stop write through `last_run_seconds` | Agree one definition of the reported duration; retain manual endpoint evidence separately from physical Stop acknowledgement |
 | Persistence | `myhome.cover_profiles.<entry_id>` HA storage v4, opaque profiles, native unique-ID assignments, per-direction evidence and revision checks | Config-entry options `cover_travel_times`, keyed by the cover's device ID; directional times and source metadata | Define identity mapping, conflict policy and one authoritative persistence path |
 | Saving | Review then explicitly save a new assigned profile | Automatic calibration stores its result; manual set service also persists values | Decide when automatic modes may save and how all writers update the same revision/notifications |
 | Device support | Standard timed covers; advanced hardware-position covers read-only | Automatic calibration rejects advanced covers | Use capability checks; actuator stop feedback does not itself imply an advanced cover |
@@ -157,7 +157,8 @@ integration rather than the next beta.
 
 **Timing is not yet identical.** Our endpoint-confirmation duration includes
 operator reaction and the request's trip to HA, but excludes the later wait for
-the Stop write. #349's ordinary-run duration ends at that write or the actuator's
+the Stop write; when the actuator's stop status arrives before the confirmation,
+the duration ends at that status instead. #349's ordinary-run duration ends at that write or the actuator's
 stop status. Our automatic mode shares the bus-start/actuator-stop boundary when that feedback
 is available, but does not use #349’s write-time fallback. This does not make all
 values from the two implementations interchangeable. Queue delay, bus feedback latency, endpoint evidence and Stop

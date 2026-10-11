@@ -183,15 +183,14 @@ async def test_travel_and_heartbeat_timeout_discard_values(calibration):
     assert cal.cover._calibration is None
 
 
-@pytest.mark.parametrize("event,reason", [("*2*2*11##", "unexpected_movement"), ("*2*0*11##", "unexpected_stop")])
-async def test_external_bus_interference_invalidates_measurement(calibration, event, reason):
+async def test_external_bus_interference_invalidates_measurement(calibration):
     cal = calibration
     await act(cal, "open")
     cal.queue[-1][1]()
     bus(cal, "*2*1*11##")
     bus(cal, "*2*1*11##")  # Repeated movement feedback does not restart the clock.
-    bus(cal, event)
-    assert cal.session.reason == reason
+    bus(cal, "*2*2*11##")
+    assert cal.session.reason == "unexpected_movement"
     assert cal.session.values == {}
     assert cal.session.stop_requested
 
