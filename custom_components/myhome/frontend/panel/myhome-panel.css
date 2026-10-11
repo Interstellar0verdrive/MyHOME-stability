@@ -1763,3 +1763,43 @@ dialog.cal-dialog .dialog-head { justify-content: space-between; padding-block: 
   .wiz-sheet.is-leaving .wiz-sheet-card { animation: wiz-panel-out 220ms cubic-bezier(.3, 0, 1, 1) forwards; }
   .cal-batch-sticky { position: static; }
 }
+/* L-95 (Figma FB2Nm01ewc4nwlUfKYts4T, 937:56699, 11 Oct): the wizard's bands and buttons recoloured, light and dark, every
+   colour a theme token (Figma's flattened hex read back as token + alpha). Kept in this one block, last in the sheet. */
+.wiz { --wiz-strip: color-mix(in srgb, var(--panel-accent) 15%, var(--primary-background-color, #fafafa));
+  --wiz-bar: color-mix(in srgb, var(--panel-accent) 20%, var(--primary-background-color, #fafafa));
+  --wiz-off: var(--primary-text-color, #141414); --wiz-off-fill: 15%; --wiz-off-text: 30%; --wiz-off-line: 30%; }
+.wiz[data-theme="dark"] { --wiz-strip: color-mix(in srgb, var(--panel-accent) 20%, var(--primary-background-color, #111));
+  --wiz-bar: color-mix(in srgb, var(--panel-accent) 20%, var(--primary-background-color, #111));
+  --wiz-off: var(--text-primary-color, #fff); --wiz-off-fill: 15%; --wiz-off-text: 40%; --wiz-off-line: 30%; }
+/* The steps strip: the accent at 15 % (dark 20 %) on the page's background; a hairline under it on the dark theme only.
+   PASSI on the surface, accent outline and text. */
+.wiz-compact { background: var(--wiz-strip); border-bottom-color: transparent; }
+.wiz[data-theme="dark"] .wiz-compact { border-bottom-color: var(--panel-border); }
+.wiz-steps-button { background: var(--panel-surface); }
+/* The action bar (where it is a bar: under the content, and the landscape phone's column): the accent at 20 % on the
+   page's background, the hairline above it as before. */
+@media (min-width: 720px) { @container caltab (max-width: 699px) { .wiz-actions { background: var(--wiz-bar); } } }
+@media (max-width: 719px), (max-height: 499px) and (orientation: landscape) { .wiz-actions { background: var(--wiz-bar); } }
+/* Disabled in the wizard (D-13's «off until the user acts»): the text colour at 15 % with its label at 30 % on the light theme, the
+   on-accent white at 15 % with its label at 40 % on the dark one, over the bar's own tint; the outlined one the same
+   colour at 30 % for its outline. `is-settling` keeps its own look. */
+.wiz :is(.wiz-action.primary, button.primary):disabled:not(.is-settling), .wiz :is(.wiz-action.primary, button.primary):disabled:not(.is-settling):hover {
+  background: color-mix(in srgb, var(--wiz-off) var(--wiz-off-fill), transparent); color: color-mix(in srgb, var(--wiz-off) var(--wiz-off-text), transparent); }
+.wiz .wiz-action.secondary:disabled, .wiz .wiz-action.secondary:disabled:hover { opacity: 1; background: transparent;
+  border-color: color-mix(in srgb, var(--wiz-off) var(--wiz-off-line), transparent); color: color-mix(in srgb, var(--wiz-off) var(--wiz-off-text), transparent); }
+/* «Ferma la tapparella»: the error colour filled, on-accent text (it was outlined, L-47). */
+.wiz-action.stop { border-color: var(--panel-error); background: var(--panel-error); color: var(--text-primary-color, #fff); }
+@media (hover: hover) { .wiz-action.stop:hover:not(:disabled) { background: color-mix(in srgb, var(--panel-error) 88%, black); } }
+.wiz-action.stop:active:not(:disabled) { background: color-mix(in srgb, var(--panel-error) 80%, black); }
+/* Dark: the bar's state line («La corsa è finita…») in the accent at 60 %. */
+.wiz[data-theme="dark"] .wiz-actions .wiz-action.status { color: color-mix(in srgb, var(--panel-accent) 60%, transparent); }
+/* The phone's title band: the strong accent (dark: at 70 % on the background, with a hairline under it), title, arrow
+   and ✕ in the on-accent white, the subtitle at 80 %. */
+@media (max-width: 719px), (max-height: 499px) and (orientation: landscape) {
+  .wiz-head { background: var(--panel-accent-strong); border-bottom-color: transparent; color: var(--text-primary-color, #fff); }
+  .wiz[data-theme="dark"] .wiz-head { background: color-mix(in srgb, var(--panel-accent-strong) 70%, var(--primary-background-color, #111));
+    border-bottom-color: var(--panel-border); }
+  .wiz-head :is(.wiz-cover, .wiz-back, .wiz-x), .wiz-head :is(.wiz-back, .wiz-x):hover { color: var(--text-primary-color, #fff); }
+  .wiz-head .wiz-head-sub, .wiz-head .wiz-head-sub :is(.cal-row-address-label, .cal-row-address-value) {
+    color: color-mix(in srgb, var(--text-primary-color, #fff) 80%, transparent); }
+}

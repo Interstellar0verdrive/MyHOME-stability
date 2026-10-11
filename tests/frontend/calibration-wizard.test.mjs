@@ -839,6 +839,40 @@ test("L-94: every dialog of the tab has its title band as much above as below, a
   assert.equal(rules(".cal-abort-actions").length, 0, "no buttons' row in a body any more");
 });
 
+test("L-95: the wizard's bands and buttons in Figma 937:56699's colours, every one a theme token, light and dark", () => {
+  const block = cascadeCss.slice(cascadeCss.indexOf(".wiz { --wiz-strip:"));
+  assert.ok(block.length > 0 && !/#[0-9a-f]{3,8}\b(?![^(]*\))/i.test(block.replace(/var\([^()]*\)/g, "")), "no literal colour outside a token's fallback");
+  const rule = (selector) => [...block.matchAll(/(?<=^|[{}])\s*([^{}@]+?)\s*\{([^{}]*)\}/g)]
+    .filter(([, selectors]) => topLevel(selectors).includes(selector)).map(([, , body]) => body.replace(/\s+/g, " ").trim()).join(" | ");
+  // Bands: the accent on the page's background, 15 % (dark 20 %) for the steps strip, 20 % for the action bar.
+  assert.match(rule(".wiz"), /--wiz-strip: color-mix\(in srgb, var\(--panel-accent\) 15%, var\(--primary-background-color, #fafafa\)\)/);
+  assert.match(rule(".wiz"), /--wiz-bar: color-mix\(in srgb, var\(--panel-accent\) 20%, var\(--primary-background-color, #fafafa\)\)/);
+  assert.match(rule('.wiz[data-theme="dark"]'), /--wiz-strip: color-mix\(in srgb, var\(--panel-accent\) 20%, var\(--primary-background-color, #111\)\)/);
+  assert.match(rule('.wiz[data-theme="dark"]'), /--wiz-bar: color-mix\(in srgb, var\(--panel-accent\) 20%, var\(--primary-background-color, #111\)\)/);
+  assert.match(rule(".wiz-compact"), /background: var\(--wiz-strip\); border-bottom-color: transparent;/, "light: no hairline under the strip");
+  assert.match(rule('.wiz[data-theme="dark"] .wiz-compact'), /border-bottom-color: var\(--panel-border\)/, "dark: its hairline");
+  assert.match(rule(".wiz-steps-button"), /background: var\(--panel-surface\)/);
+  assert.match(block, /@media \(max-width: 719px\), \(max-height: 499px\) and \(orientation: landscape\) \{ \.wiz-actions \{ background: var\(--wiz-bar\); \} \}/);
+  assert.match(block, /@container caltab \(max-width: 699px\) \{ \.wiz-actions \{ background: var\(--wiz-bar\); \} \}/);
+  // Disabled: the text colour (dark: the on-accent white) at 15 % / 30 % (dark 40 %), the outline at 30 %.
+  assert.match(rule(".wiz"), /--wiz-off: var\(--primary-text-color, #141414\); --wiz-off-fill: 15%; --wiz-off-text: 30%; --wiz-off-line: 30%;/);
+  assert.match(rule('.wiz[data-theme="dark"]'), /--wiz-off: var\(--text-primary-color, #fff\); --wiz-off-fill: 15%; --wiz-off-text: 40%; --wiz-off-line: 30%;/);
+  assert.match(rule(".wiz .wiz-action.secondary:disabled"), /border-color: color-mix\(in srgb, var\(--wiz-off\) var\(--wiz-off-line\), transparent\)/);
+  // Red: «Ferma la tapparella» filled.
+  assert.match(rule(".wiz-action.stop"), /background: var\(--panel-error\); color: var\(--text-primary-color, #fff\)/);
+  // The phone's title band: the strong accent; dark at 70 % on the background.
+  assert.match(rule(".wiz-head"), /background: var\(--panel-accent-strong\)/);
+  assert.match(rule('.wiz[data-theme="dark"] .wiz-head'), /color-mix\(in srgb, var\(--panel-accent-strong\) 70%, var\(--primary-background-color, #111\)\)/);
+  // Applied in the jsdom cascade: the block wins over the earlier rules.
+  const doc = dom.window.document, host = doc.createElement("div");
+  host.innerHTML = `<div class="wiz"><div class="wiz-compact"></div><div class="wiz-actions"><button class="wiz-action stop"></button><button class="wiz-action secondary" disabled></button></div></div>`;
+  doc.body.append(host);
+  assert.equal(winner(host.querySelector(".wiz-compact"), "background"), "var(--wiz-strip)");
+  assert.equal(winner(host.querySelector(".wiz-action.stop"), "background"), "var(--panel-error)");
+  assert.equal(winner(host.querySelector(".wiz-action.secondary"), "opacity"), "1");
+  host.remove();
+});
+
 test("L-62: the list follows Home Assistant's dark mode on every update, its dialogs too", async () => {
   const { backend, panel, root } = await mount();
   const host = root.querySelector("#cover-calibration-tab");
@@ -875,7 +909,8 @@ test("L-63/L-64: dark «In corso» chip in the full warning colour; a disabled b
       assert.equal(winner(button, "opacity"), "1");
     }
     assert.match(winner(settling, "background"), /--panel-accent/, `${theme}: the passing state keeps its look`);
-    assert.match(winner(host.querySelector(".wiz-action"), "background"), /--primary-text-color[^)]*\) 12%/, `${theme}: the wizard's D-13 disabled primary unchanged`);
+    // L-95: the wizard's own disabled primary follows Figma 937:56699 (its colours per theme are pinned by the L-95 test).
+    assert.equal(winner(host.querySelector(".wiz-action"), "background"), "color-mix(in srgb, var(--wiz-off) var(--wiz-off-fill), transparent)", `${theme}: the wizard's disabled primary`);
     host.remove();
   }
 });
