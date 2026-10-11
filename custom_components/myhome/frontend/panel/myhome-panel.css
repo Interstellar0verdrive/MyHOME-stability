@@ -1589,6 +1589,13 @@ dialog.cal-dialog .dialog-head { justify-content: space-between; padding-block: 
   /* M2-1: every ✕ of a title bar or sheet is a 44 px touch target with a 24 px icon. */
   .wiz-x, .wiz-sheet-close, .cal-page-close { width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0; justify-content: center; }
   .wiz-x ha-icon, .wiz-sheet-close ha-icon, .cal-page-close ha-icon { --mdc-icon-size: 24px; }
+  /* L-92: the back arrow is the ✕'s twin: the same 44 px target, 24 px glyph and colour, both centred on the title's
+     first line (a 24 px line; -10 px above and below keep the header's height), each glyph 16 px from its edge. */
+  .wiz-cover { line-height: 24px; }
+  .wiz-back { display: inline-flex; width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0; justify-content: center; align-items: center;
+    margin: -10px 0 -10px -10px; }
+  .wiz-back ha-icon { --mdc-icon-size: 24px; }
+  .wiz-x { align-items: center; margin: -10px -10px -10px 0; }
   .wiz-columns { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   /* The content scrolls between the phase strip and the action bar: min-height 0 lets it shrink (without it the column
      grew past the bar and showed a scrollbar that scrolled nothing). */
@@ -1711,12 +1718,13 @@ dialog.cal-dialog .dialog-head { justify-content: space-between; padding-block: 
   .wiz-frame { display: flex; flex-direction: column; min-height: 0; height: 100%; }
   .wiz-head { box-sizing: border-box; min-height: 44px; align-items: center; gap: 8px;
     padding: var(--cal-safe-top) calc(8px + var(--cal-safe-right)) 0 calc(12px + var(--cal-safe-left)); }
-  .wiz-back { margin: 0 -4px 0 -4px; }
+  .wiz-back { width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0; justify-content: center; margin: 0 -4px 0 -4px; }
+  .wiz-back ha-icon { --mdc-icon-size: 24px; }
   .wiz-head-text { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: center; column-gap: 10px; }
   .wiz-cover { font-size: 16px; }
   .wiz-head .muted { margin: 0; font-size: 12px; }
   .wiz-discard, .wiz-unfollow { display: none; }
-  .wiz-x { display: inline-flex; width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0; justify-content: center; }
+  .wiz-x { display: inline-flex; width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0; justify-content: center; margin: 0; }
   .wiz-x ha-icon { --mdc-icon-size: 24px; }
   .wiz-steps { display: none; }
   .wiz-compact { display: flex; align-items: center; gap: 10px; padding: 4px calc(12px + var(--cal-safe-right)) 4px calc(12px + var(--cal-safe-left));

@@ -791,6 +791,38 @@ const winner = (element, property) => {
   return best?.value ?? "";
 };
 
+test("L-92: on the phone the back arrow is the ✕'s twin, centred on the title's first line; the desktop header is unchanged", () => {
+  // The first @media block matching `head`, whole (balanced braces).
+  const block = (head) => {
+    const start = cascadeCss.search(head); assert.ok(start >= 0, String(head));
+    let depth = 0;
+    for (let i = cascadeCss.indexOf("{", start); i < cascadeCss.length; i++) {
+      if (cascadeCss[i] === "{") depth += 1; else if (cascadeCss[i] === "}" && (depth -= 1) === 0) return cascadeCss.slice(start, i + 1);
+    }
+    return "";
+  };
+  const rule = (css, selector) => [...css.matchAll(/(?<=^|[{}])\s*([^{}@]+?)\s*\{([^{}]*)\}/g)]
+    .filter(([, selectors]) => topLevel(selectors).includes(selector)).map(([, , body]) => body).join(";");
+  const target = /width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0; justify-content: center;/;
+  const portrait = block(/@media \(max-width: 719px\) \{\s*\.wiz \{ position: fixed/);
+  assert.match(rule(portrait, ".wiz-back"), target, "44 px target");
+  assert.match(rule(portrait, ".wiz-x"), target);
+  assert.match(rule(portrait, ".wiz-back ha-icon"), /--mdc-icon-size: 24px/, "24 px glyph");
+  assert.match(rule(portrait, ".wiz-x ha-icon"), /--mdc-icon-size: 24px/);
+  // A 24 px first line: -10 px above and below centre both 44 px targets on it without growing the header.
+  assert.match(rule(portrait, ".wiz-cover"), /line-height: 24px/);
+  assert.match(rule(portrait, ".wiz-back"), /margin: -10px 0 -10px -10px/);
+  assert.match(rule(portrait, ".wiz-x"), /margin: -10px -10px -10px 0/);
+  const landscape = block(/@media \(max-height: 499px\) and \(orientation: landscape\) \{\s*\.wiz \{/);
+  assert.match(rule(landscape, ".wiz-back"), target);
+  assert.match(rule(landscape, ".wiz-back ha-icon"), /--mdc-icon-size: 24px/);
+  assert.match(rule(landscape, ".wiz-x"), /margin: 0/, "the landscape header centres them itself");
+  // Desktop: «Abandon» in place of the ✕, the back arrow as before.
+  const desktop = cascadeCss.slice(0, cascadeCss.search(/@media \(max-width: 719px\) \{\s*\.wiz \{ position: fixed/));
+  assert.match(rule(desktop, ".wiz-back"), /^\s*flex: none; margin: -2px 0 0 -8px;\s*$/);
+  assert.match(rule(desktop, ".wiz-x"), /display: none/);
+});
+
 test("L-62: the list follows Home Assistant's dark mode on every update, its dialogs too", async () => {
   const { backend, panel, root } = await mount();
   const host = root.querySelector("#cover-calibration-tab");
