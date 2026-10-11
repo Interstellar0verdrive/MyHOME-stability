@@ -838,6 +838,37 @@ async def test_open_session_reads_for_another_tab_and_gives_a_reloaded_owner_its
         session.close()
 
 
+async def test_a_read_says_whether_the_reading_client_owns_the_open_session(hass, plant, hass_ws_client):
+    """L-93: the list names its action by what `resume` will do: the owner's tab resumes, any other follows."""
+    from custom_components.myhome.cover_profiles import register_api as register_profiles
+
+    register_profiles(hass)
+    plant.gateways[0].async_queue_calibration = lambda *args: None
+    entry_id, entity_id = plant.entries[0].entry_id, plant.records[0].entity_id
+
+    async def answer(client, message_id):
+        while (message := await client.receive_json())["id"] != message_id or message["type"] != "result":
+            pass
+        return message
+
+    with patch("aiohttp.connector.DefaultResolver", ThreadedResolver):
+        owner = await hass_ws_client(hass)
+        await owner.send_json({"id": 1, "type": WS_START, "entry_id": entry_id, "entity_id": entity_id,
+                               "revision": 0, "client_id": "tab-one"})
+        assert (await answer(owner, 1))["success"]
+        assert (await read_profile(hass, entry_id, entity_id, "tab-one"))["calibration"]["client_owner"] is True
+        assert (await read_profile(hass, entry_id, entity_id, "tab-two"))["calibration"]["client_owner"] is False
+        plain = (await read_profile(hass, entry_id, entity_id))["calibration"]
+        assert "client_owner" not in plain and plain["owner"] is False, "who owns it stays private"
+        # The same through the websocket, as the panel asks it.
+        reader = await hass_ws_client(hass)
+        await reader.send_json({"id": 1, "type": "myhome/cover_profiles/read", "entry_id": entry_id, "entity_id": entity_id,
+                                "client_id": "tab-one"})
+        assert (await answer(reader, 1))["result"]["calibration"]["client_owner"] is True
+        await reader.close()
+        await owner.close()
+
+
 async def test_every_reader_is_told_whether_the_owner_is_present(hass, recovering):
     """`attached` is this reader's own subscription; `owner_present` is the owner's presence."""
     cal, session = recovering, recovering.session

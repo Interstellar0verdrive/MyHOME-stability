@@ -216,7 +216,9 @@ export function createFakeBackend({ language = "en", inventory = coverInventory(
       if (message.type === "myhome/panel/inventory") return structuredClone(inventory);
       if (message.type === "myhome/cover_profiles/overview") return structuredClone(overview);
       if (message.type === "myhome/cover_profiles/read") {
-        const live = session && !["saved", "cancelled"].includes(session.phase) ? { ...backend.view(), owner: false, read_only: true } : null;
+        // L-93: as Home Assistant, the reader learns only whether it owns the session itself (with its client_id).
+        const live = session && !["saved", "cancelled"].includes(session.phase)
+          ? { ...backend.view(), owner: false, read_only: true, ...(message.client_id ? { client_owner: owner } : {}) } : null;
         if (live) delete live.attachment;
         return { revision: overview.revision, calibration: live };
       }

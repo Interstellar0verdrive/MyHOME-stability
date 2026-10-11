@@ -1462,7 +1462,7 @@ test("L-61: a reader's header says «Stop following» (secondary) and leaves wit
   assert.equal(wiz(), null, "back to the list");
   assert.equal(backend.calls.slice(sent).some((call) => call.action === "cancel"), false, "nothing cancelled");
   assert.notEqual(backend.session.phase, "cancelled");
-  assert.ok(tab().querySelector('[data-action="cal-tab-session"]'), "«Open session» still there");
+  assert.ok(tab().querySelector('[data-action="cal-tab-session"]'), "the session's action still there");
 });
 
 test("L-61: the header follows the role even when nothing else on the screen changes (a run under way)", async () => {
@@ -2672,12 +2672,13 @@ test("leaving the tab with a live session open asks: continue, leave and resume 
     assert.equal(backend.calls.some((message) => message.action === "cancel"), false, "nothing cancelled");
     assert.equal(unloads.length, 0, "the browser's warning leaves with the wizard");
     assert.notEqual(backend.session.phase, "cancelled");
-    // Back in the tab: the cover in progress is first, with Open session as its action.
+    // Back in the tab: the cover in progress is first; this tab still owns its session (L-93): «Resume session».
     view("calibration").click(); await tick(8);
     const first = tab().querySelector(".cal-row");
     assert.equal(first.dataset.entity, "cover.living_one", "the cover in progress sits on top");
     assert.equal(first.querySelector(".cal-badge").dataset.status, "running");
-    assert.equal(first.querySelector('[data-action="cal-tab-session"]').textContent, "Open session");
+    assert.equal(first.querySelector('[data-action="cal-tab-session"]').textContent, "Resume session");
+    assert.match(tab().querySelector(".cal-tab-busy").textContent, /resume it with «Resume session»/);
     // Reopened, taken back, and left without saving: Cancel reaches Home Assistant first.
     first.querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
     for (let i = 0; i < 2 && wiz().querySelector('[data-wiz="take"]'); i++) { wiz().querySelector('[data-wiz="take"]').click(); await tick(6); }

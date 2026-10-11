@@ -429,7 +429,8 @@ test("a session in progress marks its cover, blocks new measurements and opens a
     targets: [{ entity_id: "cover.bedroom", name: "Bedroom" }, { entity_id: "cover.living_one", name: "Living room shutter 1" }],
     next_step: { step: "next_cover", cover_index: 1, entity_id: "cover.living_one" } };
   const { root, tab, subscriptions, calls } = await mount({ session });
-  assert.match(tab.querySelector(".cal-tab-busy").textContent, /resume it with «Open session», or cancel it from the ⋮ menu of its row/);
+  // L-93: another tab's session (this tab does not own it): it is followed.
+  assert.match(tab.querySelector(".cal-tab-busy").textContent, /follow it with «Follow session», or cancel it from the ⋮ menu of its row/);
   assert.equal(tab.querySelector('[data-action="cal-tab-batch"]').disabled, true);
   for (const id of ["cover.bedroom", "cover.living_one"]) {
     assert.equal(row(tab, id).querySelector(".cal-badge").dataset.status, "running");
@@ -437,7 +438,9 @@ test("a session in progress marks its cover, blocks new measurements and opens a
   }
   assert.equal(row(tab, "cover.living_two").querySelector(".cal-badge").dataset.status, "calibrated");
   const open = row(tab, "cover.bedroom").querySelector('[data-action="cal-tab-session"]');
-  assert.equal(open.textContent, "Open session");
+  assert.equal(open.textContent, "Follow session");
+  assert.ok(calls.filter((message) => message.type === "myhome/cover_profiles/read").every((message) => typeof message.client_id === "string"),
+    "the read names this tab, to learn whether it owns the session");
   open.click(); await tick();
   const resume = subscriptions.find((item) => item.request.type === "myhome/cover_calibration/resume");
   assert.equal(resume.request.session_id, "group");
@@ -1708,7 +1711,7 @@ test("N-04: a centred dialog with a long list scrolls only its body: title row a
   void outside;
 });
 
-test("N-09: on the phone a cover's page with its session open offers «Apri sessione», as its row does", async () => {
+test("N-09: on the phone a cover's page with its session open offers its action, as its row does", async () => {
   const original = globalThis.matchMedia;
   globalThis.matchMedia = (query) => ({ matches: query.includes("max-width") || query.includes("reduced-motion") });
   try {
@@ -1720,6 +1723,20 @@ test("N-09: on the phone a cover's page with its session open offers «Apri sess
     assert.ok(button, "the session's action on the page");
     assert.equal(button.dataset.id, "one");
   } finally { globalThis.matchMedia = original; }
+});
+
+test("L-93: the session's action says what it does: «Follow session» for another tab's, «Resume session» for this tab's own", async () => {
+  const base = { entry_id: "one", entity_id: "cover.bedroom", session_id: "s1", mode: "geometry", phase: "briefing", step: "home", sequence: 2, values: {},
+    recoverable: true, attached: false, owner_present: true };
+  for (const [owned, label, notice, it] of [[false, "Follow session", /follow it with «Follow session»/, "Segui sessione"],
+    [true, "Resume session", /resume it with «Resume session»/, "Riprendi sessione"]]) {
+    // Home Assistant answers `client_owner` for the client named in the read.
+    const { tab } = await mount({ callWS: (message) => (message.type === "myhome/cover_profiles/read"
+      ? { revision: 7, calibration: { ...base, ...(message.client_id ? { client_owner: owned } : {}) } } : undefined) });
+    assert.equal(row(tab, "cover.bedroom").querySelector('[data-action="cal-tab-session"]').textContent, label);
+    assert.match(tab.querySelector(".cal-tab-busy").textContent, notice);
+    assert.equal(translations.it[owned ? "wiz_T580" : "wiz_T579"], it);
+  }
 });
 
 test("Z-1: the details' times carry one decimal, as the wizard's", async () => {

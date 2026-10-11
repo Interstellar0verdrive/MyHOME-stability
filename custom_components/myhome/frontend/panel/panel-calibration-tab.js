@@ -16,7 +16,7 @@ function holdScroll(host) {
 
 /** WHO 2 "Calibration" view: what each timed cover uses, its measurement state and the ways to measure it. */
 const asset = (name) => { const url = new URL(name, import.meta.url); url.search = new URL(import.meta.url).search; return url.href; };
-const [{ escapeHtml: esc }, model, text, { CoverCalibration }, { CalibrationWizard }, { ProfileCatalogueEditor }, { morph }, { layout, SHEETS, PHONE, SHORT, listBand, contentWidth, fitBars, fitRows, dockBar, keepScrollOnPick, focusOnOpen, revealHead }, { cancelSession, CHECK_THRESHOLD_CM }] = await Promise.all([
+const [{ escapeHtml: esc }, model, text, { CoverCalibration, checkedCalibrationClient }, { CalibrationWizard }, { ProfileCatalogueEditor }, { morph }, { layout, SHEETS, PHONE, SHORT, listBand, contentWidth, fitBars, fitRows, dockBar, keepScrollOnPick, focusOnOpen, revealHead }, { cancelSession, CHECK_THRESHOLD_CM }] = await Promise.all([
   import(asset("panel-dom.js")), import(asset("panel-model.js")), import(asset("panel-calibration-text.js")),
   import(asset("panel-cover-calibration.js")), import(asset("panel-calibration-wizard.js")), import(asset("panel-profile-catalogue-editor.js")),
   import(asset("panel-calibration-morph.js")), import(asset("panel-calibration-layout.js")), import(asset("panel-calibration-gateway.js")),
@@ -24,6 +24,12 @@ const [{ escapeHtml: esc }, model, text, { CoverCalibration }, { CalibrationWiza
 const { fill, rich, number, dateText, names, followedBy } = text;
 
 const MEASURED = ["guided", "automatic"];
+/**
+ * L-93: the action of an open session says what it will do. Home Assistant gives it back to the tab that owns it
+ * (after a reload, or once the wizard was closed with the session left running): «Riprendi sessione»; any other tab
+ * or device joins as a reader, with Take control: «Segui sessione».
+ */
+const sessionLabel = (session) => (session?.client_owner ? "wiz_T580" : "wiz_T579");
 export const FILTERS = ["all", "to_measure", "calibrated", "profile"];
 // Covers read in turn to find the gateway's session when a read fails.
 const SESSION_PROBES = 3;
@@ -309,7 +315,10 @@ export class CalibrationTab {
       let session = null, known = !timedCovers(row.data).length;
       for (const probe of timedCovers(row.data).slice(0, SESSION_PROBES)) {
         try {
-          const snapshot = await hass.callWS({ type: "myhome/cover_profiles/read", entry_id: entryId, entity_id: probe.entity_id });
+          // L-93: with this tab's identity the session says whether this tab owns it (its action then resumes it).
+          const client = await checkedCalibrationClient().catch(() => null);
+          const snapshot = await hass.callWS({ type: "myhome/cover_profiles/read", entry_id: entryId, entity_id: probe.entity_id,
+            ...(client ? { client_id: client } : {}) });
           if (!this._current(generation) || stale()) return;
           session = snapshot.calibration && !["saved", "cancelled"].includes(snapshot.calibration.phase) ? snapshot.calibration : null;
           known = true;
@@ -744,7 +753,7 @@ export class CalibrationTab {
     const profile = item.profile ? `${this._profileChip(item.profile.name)}` : `<span class="muted" aria-label="${esc(t("calTabProfileNone"))}">—</span>`;
     const last = item.last ? fill(t("calTabMeasuredOn"), { date: dateText(item.last, language) }) : "";
     const action = session
-      ? (session.waiting_for_stop || session.recoverable === false ? "" : `<button type="button" class="cal-row-action" data-action="cal-tab-session" data-id="${esc(item.entry.entry_id)}">${esc(t("calOpenSession"))}</button>`)
+      ? (session.waiting_for_stop || session.recoverable === false ? "" : `<button type="button" class="cal-row-action" data-action="cal-tab-session" data-id="${esc(item.entry.entry_id)}">${esc(t(sessionLabel(session)))}</button>`)
       : this._wizard ? `<button type="button" class="cal-row-action" data-action="cal-tab-${item.rolls ? "refine" : "measure-cover"}" data-id="${esc(key)}" ${busy ? "disabled" : ""}>${esc(t(item.rolls ? "calTabActionRefine" : "calTabActionMeasure"))}</button>` : "";
     const menuOpen = this._menu === key;
     return `<div class="cal-row${session ? " is-running" : ""}${expanded ? " is-expanded" : ""}" role="listitem" data-entity="${esc(item.cover.entity_id)}" data-entry="${esc(item.entry.entry_id)}">
@@ -804,9 +813,9 @@ export class CalibrationTab {
     const badge = session ? `<span class="badge cal-badge" data-status="running">${esc(t(session.waiting_for_stop ? "calTabRunning_waiting"
       : session.phase === "paused" ? "calTabRunning_paused" : session.owner_present ?? session.attached ? "calTabRunning_present" : "calTabRunning_absent"))}</span>`
       : statusBadge(item, t);
-    // N-09: a cover with its session open offers «Apri sessione» on its page too, as its row does.
+    // N-09: a cover with its session open offers «Segui sessione» / «Riprendi sessione» on its page too, as its row does.
     const open = session && !(session.waiting_for_stop || session.recoverable === false)
-      ? `<div class="cal-page-session"><button type="button" class="primary" data-action="cal-tab-session" data-id="${esc(item.entry.entry_id)}">${esc(t("calOpenSession"))}</button></div>` : "";
+      ? `<div class="cal-page-session"><button type="button" class="primary" data-action="cal-tab-session" data-id="${esc(item.entry.entry_id)}">${esc(t(sessionLabel(session)))}</button></div>` : "";
     return `<div class="cal-page${session ? " is-running" : ""}" role="dialog" aria-modal="true" aria-labelledby="cal-page-name" data-entity="${esc(item.cover.entity_id)}">
         <div class="cal-page-head"><div class="cal-page-head-text"><h2 id="cal-page-name">${esc(item.name)}</h2>
           <p class="muted">${this._subline([this._area(item), gateways.length > 1 ? item.entry.title : ""], item.entity)}</p></div>
@@ -1201,13 +1210,13 @@ export class CalibrationTab {
   }
 
   /**
-   * L-10 (4): what the busy notice says is only what the list offers: an open session can be resumed («Apri
-   * sessione») or cancelled (the row's ⋮); one closed and waiting for the stop, or one that cannot be read, frees
-   * the cover by itself.
+   * L-10 (4): what the busy notice says is only what the list offers: an open session can be followed («Segui
+   * sessione») or, by the tab that owns it, resumed («Riprendi sessione»), or cancelled (the row's ⋮); one closed and
+   * waiting for the stop, or one that cannot be read, frees the cover by itself.
    */
   _busyText(busy) {
     if (busy.unknown) return "wiz_T540";
-    return busy.waiting_for_stop || busy.recoverable === false ? "wiz_T539" : "wiz_T538";
+    return busy.waiting_for_stop || busy.recoverable === false ? "wiz_T539" : busy.client_owner ? "wiz_T581" : "wiz_T538";
   }
 
   /**
