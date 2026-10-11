@@ -8,7 +8,8 @@
 > ([reading range](#guided-geometry-intermediate-reading-range-0410)); the check's view adds `planned_seconds` and a
 > check the model cannot make moves to the nearest one it can ([check](#guided-geometry-check-of-the-measured-model));
 > the overview's covers add `check_cm`, `check_measured_cm`, `check_expected_cm` and `check_at`
-> ([verified precision](#verified-precision-in-the-overview)).
+> ([verified precision](#verified-precision-in-the-overview)); the gateway's profile subscription adds an empty
+> `session` event on every session transition ([below](#wizard-session-additions-0430)).
 
 > Panel 0.40.0 [pauses an automatic or batch cycle whose owner is absent](#pause-without-the-owner-0400) and keeps its measurements until the owner sends `continue`.
 
@@ -46,6 +47,17 @@ dialog. Any other value fails the schema.
 (its code, path, scope and the wizard's local flags). Only the owner may send it (`calibration_owned` otherwise). It
 is not a transition: no `sequence` change, no lease renewal, nothing on the bus. The session keeps the last one and
 every view carries it as `screen` (absent until the first `show`), so that a reader shows the owner's step.
+
+`myhome/cover_profiles/subscribe` also sends `kind: "session"` events: on every transition of a session of that
+gateway (its start, each step, its close) and when the gateway is freed (at the close, or after the last Stop is
+confirmed). The event carries no data beyond the usual envelope (`entry_id`, the unchanged `revision`, `kind`): it
+only says that the gateway's session changed. A client that lists sessions coalesces a burst of them (the panel waits
+250 ms after the last) and reads the gateway again (`overview`, then `read` of a cover); a profile editor ignores
+them, since the revision has not changed.
+
+```json
+{"id":20,"type":"event","event":{"entry_id":"ENTRY","revision":4,"kind":"session"}}
+```
 
 ## Guided geometry: check of the measured model
 
@@ -987,6 +999,10 @@ invalidate this subscription. Ordinary cover state changes use native HA updates
 
 Entry removal emits `kind: "removed"` with the last in-memory revision; process
 this terminal event regardless of revision equality and close the editor.
+
+From 0.43.0 the subscription also emits `kind: "session"`, with the current (unchanged) revision, whenever a
+session of the gateway starts, moves on, closes or frees the gateway; see
+[wizard session additions](#wizard-session-additions-0430). It carries no session data: coalesce and read again.
 HA's `unsubscribe_events` command and socket closure release the listener. A
 placeholder cleanup callback also handles disconnect while waiting for storage.
 
