@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { after, afterEach, test } from "node:test";
 
 import { translations } from "../../custom_components/myhome/frontend/panel/panel-translations.js";
-import { dom, reset } from "./wizard-harness.mjs";
+import { dom, mount, reset, tick } from "./wizard-harness.mjs";
 
 const { buildScreen } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-screens.js");
 
@@ -32,6 +32,23 @@ const asReader = (state) => ({ ...state, view: { ...state.view, owner: false, re
 
 /** Every state of one step: [label, state]. */
 export const FAMILIES = {
+  // A-03 → A-04 → A-05: the first closing, from the session's start (Home Assistant starts it by itself) to the end stop.
+  "A-03/A-05 first closing": [
+    ["session started", { view: { step: "home", phase: "briefing" }, local: { autoStart: "home" } }],
+    ["starting", { view: { step: "home", phase: "starting_close" }, local: { autoStart: "home" }, elapsed: 0 }],
+    ["closing 5 s", { view: { step: "home", phase: "closing" }, local: { autoStart: "home" }, elapsed: 5 }],
+    ["past the closing time", { view: { step: "home", phase: "closing" }, local: { autoStart: "home" }, elapsed: 23 }],
+    ["run over", { view: { step: "home", phase: "closing" }, local: { autoStart: "home" }, elapsed: 30 }],
+    ["motor stopped", { view: { step: "home", phase: "closing", motor_stopped: true, stopped_elapsed: 21 }, local: { autoStart: "home" }, elapsed: 26 }],
+    ["Stop pressed", { view: { step: "home", phase: "geometry_wait_stop" }, local: { autoStart: "home" }, elapsed: 8 }],
+  ],
+  "A-04/A-05 return before the readings are repeated": [
+    ["started", { view: { step: "home", phase: "briefing", ...halfRead }, local: { ...acks, autoStart: "home" } }],
+    ["starting", { view: { step: "home", phase: "starting_close", ...halfRead }, local: { ...acks, autoStart: "home" }, elapsed: 0 }],
+    ["closing 5 s", { view: { step: "home", phase: "closing", ...halfRead }, local: { ...acks, autoStart: "home" }, elapsed: 5 }],
+    ["past the closing time", { view: { step: "home", phase: "closing", ...halfRead }, local: { ...acks, autoStart: "home" }, elapsed: 23 }],
+    ["motor stopped", { view: { step: "home", phase: "closing", motor_stopped: true, stopped_elapsed: 21, ...halfRead }, local: { ...acks, autoStart: "home" }, elapsed: 26 }],
+  ],
   "C-11 guided ascent": [
     ["ready", { path: "C", scope: "times_only", view: { mode: "guided", phase: "confirm_closed" } }],
     ["① sent", { path: "C", scope: "times_only", view: { mode: "guided", phase: "confirm_closed" }, status: { starting: true } }],
@@ -74,4 +91,29 @@ test("L-119: the walk tells a bar that changes from one that only turns actions 
     "the same ids, on and off");
   assert.throws(() => assertOneBar("broken", [["a", { view: { step: "lift", phase: "opening" }, local: { ackLift: true }, elapsed: 2 }],
     ["b", { view: { step: "lift", phase: "reading" }, local: { ackLift: true } }]]), /changes the bar/);
+});
+
+test("L-119: A-03 → A-05 in the page: the bar drawn when the closing starts is the bar at its end stop", async () => {
+  const { backend, wiz, code, press, startFor } = await mount();
+  const drawn = () => [...wiz().querySelectorAll(".wiz-actions [data-wiz]")].map((item) => item.dataset.wiz).map((id) => (id === "stopped" ? "stop" : id));
+  const state = (id) => wiz().querySelector(`.wiz-actions [data-wiz="${id}"]`);
+  await startFor("cover.living_one");
+  await press("begin");
+  const bars = [[code(), drawn()]];
+  backend.started(); backend.tick(5); backend.emit(); await tick();
+  bars.push([code(), drawn()]);
+  assert.equal(code(), "A-04");
+  assert.equal(state("endpoint").disabled, true, "the end stop waits for the cover to arrive");
+  assert.equal(state("misbehaved").disabled, false, "«Non ha fatto quello che doveva» from the start");
+  assert.equal(state("stop").disabled, false);
+  backend.tick(18); backend.emit(); await tick();
+  bars.push([code(), drawn()]);
+  assert.equal(code(), "A-05");
+  assert.match(wiz().querySelector(".wiz-body").textContent, /si sta chiudendo completamente|is closing fully/, "still moving: not «closed» yet");
+  assert.equal(state("endpoint").disabled, false);
+  backend.session.motor_stopped = true; backend.emit(); await tick();
+  bars.push([code(), drawn()]);
+  assert.equal(state("stopped").tagName, "P", "the finished line in Stop's slot");
+  assert.match(wiz().querySelector(".wiz-body").textContent, /si è chiusa completamente|has closed fully/);
+  for (const [at, bar] of bars) assert.deepEqual(bar, ["endpoint", "misbehaved", "stop"], `the same bar on ${at}`);
 });

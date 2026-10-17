@@ -2074,7 +2074,8 @@ test("Stop alone in a wait is the red filled button; beside a step's buttons it 
   const kinds = (extra, local = {}) => buildScreen({ t, stage: "session", path: "A", view: { ...view, ...extra }, local, elapsed: 1, cover: { name: "Kitchen shutter 2" } })
     .actions.map((action) => `${action.id}:${action.kind}`);
   // Positionings to an end stop offer the end stop at once: Stop is then the red link beside it (R6-6).
-  assert.deepEqual(kinds({ step: "home", phase: "starting_close" }), ["endpoint:primary", "stop:stop"], "A-04");
+  // L-119: A-04 draws A-05's bar from the start (the end stop off until the cover arrives).
+  assert.deepEqual(kinds({ step: "home", phase: "starting_close" }), ["endpoint:primary", "misbehaved:secondary", "stop:stop"], "A-04");
   assert.deepEqual(kinds({ step: "reset", phase: "closing" }), ["endpoint:primary", "stop:stop"], "A-09 (no time known: A-10 at once)");
   assert.deepEqual(kinds({ step: "half_open", phase: "opening" }, { ackDescent: true, ackReadings: true }), ["stop:stop"], "A-17: Stop alone, outlined red as everywhere (L-47)");
   assert.deepEqual(kinds({ step: "lift", phase: "opening" }, { ackLift: true }), ["next:primary", "lift:primary", "stop:stop"], "A-07: ① · ② · Stop (L-116)");
@@ -2088,6 +2089,9 @@ test("Stop alone in a wait is the red filled button; beside a step's buttons it 
   assert.equal(wiz().querySelector('.wiz-actions [data-wiz="stop"]').className, "wiz-action stop");
   backend.started(); await tick();
   assert.equal(wiz().querySelector('.wiz-actions [data-wiz="endpoint"]').textContent, "It is fully closed, continue");
+  // L-119: the end stop is pressable once the cover has arrived (here: its closing time is over).
+  assert.equal(wiz().querySelector('.wiz-actions [data-wiz="endpoint"]').disabled, true);
+  backend.tick(22); backend.emit(); await tick();
   await press("endpoint");
   assert.equal(backend.calls.filter((message) => message.action === "endpoint").length, 1, "the same end stop the automatic advance sends");
   await press("stop");
@@ -2906,7 +2910,8 @@ test("A-04 lasts the whole positioning; A-05 then offers the end stop and T033 a
   await press("begin");
   backend.started(); backend.tick(5); backend.emit(); await tick();
   assert.equal(code(), "A-04", "5 s into a 21.7 s closing: still positioning");
-  assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => item.dataset.wiz), ["endpoint", "stop"], "L-116: Stop last");
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => item.dataset.wiz), ["endpoint", "misbehaved", "stop"], "L-116: Stop last; L-119: A-05's bar from the start");
+  assert.equal(wiz().querySelector('[data-wiz="endpoint"]').disabled, true, "L-119: the end stop waits for the cover to arrive");
   assert.match(wiz().querySelector(".wiz-wait-remaining").textContent, /17 s/, "the time left counts down over the closing time");
   backend.tick(16); backend.emit(); await tick();
   assert.equal(code(), "A-04", "21 s in: still positioning");
@@ -3282,7 +3287,7 @@ test("a stop frame well before the estimated run asks to check the end stop; the
   const early = at({ step: "home", phase: "closing", motor_stopped: true, stopped_elapsed: 8 });
   assert.equal(early.code, "A-05");
   assert.deepEqual(early.notices, [{ tone: "warning", result: true, text: "The cover stopped earlier than expected (8.0 s of about 20 s): check that it is really fully closed before continuing." }]);
-  assert.equal(early.actions[0].disabled, undefined, "the end stop stays pressable");
+  assert.equal(!!early.actions[0].disabled, false, "the end stop stays pressable");
   assert.deepEqual(at({ step: "home", phase: "closing", motor_stopped: true, stopped_elapsed: 13 }).notices, [], "past 60 %: no warning");
   assert.equal(at({ step: "reset", phase: "closing", motor_stopped: true, stopped_elapsed: 5 }).notices.length, 1, "A-10 too");
   assert.equal(at({ step: "reset", phase: "closing", motor_stopped: true, stopped_elapsed: 5 }, { ackReadings: true }).notices.length, 0,

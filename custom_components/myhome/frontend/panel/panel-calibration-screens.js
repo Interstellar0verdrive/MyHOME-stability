@@ -395,9 +395,10 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
   // U-9: once the run to an end stop is over (the stop frame, or its full time and a margin gone by: a timed actuator
   // stops by itself without a frame) Stop gives way to the state, «La corsa è finita: la tapparella è ferma».
   const ranOut = (seconds) => MOTOR_STOPPED(view) || (seconds > 0 && (elapsed ?? 0) >= seconds + Math.max(2, seconds * 0.15));
-  const stopOrState = (seconds) => ranOut(seconds) ? [{ id: "stopped", label: t("wiz_T498"), kind: "state" }] : [stop];
   // L-116: in a bar with the ①/② pair Stop is always drawn, last, off while nothing moves (finalize sets it).
+  // L-119: so in every bar of a step that moves the cover: its slot never empties, the state only takes its place.
   const pinnedStop = { ...stop, pinned: true };
+  const stopOrState = (seconds) => ranOut(seconds) ? [{ id: "stopped", label: t("wiz_T498"), kind: "state" }] : [pinnedStop];
   const toEndStop = (label, running) => [{ id: "endpoint", label: t(label), kind: "primary", disabled: phase !== running }, ...whileRunning(view, stop)];
   // L-14: a return before a tape reading (the user is there to read the tape) never goes on by itself: its end stop is
   // confirmed by the user, enabled once the motor stopped by itself or its estimated time has run; the run to the next
@@ -425,19 +426,26 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
   if (phase === "review" || phase === "saving") return summaryScreen(screen, ctx, tx, n, values);
   if (step === "home") {
     screen.phase = "prep";
-    if (phase === "briefing") return Object.assign(screen, { code: p("03"), title: t("wiz_T021"), body: path === "C" ? tx("wiz_T197", values) : t("wiz_T022"),
+    // A session's first closing starts by itself (L-119: its briefing already draws the positioning and its bar); a
+    // session reopened before it started keeps A-03 and its button.
+    if (phase === "briefing" && local.autoStart !== "home") return Object.assign(screen, { code: p("03"), title: t("wiz_T021"), body: path === "C" ? tx("wiz_T197", values) : t("wiz_T022"),
       actions: [{ id: "next", label: t("wiz_T024"), kind: "primary" }] });
-    // A-05 once the positioning is over: the end stop and "It did not do what it should" can be pressed at once, the
-    // red Stop stays while the motor runs. T033 opens S-01 (nothing measured yet is lost). Not on A-10: there a stop
-    // discards the lift-off measurement (§8.9).
-    if (phase === "closing" && !positioningRun(closingTime)) {
-      Object.assign(screen, { code: p("05"), title: t("wiz_T030"), body: t(slats ? "wiz_T031" : "wiz_T501"),
-        actions: [{ id: "endpoint", label: t("wiz_T032"), kind: "primary" }, { id: "misbehaved", label: t("wiz_T033"), kind: "secondary" }, ...stopOrState(closingTime)] });
+    // L-119: one bar from the start of the closing to its end stop: the end stop, off until the cover has arrived (the
+    // motor stopped by itself, or its estimated time is over); «Non ha fatto quello che doveva» from the start (it
+    // stops the cover and opens S-01, nothing measured yet is lost); Stop last, replaced in place by the finished line
+    // once the run is over. Not on A-10: there a stop discards the lift-off measurement (§8.9).
+    const arrived = phase === "closing" && !positioningRun(closingTime);
+    const running = ["starting_close", "closing"].includes(phase);
+    const bar = [{ id: "endpoint", label: t("wiz_T032"), kind: "primary", disabled: !arrived, settling: !arrived && running },
+      { id: "misbehaved", label: t("wiz_T033"), kind: "secondary", disabled: !running }, ...stopOrState(closingTime)];
+    // A-05 once the positioning is over; while the motor still runs its text says the cover is closing, not closed.
+    if (arrived) {
+      Object.assign(screen, { code: p("05"), title: t("wiz_T030"), body: t(ranOut(closingTime) ? (slats ? "wiz_T031" : "wiz_T501") : (slats ? "wiz_T590" : "wiz_T591")), actions: bar });
       stoppedEarly(closingTime, "wiz_T440");
       return screen;
     }
     positioning("04", tx("wiz_T029", values), closingTime);
-    if (["starting_close", "closing"].includes(phase)) screen.actions = local.ackReadings ? returnEnd("wiz_T032", "closing", closingTime) : toEndStop("wiz_T032", "closing");
+    screen.actions = bar;
     return screen;
   }
   if (["lift", "reset", "opening"].includes(step)) screen.phase = "ascent";
