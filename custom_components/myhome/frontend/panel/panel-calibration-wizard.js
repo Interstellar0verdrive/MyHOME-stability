@@ -1141,14 +1141,15 @@ export class CalibrationWizard {
     // Review nit: a cover already shown «closed» (at an unknown position) is still «closed» before its run starts:
     // that «closed» counts only once Home Assistant has reported the close under way; otherwise the run's time decides.
     if (state && ["closing", "opening"].includes(state.state)) homing.moved = true;
-    // L-120: the close is over at the earliest of its stop status and its estimated closing time, with no margin (a
-    // MyHOMEServer1 reports the stop of a run to the end stop only at the actuator's timer, about 60 s). Home Assistant
-    // still shows the cover closing until that status, and a session does not start on a moving cover: the panel then
-    // writes the Stop, as path A's confirmed end stop does, and the session starts once the cover is still, on C-11
-    // («check that it is fully closed and still»), where nothing moves before the user's press.
+    // L-120: the close is over at the earliest of its stop status and its estimated closing time (a MyHOMEServer1
+    // reports the stop of a run to the end stop only at the actuator's timer, about 60 s). Home Assistant still shows
+    // the cover closing until that status, and a session does not start on a moving cover: the panel then writes the
+    // Stop, as path A's confirmed end stop does, and the session starts once the cover is still, on C-11 («check that
+    // it is fully closed and still»), where nothing moves before the user's press. L-120b: an action on the motor, so
+    // the estimate keeps its margin of max(2 s, 15 %) (`homeStopAt`).
     // N-3: no closing time to wait for (none known): two minutes, then the session starts on «check that it is fully
     // closed», where the user confirms it, rather than a positioning that never ends for a cover that never moves.
-    const estimated = homing.seconds != null && elapsed >= homing.seconds;
+    const estimated = homing.seconds != null && elapsed >= screens.homeStopAt(homing.seconds);
     if (estimated && state && !still && !homing.stopSent) {
       homing.stopSent = true;
       Promise.resolve(this._context.hass.callService?.("cover", "stop_cover", { entity_id: homing.entity })).catch(() => {});

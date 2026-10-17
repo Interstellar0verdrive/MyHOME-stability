@@ -305,9 +305,10 @@ export function buildScreen(ctx) {
 
   // L-38: before a times-only measurement the cover is closed by Home Assistant, as path A's first positioning (C-04).
   if (local.homing && !view) {
-    const seconds = local.homing.seconds, done = Math.min(seconds ?? 0, Math.max(0, ((ctx.now ?? Date.now()) - local.homing.started) / 1000));
+    // L-120b: the bar runs to the instant the panel writes the Stop (the estimate and its margin).
+    const seconds = homeStopAt(local.homing.seconds), done = Math.min(seconds ?? 0, Math.max(0, ((ctx.now ?? Date.now()) - local.homing.started) / 1000));
     Object.assign(screen, { code: "C-04", phase: "prep", title: t("wiz_T027"),
-      // L-120: the bar ends at the estimated closing time, when the close counts as done.
+      // L-120: the bar ends when the close counts as done (L-120b: at the Stop).
       wait: { text: tx("wiz_T029", values), stages: [], progress: seconds > 0 ? { value: done / seconds, remaining: done >= seconds ? null : Math.max(1, Math.ceil(seconds - done - 0.001)) } : { value: null, remaining: null } },
       actions: [{ id: "stop", label: t("wiz_T028"), kind: "stop" }] });
     return finish();
@@ -1143,6 +1144,12 @@ function secondsLeft(seconds) { return Math.max(1, Math.ceil(seconds - 0.001)); 
 
 /** A stop frame before this share of the estimated run is "earlier than expected" (R7-9). */
 const EARLY_STOP_SHARE = 0.6;
+
+/**
+ * L-120b: when the panel writes the Stop of the close before a times-only measurement (C-04): its estimated closing
+ * time and a margin of max(2 s, 15 %), as an action on the motor (not a gate of the screen) deserves.
+ */
+export const homeStopAt = (seconds) => (seconds > 0 ? seconds + Math.max(2, seconds * 0.15) : null);
 
 /** A positioning to an end stop the cover already sits at: the bar runs this long, until the bus confirms the stop. */
 const ALREADY_THERE_SECONDS = 2;
