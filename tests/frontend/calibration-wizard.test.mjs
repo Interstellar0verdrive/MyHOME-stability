@@ -2948,8 +2948,9 @@ test("A-04 lasts the whole positioning; A-05 then offers the end stop and T033 a
   assert.deepEqual([run("home", "C", {}, 22.5).code, run("home", "C", {}, 22.5).actions.map((action) => [action.id, !!action.disabled])],
     ["C-05", [["endpoint", false], ["misbehaved", false], ["stop", false]]], "the C clone too");
   // L-58: a reader at rest has no button of the step (L-75: the note says the other device confirms; the text is the step's).
+  // L-119: the finished line that took Stop's place stays in the reader's bar too.
   const reader = run("home", "C", { read_only: true, owner: false, owner_present: true, motor_stopped: true });
-  assert.deepEqual(reader.actions, []);
+  assert.deepEqual(reader.actions.map((action) => action.id), ["stopped"]);
   assert.doesNotMatch(reader.body, /altro dispositivo/);
   assert.equal(reader.readOnly.text, "Un altro dispositivo guida la calibrazione.");
 });

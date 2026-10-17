@@ -1250,7 +1250,8 @@ function finalize(screen, ctx) {
     // L-58b: the armed confirmation counts its seconds down (`left`) before it goes back.
     screen.readOnly = { text: t("wiz_T263"), take: !claimable ? null : status.confirmTake ? t("calConfirmTakeControl") : t("wiz_T264"),
       left: status.confirmTake && status.confirmLeft ? status.confirmLeft : null, consequence: claimable && status.confirmTake ? t("wiz_T265") : null };
-    screen.actions = screen.actions.filter((action) => action.id === "stop" || (readerEnded && action.id === "close"));
+    // L-119: the run's state that replaces Stop in place («La corsa è finita») is the reader's too: its bar keeps its slot.
+    screen.actions = screen.actions.filter((action) => ["stop", "stopped"].includes(action.id) || (readerEnded && action.id === "close"));
     // The header keeps the reader's «Smetti di seguire».
     if (readerEnded) screen.discard = true;
     screen.links = [];

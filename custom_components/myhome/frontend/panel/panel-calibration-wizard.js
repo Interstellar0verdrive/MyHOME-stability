@@ -856,6 +856,8 @@ export class CalibrationWizard {
       local.discarded = { step: local.invalidRun.step, value: gateway?.view?.values?.[key] ?? null };
     }
     if (id === "repeat") { local.invalidRun = null; local.travelTyped = null; }
+    // L-119: a run started from its own button keeps that button, off, in its bar until the step ends.
+    if (id === "next" && gateway?.view?.phase === "briefing" && gateway.view.step) local.manualStart = gateway.view.step;
     if (["next", "lift", "endpoint", "repeat", "repeat_step", "accept", "repeat_check", "redo_readings", "continue_anyway", "continue", "skip"].includes(id)) return this._send(id);
     // "It did not do what it should" (A-05): today the run is stopped and S-01 offers to start over (L2 will repeat the step).
     // L-38: Stop during the positioning before a times-only measurement: Home Assistant stops the cover, nothing started.
@@ -1255,6 +1257,9 @@ export class CalibrationWizard {
     // it, and the next run starts from that press.
     this._closeFullRun(view);
     this._queuedRepeat(view);
+    // L-119 «same step, same bar»: how the step's run starts (by itself after a press, or from its own button) is
+    // decided once per step and keeps its bar for the whole step.
+    if ((view?.step ?? null) !== local.barStep) Object.assign(local, { barStep: view?.step ?? null, autoStart: null, manualStart: null });
     this._autoNext(view);
     this._unloadGuard(this._liveOpen());
     this._render();
@@ -1364,12 +1369,14 @@ export class CalibrationWizard {
       if (!TRANSIT.includes(view.phase)) local.arm = null;
       return;
     }
-    // The answer to the press arrives while it is still pending: decide once it has settled.
-    if (status.busy) return;
-    local.arm = null;
     // L-44: the check's run to its target starts on the confirmation of its end stop, as the half readings' runs do.
     const due = (view.step === "home" && arm.start) || (view.step === "reset" && !view.gap_warning) || view.step === "top"
       || (["half_open", "half_close"].includes(view.step) && local.ackReadings) || (view.step === "check" && !!view.check);
+    // L-119: a run about to start by itself shows its own bar (off) from this briefing on, not the start button.
+    if (due) local.autoStart = view.step;
+    // The answer to the press arrives while it is still pending: decide once it has settled.
+    if (status.busy) return;
+    local.arm = null;
     if (!due) return;
     queueMicrotask(() => { if (this._gateway?.view === view) this._gateway.act("next"); });
   }
@@ -1580,7 +1587,7 @@ function accepted(input) {
  * Fine-tuning keeps its base on purpose (`_startRefine` passes it again).
  */
 function freshFlags() {
-  return { ackLift: false, ackAscent: false, ackDescent: false, ackReadings: false, arm: null, run: null, fullRun: null, invalidRun: null, repeatQueued: false, moreOpen: false, travelTyped: null, discarded: null, misbehaved: false, stopSent: false,
+  return { ackLift: false, ackAscent: false, ackDescent: false, ackReadings: false, arm: null, run: null, fullRun: null, invalidRun: null, repeatQueued: false, moreOpen: false, travelTyped: null, discarded: null, misbehaved: false, stopSent: false, barStep: null, autoStart: null, manualStart: null,
     review: null, pendingSave: null, fieldError: null, fieldSequence: undefined, errorPhase: undefined, saveProfile: undefined, saveChoice: undefined,
     profileName: undefined, refining: false, lastGap: null, liftOrigin: null, baseReadings: null, fineReadings: null, pathChoice: null, reachedPhase: null };
 }
