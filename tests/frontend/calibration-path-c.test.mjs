@@ -317,7 +317,7 @@ test("L-38: times only first closes an open cover, as path A does, then starts o
   assert.equal(third.backend.hass.services.at(-1).service, "close_cover");
 });
 
-test("L-120/L-120b: the close before times only is over at its estimated closing time and margin, not at a stop status that comes at the actuator's timer", async () => {
+test("L-120/L-120c: the close before times only is over at its estimated closing time and margin, not at a stop status that comes at the actuator's timer", async () => {
   const context = await mount();
   const { backend, wiz, code, press, panel } = context;
   await toCase(context, "times_only");
@@ -330,16 +330,16 @@ test("L-120/L-120b: the close before times only is over at its estimated closing
   const stops = () => backend.hass.services.filter((call) => call.service === "stop_cover").length;
   // A MyHOMEServer1: Home Assistant keeps showing it closing until the actuator's timer (about 60 s).
   backend.hass.states["cover.kitchen_two"] = { state: "closing", attributes: { current_position: 20 } };
-  // L-120b: the Stop is an action on the motor: 12.1 s + max(2 s, 15 %) = 14.1 s.
+  // L-120c: the Stop is an action on the motor: 12.1 s + max(4 s, 25 %) = 16.1 s.
   homing.started = Date.now() - 12200;
   wizard.updateHass(backend.hass); await tick(4);
   assert.deepEqual([started(), stops(), code()], [false, 0, "C-04"], "past its closing time but within the margin: no Stop");
-  homing.started = Date.now() - 13900;
+  homing.started = Date.now() - 15900;
   wizard.updateHass(backend.hass); await tick(4);
   assert.deepEqual([started(), stops(), code()], [false, 0, "C-04"], "just before the margin ends: no Stop");
   assert.match(wiz().querySelector(".wiz-wait-remaining").textContent, /1 s/, "the bar runs to the Stop");
   // The estimate and its margin are over: the Stop is written, as path A's confirmed end stop…
-  homing.started = Date.now() - 14200;
+  homing.started = Date.now() - 16200;
   wizard.updateHass(backend.hass); await tick(4);
   assert.equal(wiz().querySelector(".wiz-wait-remaining").hidden, true, "the bar has ended with the Stop");
   assert.deepEqual([stops(), started()], [1, false], "the Stop, once; no session on a cover Home Assistant still sees moving");

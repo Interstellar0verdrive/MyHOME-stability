@@ -1147,9 +1147,10 @@ const EARLY_STOP_SHARE = 0.6;
 
 /**
  * L-120b: when the panel writes the Stop of the close before a times-only measurement (C-04): its estimated closing
- * time and a margin of max(2 s, 15 %), as an action on the motor (not a gate of the screen) deserves.
+ * time and a margin, as an action on the motor (not a gate of the screen) deserves. L-120c: max(4 s, 25 %): a few
+ * seconds more cost nothing, an early Stop would leave the cover short of the bottom and block the measurement.
  */
-export const homeStopAt = (seconds) => (seconds > 0 ? seconds + Math.max(2, seconds * 0.15) : null);
+export const homeStopAt = (seconds) => (seconds > 0 ? seconds + Math.max(4, seconds * 0.25) : null);
 
 /** A positioning to an end stop the cover already sits at: the bar runs this long, until the bus confirms the stop. */
 const ALREADY_THERE_SECONDS = 2;

@@ -1146,7 +1146,7 @@ export class CalibrationWizard {
     // the cover closing until that status, and a session does not start on a moving cover: the panel then writes the
     // Stop, as path A's confirmed end stop does, and the session starts once the cover is still, on C-11 («check that
     // it is fully closed and still»), where nothing moves before the user's press. L-120b: an action on the motor, so
-    // the estimate keeps its margin of max(2 s, 15 %) (`homeStopAt`).
+    // the estimate keeps a margin (`homeStopAt`, L-120c: max(4 s, 25 %)).
     // N-3: no closing time to wait for (none known): two minutes, then the session starts on «check that it is fully
     // closed», where the user confirms it, rather than a positioning that never ends for a cover that never moves.
     const estimated = homing.seconds != null && elapsed >= screens.homeStopAt(homing.seconds);
