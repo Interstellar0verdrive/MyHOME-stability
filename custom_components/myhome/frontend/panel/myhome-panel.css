@@ -1462,11 +1462,11 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
    («Ferma la tapparella») is filled, in every layout (the L-95 block at the end of the sheet). */
 .wiz-action.stop, .wiz-action.danger-outline { min-height: 44px; border: 1px solid var(--panel-error); color: var(--panel-error); background: transparent; box-shadow: none; }
 .wiz-action.link { min-height: 44px; border: 0; background: transparent; box-shadow: none; color: var(--panel-accent); }
-/* Review P4: a stop control is always in view and reachable, and never next to a timing confirm: it heads the bar and is
-   set apart from the actions under it by 20 px with a hairline in the middle (the bar's own gap plus 8 px), in every
-   layout (phone bar, landscape column, desktop column). */
-.wiz-actions > .wiz-action.stop:not(:last-child) { position: relative; margin-bottom: 8px; }
-.wiz-actions > .wiz-action.stop:not(:last-child)::after { content: ""; position: absolute; inset-inline: 0; bottom: -11px; height: 1px;
+/* L-116: the emergency Stop is the last of the actions (outlined ways out may follow), always drawn in a bar with the
+   ①/② pair, and set apart from the action before it by 20 px with a hairline in the middle (the bar's own gap plus
+   8 px): never next to a timing confirm, in every layout (phone bar, landscape column, desktop column). */
+.wiz-actions > .wiz-action.stop:not(:first-child) { position: relative; margin-top: 8px; }
+.wiz-actions > .wiz-action.stop:not(:first-child)::before { content: ""; position: absolute; inset-inline: 0; top: -11px; height: 1px;
   background: var(--panel-border); pointer-events: none; }
 @media (hover: hover) { :is(.wiz-action.stop, .wiz-action.danger-outline, .wiz-action.danger):hover:not(:disabled) { background: color-mix(in srgb, var(--panel-error) 8%, transparent); } }
 :is(.wiz-action.stop, .wiz-action.danger-outline, .wiz-action.danger):active:not(:disabled) { background: color-mix(in srgb, var(--panel-error) 12%, transparent); }

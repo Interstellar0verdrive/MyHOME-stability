@@ -395,6 +395,8 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
   // stops by itself without a frame) Stop gives way to the state, «La corsa è finita: la tapparella è ferma».
   const ranOut = (seconds) => MOTOR_STOPPED(view) || (seconds > 0 && (elapsed ?? 0) >= seconds + Math.max(2, seconds * 0.15));
   const stopOrState = (seconds) => ranOut(seconds) ? [{ id: "stopped", label: t("wiz_T498"), kind: "state" }] : [stop];
+  // L-116: in a bar with the ①/② pair Stop is always drawn, last, off while nothing moves (finalize sets it).
+  const pinnedStop = { ...stop, pinned: true };
   const toEndStop = (label, running) => [{ id: "endpoint", label: t(label), kind: "primary", disabled: phase !== running }, ...whileRunning(view, stop)];
   // L-14: a return before a tape reading (the user is there to read the tape) never goes on by itself: its end stop is
   // confirmed by the user, enabled once the motor stopped by itself or its estimated time has run; the run to the next
@@ -454,9 +456,9 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     const moving = /^(starting_)?(open|clos)ing$/.test(phase);
     Object.assign(screen, { code: p("07"), title: t("wiz_T042"), body: moving ? t("wiz_T520") : path === "C" ? t("wiz_T202") : t("wiz_T043"),
       stopwatch: runWatch(t, n, view, elapsed),
-      // Review P4: once ① has started the run it goes away (no disabled slot left at the top of the bar).
-      actions: [...(phase === "briefing" ? [{ id: "next", label: t("wiz_T045"), kind: "primary" }] : []),
-        { id: "lift", label: t("wiz_T046"), kind: "primary", disabled: phase !== "opening" }, stop] });
+      // L-116: ① · ② · Stop, always all three: ① off once it started the run, ② and Stop on while the cover moves.
+      actions: [{ id: "next", label: t("wiz_T045"), kind: "primary", disabled: phase !== "briefing" },
+        { id: "lift", label: t("wiz_T046"), kind: "primary", disabled: phase !== "opening" }, pinnedStop] });
     if ((resting || view.still_resting) && phase === "briefing") screen.notices.push(liftRepeated());
     if (phase === "geometry_wait_stop") stopping(view.samples?.lift);
     return screen;
@@ -515,7 +517,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
       body: t(/^(starting_)?opening$/.test(phase) ? "wiz_T521" : slats ? "wiz_T056" : "wiz_T499"),
       stopwatch: runWatch(t, n, view, elapsed),
       actions: [{ id: "next", label: t("wiz_T045"), kind: "primary", disabled: phase !== "briefing" },
-        { id: "endpoint", label: t("wiz_T057"), kind: "primary", disabled: phase !== "opening" || MOTOR_STOPPED(view) }, ...whileRunning(view, stop)] });
+        { id: "endpoint", label: t("wiz_T057"), kind: "primary", disabled: phase !== "opening" || MOTOR_STOPPED(view) }, pinnedStop] });
     if (phase === "geometry_wait_stop") stopping(view.values?.opening_time);
     return screen;
   }
@@ -529,7 +531,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     Object.assign(screen, { code: p("14"), title: t("wiz_T068"),
       body: t(/^(starting_)?closing$/.test(phase) ? (slats ? "wiz_T522" : "wiz_T523") : slats ? "wiz_T069" : "wiz_T500"), stopwatch: runWatch(t, n, view, elapsed),
       actions: [{ id: "next", label: t("wiz_T045"), kind: "primary", disabled: phase !== "briefing" },
-        { id: "endpoint", label: t("wiz_T070"), kind: "primary", disabled: phase !== "closing" || MOTOR_STOPPED(view) }, ...whileRunning(view, stop)] });
+        { id: "endpoint", label: t("wiz_T070"), kind: "primary", disabled: phase !== "closing" || MOTOR_STOPPED(view) }, pinnedStop] });
     if (phase === "geometry_wait_stop") stopping(view.values?.closing_time);
     return screen;
   }
@@ -664,7 +666,7 @@ function guidedScreen(screen, ctx, tx, n, values, stop) {
     return Object.assign(screen, { code: "C-11", phase: "ascent", title: t("wiz_T040"), body: t(phase === "confirm_closed" ? "wiz_T477" : "wiz_T521"),
       stopwatch: runWatch(t, n, view, elapsed),
       actions: [{ id: "run:open", label: t("wiz_T045"), kind: "primary", disabled: phase !== "confirm_closed" },
-        { id: "endpoint", label: t("wiz_T057"), kind: "primary", disabled: phase !== "opening" || MOTOR_STOPPED(view) }, ...whileRunning(view, stop)] });
+        { id: "endpoint", label: t("wiz_T057"), kind: "primary", disabled: phase !== "opening" || MOTOR_STOPPED(view) }, { ...stop, pinned: true }] });
   }
   if (phase === "confirm_open" && !local.ackAscent) {
     screen.phase = "ascent";
@@ -674,7 +676,7 @@ function guidedScreen(screen, ctx, tx, n, values, stop) {
     return Object.assign(screen, { code: "C-14", phase: "descent", title: t("wiz_T068"), body: t(phase === "confirm_open" ? "wiz_T479" : "wiz_T522"),
       stopwatch: runWatch(t, n, view, elapsed),
       actions: [{ id: "run:close", label: t("wiz_T045"), kind: "primary", disabled: phase !== "confirm_open" },
-        { id: "endpoint", label: t("wiz_T070"), kind: "primary", disabled: phase !== "closing" || MOTOR_STOPPED(view) }, ...whileRunning(view, stop)] });
+        { id: "endpoint", label: t("wiz_T070"), kind: "primary", disabled: phase !== "closing" || MOTOR_STOPPED(view) }, { ...stop, pinned: true }] });
   }
   return Object.assign(screen, { code: "unknown", title: t("wiz_T027"), actions: [stop] });
 }
@@ -1231,7 +1233,11 @@ function finalize(screen, ctx) {
   // L-77: no Stop at rest, whoever looks. Within a movement each step still decides (U-9: once a run to an end stop has
   // run out, its state replaces Stop), and the reader keeps exactly the owner's decision.
   // The close Home Assistant makes before a session (L-38, no session yet) is a movement too.
-  if (!IN_MOTION(view, status) && !(local.homing && !view)) screen.actions = screen.actions.filter((action) => action.id !== "stop");
+  const moving = IN_MOTION(view, status) || !!(local.homing && !view);
+  // L-116: a pinned Stop (bars with the ①/② pair) stays in its place, off while nothing moves; any other Stop only
+  // while something moves.
+  screen.actions = screen.actions.filter((action) => action.id !== "stop" || moving || action.pinned)
+    .map((action) => (action.id === "stop" && action.pinned ? { ...action, disabled: !moving } : action));
   // L-113: a reader never restarts or cancels: on an interrupted session it keeps the reader's bar too, with «Torna
   // all'elenco»; «Prendi il controllo» only while Home Assistant keeps the session (`recoverable`, within its lease).
   // «Ricomincia» and «Annulla la misurazione» are the owner's, after a claim.

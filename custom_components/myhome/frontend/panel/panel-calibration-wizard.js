@@ -534,11 +534,11 @@ export class CalibrationWizard {
             : `<button type="button" class="wiz-action ${action.kind}" data-wiz="${esc(action.id)}"${action.note ? ` aria-describedby="wiz-note-${esc(action.id.replace(/\W/g, "-"))}"` : ""}>${esc(action.label)}</button>${action.note
             ? `<p class="wiz-action-note muted" id="wiz-note-${esc(action.id.replace(/\W/g, "-"))}">${esc(action.note)}</p>` : ""}`;
           const { shown, more, red } = overflow(screen.actions);
-          // Review P4: Stop (an emergency) heads the bar, set apart from the actions under it (CSS: a gap and a hairline),
-          // so a thumb aiming at a timing confirm (②, the end stop) never lands on it; leaving a process stays last.
+          // L-116: the emergency Stop is the last of the actions, after a gap and a hairline (CSS), never next to ②;
+          // leaving a process (outlined) follows it.
           const stops = red.filter((action) => action.kind === "stop"), leaving = red.filter((action) => action.kind !== "stop");
-          return `${stops.map(one).join("")}${shown.map(one).join("")}${more.length ? `<div class="wiz-more"><button type="button" class="wiz-more-toggle" data-wiz="more" aria-expanded="false" aria-controls="wiz-more-list">${esc(t("wiz_T529"))}<ha-icon icon="mdi:chevron-down" aria-hidden="true"></ha-icon></button>
-            <div class="wiz-more-list" id="wiz-more-list">${more.map(one).join("")}</div></div>` : ""}${leaving.map(one).join("")}`;
+          return `${shown.map(one).join("")}${more.length ? `<div class="wiz-more"><button type="button" class="wiz-more-toggle" data-wiz="more" aria-expanded="false" aria-controls="wiz-more-list">${esc(t("wiz_T529"))}<ha-icon icon="mdi:chevron-down" aria-hidden="true"></ha-icon></button>
+            <div class="wiz-more-list" id="wiz-more-list">${more.map(one).join("")}</div></div>` : ""}${stops.map(one).join("")}${leaving.map(one).join("")}`;
         })()}`;
       if (focused) column.querySelector(`[data-wiz="${focused}"]`)?.focus({ preventScroll: true });
     }
