@@ -543,10 +543,19 @@ test("a cover that follows a profile saves only on itself by default, which wait
   name.value = "kitchen_two"; name.dispatchEvent(new Event("input", { bubbles: true })); await tick();
   assert.equal(error().hidden, true, "the error goes with the problem");
   assert.equal(wiz().querySelector(".wiz-name-line").textContent, 'This cover will follow the new profile. "tall_two_leaf" stays with the other cover.');
+  // L-118: a base calibration (Home Assistant offers `save_modes: ["new"]`) cannot update the profile followed: that
+  // choice is shown disabled, saying so, and never chosen; Save stays usable on a new profile.
   const update = wiz().querySelector('[name="save_choice"][value="update"]');
+  assert.equal(update.disabled, true);
+  assert.equal(update.closest(".wiz-radio").querySelector(".wiz-option-note.cal-note.is-warning").textContent, "Available in a future version");
   update.checked = true; update.dispatchEvent(new Event("change", { bubbles: true })); await tick();
-  assert.equal(wiz().querySelector('[data-wiz="save"]').disabled, true, "updating a shared profile waits for the unified Save");
-  assert.equal(backend.calls.some((message) => message.action === "save"), false);
+  assert.equal(wiz().querySelector('[name="save_choice"]:checked').value, "new", "the screen never lands on it");
+  assert.equal(wiz().querySelector('[data-wiz="save"]').disabled, false, "Save is never left disabled by a choice it cannot carry out");
+  assert.equal(wiz().querySelector('[data-wiz="save"]').textContent, 'Save as "kitchen_two"');
+  assert.equal(wiz().querySelector(".wiz-notices").textContent.includes("not available yet"), false, "no notice about a choice not made");
+  await press("save"); await tick(4);
+  const save = backend.calls.filter((message) => message.action === "save").at(-1);
+  assert.deepEqual([save.save_mode, save.name], ["new", "kitchen_two"]);
 });
 
 /** Path A on Living room shutter 1 from the first close to its saved screen (A-34). */

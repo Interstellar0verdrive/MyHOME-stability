@@ -654,8 +654,8 @@ export class CalibrationWizard {
     return `<div class="wiz-profile-block">
       <label class="wiz-switch"><input type="checkbox" role="switch" name="save_profile" ${block.on ? "checked" : ""}><span>${esc(block.switchLabel)}</span></label>
       <p class="muted">${esc(block.explanation)}</p>
-      ${block.choice ? `<fieldset class="wiz-radios">${block.choice.options.map((option) => `<label class="wiz-radio"><input type="radio" name="save_choice" value="${esc(option.value)}" ${option.value === block.choice.value ? "checked" : ""}>
-        <span>${esc(option.label)}${option.description ? `<small class="muted">${esc(option.description)}</small>` : ""}</span></label>`).join("")}</fieldset>` : ""}
+      ${block.choice ? `<fieldset class="wiz-radios">${block.choice.options.map((option) => `<label class="wiz-radio${option.disabled ? " is-disabled" : ""}"><input type="radio" name="save_choice" value="${esc(option.value)}" ${option.value === block.choice.value ? "checked" : ""} ${option.disabled ? "disabled" : ""}>
+        <span>${esc(option.label)}${option.warning ? `<span class="cal-note is-warning wiz-radio-warning wiz-option-note">${esc(option.warning)}</span>` : ""}${option.description ? `<small class="muted">${esc(option.description)}</small>` : ""}</span></label>`).join("")}</fieldset>` : ""}
       ${block.name ? `<label>${esc(block.name.label)}<input class="wiz-name-input" name="profile_name" maxlength="64" autocomplete="off" value="${esc(block.name.value)}" aria-describedby="wiz-name-error wiz-name-hint"></label>
         <p id="wiz-name-error" class="wiz-name-error" role="alert" hidden></p>
         <p id="wiz-name-hint" class="muted">${esc(block.name.hint)}</p><p class="wiz-name-line">${esc(block.name.line)}</p>` : ""}</div>`;

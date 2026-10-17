@@ -862,10 +862,13 @@ function profileBlock(ctx, tx, pathC) {
   // lands on a choice that cannot be saved. Elsewhere, and until then, a new profile.
   const source = follows && !!cover.entity_id && cover.profile.provenance?.opening?.origin_entity_id === cover.entity_id;
   const canUpdate = ctx.supports ? ctx.supports("profile_update") : true;
-  const choice = on && follows ? { name: "save_choice", value: local.saveChoice || (source && canUpdate ? "update" : "new"),
+  // L-118: a session that cannot save into the profile followed (a base calibration: Home Assistant offers only a new
+  // profile, `save_modes: ["new"]`) shows «update» disabled, saying so, and never lands on it: Save stays usable.
+  const choice = on && follows ? { name: "save_choice", value: canUpdate ? local.saveChoice || (source ? "update" : "new") : "new",
     // Listed as in A-21d: update first, then a new profile (still the default choice, §9.10).
     options: [{ value: "update", label: tx("wiz_T109", { profile: cover.profile.name }),
-      description: counted(t, "wiz_T110", cover.followers?.length ?? 0, { names: ctx.followerNames || "—" }) }, { value: "new", label: t("wiz_T111") }] } : null;
+      description: counted(t, "wiz_T110", cover.followers?.length ?? 0, { names: ctx.followerNames || "—" }),
+      ...(canUpdate ? {} : { disabled: true, warning: t("wiz_T584") }) }, { value: "new", label: t("wiz_T111") }] } : null;
   const creating = on && (!follows || choice.value === "new");
   const nameValue = local.profileName ?? slug(cover?.name || "");
   // Home Assistant accepts any name of 1–64 characters; two profiles with the same name would be told apart by nothing.
