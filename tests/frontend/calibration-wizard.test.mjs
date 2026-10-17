@@ -1356,10 +1356,10 @@ test("L-112: the calibration's buttons ease their paint (200 ms, ease-out) betwe
   assert.ok(recolouring < 0 || css.indexOf(eased[0]) < recolouring, "with the generic button rules, not in L-95's block (revertable alone)");
 });
 
-test("L-116: an emergency Stop is the last action, always drawn with the ①/② pair, 70 % of an action's height and a hairline after the action before it", async () => {
+test("L-116: an emergency Stop is the last action, always drawn with the ①/② pair, 85 % of an action's height and a hairline after the action before it", async () => {
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
-  // L-116b: the space before Stop is 70 % of an action's height (the bar's 12 px gap plus the rest), the hairline in its middle.
-  assert.match(css, /\.wiz-actions \{ --wiz-action-height: 44px; --cal-stop-gap: calc\(0\.7 \* var\(--wiz-action-height\)\); \}/, "0.7 × the action's height");
+  // L-116b/c: the space before Stop is 85 % of an action's height (the bar's 12 px gap plus the rest), the hairline in its middle.
+  assert.match(css, /\.wiz-actions \{ --wiz-action-height: 44px; --cal-stop-gap: calc\(0\.85 \* var\(--wiz-action-height\)\); \}/, "0.85 × the action's height");
   assert.match(css, /\.wiz-action \{ width: 100%; min-height: 44px;/, "the action's height it is computed from");
   assert.match(css, /\.wiz-actions > \.wiz-action\.stop:not\(:first-child\) \{ position: relative; margin-top: calc\(var\(--cal-stop-gap\) - 12px\); \}/);
   assert.match(css, /\.wiz-actions > \.wiz-action\.stop:not\(:first-child\)::before \{ content: ""; position: absolute; inset-inline: 0; top: calc\(var\(--cal-stop-gap\) \/ -2 - 0\.5px\); height: 1px;\s*background: var\(--panel-border\); pointer-events: none; \}/,
