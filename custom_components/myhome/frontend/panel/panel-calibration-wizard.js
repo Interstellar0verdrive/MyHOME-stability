@@ -256,6 +256,15 @@ export class CalibrationWizard {
       // A choice that redraws the screen (a note under the chosen option) keeps the keyboard on that choice.
       const active = this._root.getRootNode().activeElement;
       const radio = !codeChanged && active?.type === "radio" && this._frame.contains(active) ? active.name : null;
+      // L-117: the same screen drawn again (a switch, a choice, a view of Home Assistant that changes a part of it) keeps
+      // where it was scrolled, in the wizard's own content (phone) and in the page around it, and the field in use;
+      // only a new screen starts from the top.
+      const kept = codeChanged ? null : {
+        main: this._frame.querySelector(".wiz-main")?.scrollTop ?? 0,
+        around: scrollParents(this._root).map((element) => [element, element.scrollTop]),
+        focus: active && this._frame.contains(active) && active.type !== "radio"
+          ? (active.name ? `[name="${active.name}"]` : active.dataset?.wiz ? `[data-wiz="${active.dataset.wiz}"]` : null) : null,
+      };
       this._signature = signature;
       this._renderedCode = screen.code;
       this._root.dataset.code = screen.code;
@@ -324,6 +333,12 @@ export class CalibrationWizard {
       this._pickerHtml = null;
       this._watchMore();
       if (radio) this._frame.querySelector(`.wiz-radios input[name="${radio}"]:checked`)?.focus({ preventScroll: true });
+      if (kept) {
+        if (kept.focus) this._frame.querySelector(kept.focus)?.focus({ preventScroll: true });
+        const main = this._frame.querySelector(".wiz-main");
+        if (main && main.scrollTop !== kept.main) main.scrollTop = kept.main;
+        for (const [element, top] of kept.around) if (element.scrollTop !== top) element.scrollTop = top;
+      }
       // L-8: in the page's inline layouts the page is scrolled by `revealHead` (the head at the top on opening, kept in
       // view at every step), never by the focus; full screen, the focus scrolls the wizard's own content.
       if (codeChanged) queueMicrotask(() => {
@@ -1520,6 +1535,15 @@ export class CalibrationWizard {
 function takeLabel(readOnly) { return readOnly.left ? `${readOnly.take} · ${readOnly.left} s` : readOnly.take; }
 
 function key(item) { return JSON.stringify([item.entry.entry_id, item.cover.entity_id]); }
+
+/** L-117: every element that may scroll the wizard (its ancestors through shadow roots, and the page itself). */
+function scrollParents(element) {
+  const found = [];
+  for (let node = element?.parentElement || element?.getRootNode?.().host; node; node = node.parentElement || node.getRootNode?.().host) found.push(node);
+  const page = element?.ownerDocument?.scrollingElement;
+  if (page && !found.includes(page)) found.push(page);
+  return found;
+}
 
 /** The red actions: the emergency (Stop, filled) and abandoning a process (Cancel the measurement, Exit without saving: outlined). */
 const RED_KINDS = ["danger", "danger-outline", "stop"];
