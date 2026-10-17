@@ -49,6 +49,32 @@ export const FAMILIES = {
     ["past the closing time", { view: { step: "home", phase: "closing", ...halfRead }, local: { ...acks, autoStart: "home" }, elapsed: 23 }],
     ["motor stopped", { view: { step: "home", phase: "closing", motor_stopped: true, stopped_elapsed: 21, ...halfRead }, local: { ...acks, autoStart: "home" }, elapsed: 26 }],
   ],
+  // A-09 → A-10: the return to the rest after the lift-off reading, started by itself after «Fatto, avanti».
+  "A-09/A-10 return to the rest": [
+    ["after the reading", { view: { step: "reset", phase: "briefing", ...timed, values: {} }, local: { ackLift: true, autoStart: "reset" } }],
+    ["starting", { view: { step: "reset", phase: "starting_close", ...timed, values: {} }, local: { ackLift: true, autoStart: "reset" }, elapsed: 0 }],
+    ["closing", { view: { step: "reset", phase: "closing", ...timed, values: {} }, local: { ackLift: true, autoStart: "reset" }, elapsed: 3 }],
+    ["past the closing time", { view: { step: "reset", phase: "closing", ...timed, values: {} }, local: { ackLift: true, autoStart: "reset" }, elapsed: 23 }],
+    ["run over", { view: { step: "reset", phase: "closing", ...timed, values: {} }, local: { ackLift: true, autoStart: "reset" }, elapsed: 30 }],
+    ["motor stopped", { view: { step: "reset", phase: "closing", motor_stopped: true, stopped_elapsed: 19, ...timed, values: {} }, local: { ackLift: true, autoStart: "reset" }, elapsed: 20 }],
+    ["Stop pressed", { view: { step: "reset", phase: "geometry_wait_stop", ...timed, values: {} }, local: { ackLift: true, autoStart: "reset" }, elapsed: 4 }],
+  ],
+  // The same return on a session reopened at its briefing: its start goes first and stays, off, once pressed.
+  "A-09/A-10 return to the rest, started from its button": [
+    ["reopened", { view: { step: "reset", phase: "briefing", ...timed, values: {} }, local: { ackLift: true } }],
+    ["start pressed", { view: { step: "reset", phase: "starting_close", ...timed, values: {} }, local: { ackLift: true, manualStart: "reset" }, elapsed: 0 }],
+    ["closing", { view: { step: "reset", phase: "closing", ...timed, values: {} }, local: { ackLift: true, manualStart: "reset" }, elapsed: 3 }],
+    ["motor stopped", { view: { step: "reset", phase: "closing", motor_stopped: true, stopped_elapsed: 19, ...timed, values: {} }, local: { ackLift: true, manualStart: "reset" }, elapsed: 20 }],
+  ],
+  // A-09 (top): the return to the top before a repeated descent.
+  "A-09 return to the top": [
+    ["after the press", { view: { step: "top", phase: "briefing", ...timed }, local: { ackLift: true, ackAscent: true, autoStart: "top" } }],
+    ["starting", { view: { step: "top", phase: "starting_open", ...timed }, local: { ackLift: true, ackAscent: true, autoStart: "top" }, elapsed: 0 }],
+    ["opening", { view: { step: "top", phase: "opening", ...timed }, local: { ackLift: true, ackAscent: true, autoStart: "top" }, elapsed: 5 }],
+    ["run over", { view: { step: "top", phase: "opening", ...timed }, local: { ackLift: true, ackAscent: true, autoStart: "top" }, elapsed: 40 }],
+    ["motor stopped", { view: { step: "top", phase: "opening", motor_stopped: true, stopped_elapsed: 21, ...timed }, local: { ackLift: true, ackAscent: true, autoStart: "top" }, elapsed: 22 }],
+    ["Stop pressed", { view: { step: "top", phase: "geometry_wait_stop", ...timed }, local: { ackLift: true, ackAscent: true, autoStart: "top" }, elapsed: 6 }],
+  ],
   // A-07, A-11, A-14: ① · ② · Stop from the briefing to the stop that follows ② (G2-10's wait included).
   "A-07 lift-off run": [
     ["briefing", { view: { step: "lift", phase: "briefing" }, local: { ackLift: true } }],
@@ -138,4 +164,51 @@ test("L-119: A-03 → A-05 in the page: the bar drawn when the closing starts is
   assert.equal(state("stopped").tagName, "P", "the finished line in Stop's slot");
   assert.match(wiz().querySelector(".wiz-body").textContent, /si è chiusa completamente|has closed fully/);
   for (const [at, bar] of bars) assert.deepEqual(bar, ["endpoint", "misbehaved", "stop"], `the same bar on ${at}`);
+});
+
+test("L-119: every bar drawn from the lift-off reading to A-10 is the same one, the start by itself included", async () => {
+  const { backend, wiz, code, press, type, startFor } = await mount();
+  await startFor("cover.living_one");
+  await press("begin"); backend.started(); backend.tick(25); backend.emit(); await tick();
+  await press("endpoint"); backend.stopped(); await tick();
+  await press("ack:lift"); await press("next"); backend.started(); backend.tick(4); backend.emit(); await tick();
+  await press("lift"); backend.stopped(); await tick();
+  assert.equal(code(), "A-08");
+  // Every bar the page draws, however briefly (a view in between included).
+  const bars = [];
+  const record = () => { const bar = wiz().querySelector(".wiz-actions"); if (bar) bars.push(`${code()} ${[...bar.querySelectorAll("[data-wiz]")].map((item) => item.dataset.wiz).join(" · ")}`); };
+  const observer = new window.MutationObserver(record);
+  observer.observe(wiz(), { subtree: true, childList: true, attributes: true, attributeFilter: ["data-code"] });
+  try {
+    await type("3");
+    record();
+    backend.started(); backend.tick(5); backend.emit(); await tick(); record();
+    backend.tick(30); backend.emit(); await tick(); record();
+    assert.equal(code(), "A-10");
+  } finally { observer.disconnect(); }
+  const after = bars.slice(bars.findIndex((bar) => bar.startsWith("A-09")));
+  assert.ok(after.length >= 3, after.join("\n"));
+  assert.deepEqual([...new Set(after.map((bar) => bar.replace(/^\S+ /, "").replace("stopped", "stop")))], ["endpoint · stop"], after.join("\n"));
+});
+
+test("L-119: a return reopened at its briefing keeps its own start, off, once pressed", async () => {
+  const { backend, wiz, press, panel, startFor } = await mount();
+  await startFor("cover.living_one");
+  await press("begin"); backend.started(); backend.tick(25); backend.emit(); await tick();
+  await press("endpoint"); backend.stopped(); await tick();
+  await press("ack:lift"); await press("next"); backend.started(); backend.tick(4); backend.emit(); await tick();
+  await press("lift"); backend.stopped(); await tick();
+  // The reading is sent but the automatic start does not happen (as on a session reopened at the briefing).
+  const wizard = panel._calibrationTab._wizard;
+  const autoNext = wizard._autoNext;
+  wizard._autoNext = () => {};
+  try {
+    const input = wiz().querySelector('[name="reading_cm"]'); input.value = "3"; input.dispatchEvent(new Event("input", { bubbles: true }));
+    await press("reading");
+  } finally { wizard._autoNext = autoNext; }
+  const bar = () => [...wiz().querySelectorAll(".wiz-actions [data-wiz]")].map((item) => [item.dataset.wiz, item.disabled]);
+  assert.deepEqual(bar(), [["next", false], ["endpoint", true], ["stop", true]]);
+  await press("next");
+  backend.started(); backend.tick(3); backend.emit(); await tick();
+  assert.deepEqual(bar(), [["next", true], ["endpoint", false], ["stop", false]]);
 });

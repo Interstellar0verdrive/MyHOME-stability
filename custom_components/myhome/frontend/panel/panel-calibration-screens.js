@@ -372,6 +372,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
   const positioningRun = (seconds) => !MOTOR_STOPPED(view) && seconds > 0 && (elapsed ?? 0) < seconds;
   // While a cover positions to an end stop, the user's eye may confirm it at once (the estimate comes from times not yet
   // measured): the end stop is the primary from the start (pressable once the motor runs), Stop the red link beside it.
+  // (L-119: not the first closing, whose end stop waits for the cover to arrive.)
   // The motor stopped by itself well before the estimated run (under 60 %): a wall switch or an obstacle gives the same
   // frame as the end stop, so the user is asked to look before confirming. The confirmation stays active.
   const stoppedEarly = (estimate, key) => {
@@ -403,7 +404,6 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
   // L-119: so in every bar of a step that moves the cover: its slot never empties, the state only takes its place.
   const pinnedStop = { ...stop, pinned: true };
   const stopOrState = (seconds) => ranOut(seconds) ? [{ id: "stopped", label: t("wiz_T498"), kind: "state" }] : [pinnedStop];
-  const toEndStop = (label, running) => [{ id: "endpoint", label: t(label), kind: "primary", disabled: phase !== running }, ...whileRunning(view, stop)];
   // L-14: a return before a tape reading (the user is there to read the tape) never goes on by itself: its end stop is
   // confirmed by the user, enabled once the motor stopped by itself or its estimated time has run; the run to the next
   // reading then starts from that press.
@@ -411,6 +411,11 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     const ready = MOTOR_STOPPED(view) || !(seconds > 0) || (elapsed ?? 0) >= seconds;
     return [{ id: "endpoint", label: t(label), kind: "primary", disabled: phase !== running || !ready, settling: phase === running && !ready }, ...whileRunning(view, stop)];
   };
+  // L-119 «same step, same bar»: a run Home Assistant starts by itself after a press (a return to an end stop, the
+  // runs of the tape readings, the check's legs) draws its whole bar, off, from the briefing that precedes it. When
+  // nothing starts it (a session reopened or claimed there) its own start goes first and stays, off, once pressed.
+  const withStart = (items) => (phase === "briefing" && local.autoStart !== step) || local.manualStart === step
+    ? [{ id: "next", label: t("wiz_T060"), kind: "primary", disabled: phase !== "briefing" }, ...items] : items;
   // L-37: the base calibration ends with an optional check of the model just measured (the backend's check: the end
   // stop, a timed run to half the travel descending from the top, a tape reading); its gap is the precision shown in
   // the summary, and the reading anchors Home Assistant's estimate.
@@ -483,17 +488,20 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
       notices: [{ tone: "warning", result: true, text: fill(t("calGapWarning"), view) }],
       // G3-5: repeating is the advised way; going on with a wide gap is the outlined secondary.
       actions: [{ id: "repeat", label: t("wiz_T061"), kind: "primary" }, { id: "next", label: t("wiz_T473"), kind: "secondary" }] });
-    // The same Stop rule as A-05 (only while the motor runs); no T033 here, a stop would discard the lift-off.
+    // The same Stop rule as A-05; no T033 here, a stop would discard the lift-off.
+    // L-119: one bar from the briefing to the end stop: the end stop (on while the cover closes, as before: the eye may
+    // confirm it; a return before a repeated reading only once it has arrived), Stop last or the finished line.
+    const ready = MOTOR_STOPPED(view) || !(closingTime > 0) || (elapsed ?? 0) >= closingTime;
+    const bar = withStart([{ id: "endpoint", label: t("wiz_T032"), kind: "primary", disabled: phase !== "closing" || (local.ackReadings && !ready),
+      settling: ["starting_close", "closing"].includes(phase) && (phase !== "closing" || (local.ackReadings && !ready)) }, ...stopOrState(closingTime)]);
     if (phase === "closing" && !positioningRun(closingTime)) {
-      Object.assign(screen, { code: p("10"), title: t("wiz_T053"), body: t("wiz_T054"),
-        actions: [{ id: "endpoint", label: t("wiz_T032"), kind: "primary" }, ...stopOrState(closingTime)] });
+      Object.assign(screen, { code: p("10"), title: t("wiz_T053"), body: t("wiz_T054"), actions: bar });
       // Not on a return before a repeated reading: that one confirms itself on the stop frame (§9.53).
       if (!local.ackReadings) stoppedEarly(closingTime, "wiz_T440");
       return screen;
     }
     positioning("09", tx(path === "C" ? "wiz_T203" : "wiz_T052", values), closingTime);
-    if (["starting_close", "closing"].includes(phase)) screen.actions = local.ackReadings ? returnEnd("wiz_T032", "closing", closingTime) : toEndStop("wiz_T032", "closing");
-    if (phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }];
+    screen.actions = bar;
     if (resting || view.still_resting) screen.notices.push(liftRepeated());
     return screen;
   }
@@ -577,10 +585,13 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
   if (step === "top" && !readingsReturn) {
     // D-12: once the motor has stopped the run is no longer «positioning»: the stop is said in the title, with its
     // warning when it came early, and the end stop to confirm (the state instead of Stop, U-9).
+    // Z-5: as A-05, «Non ha fatto quello che doveva» beside the end stop. L-119: from the start of the run, with the end
+    // stop (on while the cover opens: the eye may confirm it) and Stop last, replaced in place by the finished line.
+    const running = ["starting_open", "opening"].includes(phase);
+    const bar = withStart([{ id: "endpoint", label: t("wiz_T432"), kind: "primary", disabled: phase !== "opening", settling: phase === "starting_open" },
+      { id: "misbehaved", label: t("wiz_T033"), kind: "secondary", disabled: !running }, ...stopOrState(topTime)]);
     if (phase === "opening" && MOTOR_STOPPED(view)) {
-      // Z-5: as A-05 after an early stop (T440), «Non ha fatto quello che doveva» is offered beside the end stop.
-      Object.assign(screen, { code: p("09"), phase: "descent", title: t("wiz_T504"),
-        actions: [{ id: "endpoint", label: t("wiz_T432"), kind: "primary" }, { id: "misbehaved", label: t("wiz_T033"), kind: "secondary" }, ...stopOrState(topTime)] });
+      Object.assign(screen, { code: p("09"), phase: "descent", title: t("wiz_T504"), actions: bar });
       stoppedEarly(topTime, "wiz_T441");
       return screen;
     }
@@ -588,9 +599,8 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     // L-29: the end stop it goes to, by direction («va», not «torna»: it did not come from there).
     positioning("09", t("wiz_T553"), topTime);
     screen.phase = "descent";
-    if (["starting_open", "opening"].includes(phase)) screen.actions = toEndStop("wiz_T432", "opening");
+    screen.actions = bar;
     if (phase === "opening") stoppedEarly(topTime, "wiz_T441");
-    if (phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
     return screen;
   }
   if (step === "top" || step === "half_close") {
