@@ -3027,14 +3027,17 @@ test("L-14: a return before a tape reading waits for the user: its end stop is e
   await first.press("endpoint"); first.backend.stopped(); await tick(6);
   assert.equal(endpoints(first.backend), before + 1);
   assert.equal(first.actions().at(-1), "next", "the half descent starts from the press");
-  // 2. No stop frame: the end stop comes on once the measured opening time (22.2 s) has run, and still waits.
+  // 2. No stop frame: the end stop comes on once the rest of the measured ascent has run (L-120: from where the
+  // half-ascent run stopped, 22.2 − (4.4 + 22.2) / 2 = 8.9 s; no margin), and still waits.
   const second = await mount();
   await toTop(second);
   const base = endpoints(second.backend);
-  second.backend.tick(20); second.backend.emit(); await tick(6);
-  assert.equal(button(second).disabled, true, "20 s: not yet");
-  second.backend.tick(3); second.backend.emit(); await tick(6);
-  assert.equal(button(second).disabled, false, "23 s: on");
+  second.backend.tick(8.8); second.backend.emit(); await tick(6);
+  assert.equal(button(second).disabled, true, "8.8 s: not yet");
+  assert.match(second.wiz().querySelector(".wiz-wait-remaining").textContent, /1 s/, "the bar still has its last second");
+  second.backend.tick(0.2); second.backend.emit(); await tick(6);
+  assert.equal(button(second).disabled, false, "9.0 s: on");
+  assert.equal(second.wiz().querySelector(".wiz-wait-remaining").hidden, true, "and the bar has ended at that instant");
   second.backend.tick(30); second.backend.emit(); await tick(6);
   assert.equal(endpoints(second.backend), base, "and nothing goes on by itself");
 });
@@ -4393,8 +4396,9 @@ test("V-1: A-19 asks to confirm the top only on its first leg, and each leg says
   const first = at({ step: "top", phase: "opening" });
   assert.equal(first.code, "A-19");
   assert.ok(first.actions.some((action) => action.id === "endpoint"), "the top is confirmed on the first leg");
-  assert.match(first.wait.stages[0].text, /about 24 s/, "23.3 s rounded up, as the time left");
-  assert.equal(first.wait.remaining, "About 23 s remaining", "1 s run of 23.3");
+  // L-120: from where the half-ascent run stopped: 23.3 − (4 + 23.3) / 2 = 9.65 s, rounded up as the time left.
+  assert.match(first.wait.stages[0].text, /about 10 s/, "9.65 s rounded up, as the time left");
+  assert.equal(first.wait.remaining, "About 9 s remaining", "1 s run of 9.65");
   const second = at({ step: "half_close", phase: "closing" });
   assert.equal(second.code, "A-19");
   assert.equal(second.actions.find((action) => action.id === "endpoint").disabled, true, "never on the way down to half (L-119: off, in its place)");

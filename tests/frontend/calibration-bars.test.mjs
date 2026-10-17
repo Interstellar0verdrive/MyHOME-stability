@@ -256,6 +256,8 @@ test("L-119: a return reopened at its briefing keeps its own start, off, once pr
   assert.deepEqual(bar(), [["next", false], ["endpoint", true], ["stop", true]]);
   await press("next");
   backend.started(); backend.tick(3); backend.emit(); await tick();
+  assert.deepEqual(bar(), [["next", true], ["endpoint", true], ["stop", false]], "L-120: the end stop waits for the cover to arrive");
+  backend.tick(19); backend.emit(); await tick();
   assert.deepEqual(bar(), [["next", true], ["endpoint", false], ["stop", false]]);
 });
 
@@ -283,4 +285,37 @@ test("L-119b: Stop and the finished line are one slot of the bar: the same node,
   backend.session.motor_stopped = false; backend.session._started = null; backend.started(); backend.tick(1); backend.emit(); await tick();
   assert.equal(wiz().querySelector(".wiz-actions > .wiz-stop-slot"), reader, "back to Stop in the same slot");
   assert.deepEqual([reader.className, reader.firstElementChild.dataset.wiz], ["wiz-stop-slot", "stop"]);
+});
+
+test("L-120: every «arrived» confirm comes on at the earliest of the stop status and the estimated run, no margin, as its bar ends", () => {
+  // [screen, path, view, local, estimate (s)]: the first closing and the returns use the times known at that point (the
+  // closing time in use before anything is measured; the measured ascent afterwards); A-19 starts where the half-ascent
+  // run stopped: 22.2 − (4.4 + 22.2) / 2 = 8.9 s.
+  const cases = [
+    ["A-04/A-05", "A", { step: "home", phase: "closing" }, {}, 21.7],
+    ["C-04/C-05", "C", { step: "home", phase: "closing" }, {}, 21.7],
+    ["A-09/A-10", "A", { step: "reset", phase: "closing", ...timed, values: {} }, { ackLift: true }, 21.7],
+    ["A-09 to the top", "A", { step: "top", phase: "opening", ...timed }, { ackLift: true, ackAscent: true }, 22.2],
+    ["A-19 first leg", "A", { step: "top", phase: "opening", ...halfRead }, acks, 8.9],
+    ["C-19 first leg", "C", { step: "top", phase: "opening", ...halfRead }, acks, 8.9],
+    ["A-30 first leg", "A", { step: "top", phase: "opening", ...halfRead, check: { direction: "closing", planned_seconds: 9 } }, acks, 22.2],
+  ];
+  for (const [name, path, view, local, estimate] of cases) {
+    const at = (elapsed, extra = {}) => screenAt({ path, scope: path === "C" ? "times_and_rolls" : null, view: { ...view, ...extra }, local, elapsed });
+    const endpoint = (screen) => screen.actions.find((action) => action.id === "endpoint");
+    const before = at(estimate - 0.05), on = at(estimate);
+    assert.equal(endpoint(before).disabled, true, `${name}: off before the estimate`);
+    assert.ok(before.wait.progress.value < 1 && before.wait.progress.remaining >= 1, `${name}: the bar still runs`);
+    assert.equal(!!endpoint(on).disabled, false, `${name}: on at ${estimate} s, no margin`);
+    assert.ok(!on.wait || (on.wait.progress.value === 1 && on.wait.progress.remaining == null), `${name}: the bar has ended at that instant`);
+    // The stop status ends it earlier: on at once, the bar complete.
+    const stopped = at(3, { motor_stopped: true, stopped_elapsed: 3 });
+    assert.equal(!!endpoint(stopped).disabled, false, `${name}: on at the stop status`);
+    assert.ok(!stopped.wait || (stopped.wait.progress.value === 1 && stopped.wait.progress.remaining == null), `${name}: the bar complete at the stop status`);
+  }
+  // Not an «arrived» confirm: ② of a full run stays the press of the moment, and a run stopped before it is still not valid.
+  const unpressed = screenAt({ view: { step: "opening", phase: "opening", ...timed, values: {}, motor_stopped: true, stopped_elapsed: 21.4 }, local: { ackLift: true }, elapsed: 22 });
+  assert.deepEqual([unpressed.code, barOf(unpressed)], ["A-12", ["repeat", "invalid-next"]]);
+  const running = screenAt({ view: { step: "opening", phase: "opening", ...timed, values: {} }, local: { ackLift: true }, elapsed: 1 });
+  assert.equal(!!running.actions.find((action) => action.id === "endpoint").disabled, false, "② on at once while the motor runs");
 });

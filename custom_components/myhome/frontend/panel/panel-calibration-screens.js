@@ -364,13 +364,19 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
   const liftTile = () => view.samples?.lift == null ? null : { label: t("wiz_T039"), value: n.fixed(view.samples.lift), unit: "s",
     extra: view.readings?.gap == null ? "" : `${n(view.readings.gap)} cm` };
   const timeTile = (key, seconds) => seconds == null ? null : { label: t(key), value: n.fixed(seconds), unit: "s" };
-  const topTime = toRun(view.values?.opening_time, false);
+  // L-120: the return to the top after the half-ascent reading starts where that run stopped, ((lift) + ascent) / 2 s up
+  // from the bottom (A-17): what is left is the rest of the measured ascent, known to the session. Home Assistant's
+  // position is not needed there (it is estimated with the times in use, and a session never confirms it before a
+  // reading); elsewhere it gives the share of the travel still ahead.
+  const fromHalf = step === "top" && !view.check && view.readings?.half_open != null && view.values?.opening_time > 0;
+  const topTime = fromHalf ? view.values.opening_time - ((slats ? view.samples?.lift || 0 : 0) + view.values.opening_time) / 2
+    : toRun(view.values?.opening_time, false);
   // A run to an end stop stays a positioning until the motor stops by itself or its full time has passed; only then
   // does the screen ask to confirm the end stop.
   const positioningRun = (seconds) => !MOTOR_STOPPED(view) && seconds > 0 && (elapsed ?? 0) < seconds;
-  // While a cover positions to an end stop, the user's eye may confirm it at once (the estimate comes from times not yet
-  // measured): the end stop is the primary from the start (pressable once the motor runs), Stop the red link beside it.
-  // (L-119: not the first closing, whose end stop waits for the cover to arrive.)
+  // L-120: every «arrived» confirm (A-05, A-10, the return to the top, A-19 and A-30's first leg) is on at the earliest
+  // of the motor's stop status and the estimated run, with no margin; the wait's bar ends at that same instant. Before
+  // it the user cannot claim an end stop the cover could not have reached yet.
   // The motor stopped by itself well before the estimated run (under 60 %): a wall switch or an obstacle gives the same
   // frame as the end stop, so the user is asked to look before confirming. The confirmation stays active.
   const stoppedEarly = (estimate, key) => {
@@ -484,11 +490,11 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
       // G3-5: repeating is the advised way; going on with a wide gap is the outlined secondary.
       actions: [{ id: "repeat", label: t("wiz_T061"), kind: "primary" }, { id: "next", label: t("wiz_T473"), kind: "secondary" }] });
     // The same Stop rule as A-05; no T033 here, a stop would discard the lift-off.
-    // L-119: one bar from the briefing to the end stop: the end stop (on while the cover closes, as before: the eye may
-    // confirm it; a return before a repeated reading only once it has arrived), Stop last or the finished line.
-    const ready = arrivedBy(closingTime);
-    const bar = withStart([{ id: "endpoint", label: t("wiz_T032"), kind: "primary", disabled: phase !== "closing" || (local.ackReadings && !ready),
-      settling: ["starting_close", "closing"].includes(phase) && (phase !== "closing" || (local.ackReadings && !ready)) }, ...stopOrState(closingTime)]);
+    // L-119: one bar from the briefing to the end stop: the end stop (L-120: on once the cover has arrived), Stop last
+    // or the finished line.
+    const ready = phase === "closing" && arrivedBy(closingTime);
+    const bar = withStart([{ id: "endpoint", label: t("wiz_T032"), kind: "primary", disabled: !ready,
+      settling: ["starting_close", "closing"].includes(phase) && !ready }, ...stopOrState(closingTime)]);
     if (phase === "closing" && !positioningRun(closingTime)) {
       Object.assign(screen, { code: p("10"), title: t("wiz_T053"), body: t("wiz_T054"), actions: bar });
       // Not on a return before a repeated reading: that one confirms itself on the stop frame (§9.53).
@@ -583,9 +589,10 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     // D-12: once the motor has stopped the run is no longer «positioning»: the stop is said in the title, with its
     // warning when it came early, and the end stop to confirm (the state instead of Stop, U-9).
     // Z-5: as A-05, «Non ha fatto quello che doveva» beside the end stop. L-119: from the start of the run, with the end
-    // stop (on while the cover opens: the eye may confirm it) and Stop last, replaced in place by the finished line.
+    // stop (L-120: on once the cover has arrived) and Stop last, replaced in place by the finished line.
     const running = ["starting_open", "opening"].includes(phase);
-    const bar = withStart([{ id: "endpoint", label: t("wiz_T432"), kind: "primary", disabled: phase !== "opening", settling: phase === "starting_open" },
+    const arrived = phase === "opening" && arrivedBy(topTime);
+    const bar = withStart([{ id: "endpoint", label: t("wiz_T432"), kind: "primary", disabled: !arrived, settling: running && !arrived },
       { id: "misbehaved", label: t("wiz_T033"), kind: "secondary", disabled: !running }, ...stopOrState(topTime)]);
     if (phase === "opening" && MOTOR_STOPPED(view)) {
       Object.assign(screen, { code: p("09"), phase: "descent", title: t("wiz_T504"), actions: bar });
@@ -1124,6 +1131,8 @@ function waitBar(view, elapsed, seconds) {
   if (MOTOR_STOPPED(view)) return { value: 1, remaining: null };
   if (!(seconds > 0)) return { value: null, remaining: null };
   const done = ["opening", "closing"].includes(view.phase) && elapsed != null ? Math.min(seconds, Math.max(0, elapsed)) : 0;
+  // L-120: the estimate run, the bar is complete and says no time left: the instant its confirm comes on.
+  if (done >= seconds) return { value: 1, remaining: null };
   return { value: done / seconds, remaining: secondsLeft(seconds - done) };
 }
 
