@@ -49,6 +49,28 @@ export const FAMILIES = {
     ["past the closing time", { view: { step: "home", phase: "closing", ...halfRead }, local: { ...acks, autoStart: "home" }, elapsed: 23 }],
     ["motor stopped", { view: { step: "home", phase: "closing", motor_stopped: true, stopped_elapsed: 21, ...halfRead }, local: { ...acks, autoStart: "home" }, elapsed: 26 }],
   ],
+  // A-07, A-11, A-14: ① · ② · Stop from the briefing to the stop that follows ② (G2-10's wait included).
+  "A-07 lift-off run": [
+    ["briefing", { view: { step: "lift", phase: "briefing" }, local: { ackLift: true } }],
+    ["① sent", { view: { step: "lift", phase: "briefing" }, local: { ackLift: true }, status: { starting: true } }],
+    ["starting", { view: { step: "lift", phase: "starting_open" }, local: { ackLift: true }, elapsed: 0 }],
+    ["moving", { view: { step: "lift", phase: "opening" }, local: { ackLift: true }, elapsed: 3 }],
+    ["② pressed, stopping", { view: { step: "lift", phase: "geometry_wait_stop", samples: { lift: 4.4 } }, local: { ackLift: true }, elapsed: 4 }],
+  ],
+  "A-11 full ascent": [
+    ["briefing", { view: { step: "opening", phase: "briefing", ...timed, values: {} }, local: { ackLift: true } }],
+    ["starting", { view: { step: "opening", phase: "starting_open", ...timed, values: {} }, local: { ackLift: true }, elapsed: 0 }],
+    ["moving", { view: { step: "opening", phase: "opening", ...timed, values: {} }, local: { ackLift: true }, elapsed: 10 }],
+    ["② pressed, stopping", { view: { step: "opening", phase: "geometry_wait_stop", ...timed, values: { opening_time: 22.2 } }, local: { ackLift: true, fullRun: { step: "opening", pressed: true } }, elapsed: 23 }],
+    ["② pressed, motor stopped", { view: { step: "opening", phase: "opening", motor_stopped: true, stopped_elapsed: 22.2, ...timed, values: {} },
+      local: { ackLift: true, fullRun: { step: "opening", pressed: true } }, elapsed: 23 }],
+  ],
+  "A-14 full descent": [
+    ["briefing", { view: { step: "closing", phase: "briefing", ...timed }, local: { ackLift: true, ackAscent: true } }],
+    ["starting", { view: { step: "closing", phase: "starting_close", ...timed }, local: { ackLift: true, ackAscent: true }, elapsed: 0 }],
+    ["moving", { view: { step: "closing", phase: "closing", ...timed }, local: { ackLift: true, ackAscent: true }, elapsed: 10 }],
+    ["② pressed, stopping", { view: { step: "closing", phase: "geometry_wait_stop", ...timed }, local: { ackLift: true, ackAscent: true, fullRun: { step: "closing", pressed: true } }, elapsed: 22 }],
+  ],
   "C-11 guided ascent": [
     ["ready", { path: "C", scope: "times_only", view: { mode: "guided", phase: "confirm_closed" } }],
     ["① sent", { path: "C", scope: "times_only", view: { mode: "guided", phase: "confirm_closed" }, status: { starting: true } }],

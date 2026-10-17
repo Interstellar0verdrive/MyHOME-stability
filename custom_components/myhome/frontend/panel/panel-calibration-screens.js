@@ -385,12 +385,16 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
   // G3-3: a warning, worded by where the repeat came from (the value typed, or the button).
   const liftRepeated = () => ({ tone: "warning", result: true, text: !resting ? fill(t("calLiftRepeated"), view)
     : local.liftOrigin === "button" ? t("wiz_T469") : fill(t("wiz_T458"), { n: n(local.lastGap, 2) }) });
-  // G2-10: after ② (or at the end of a half run) the backend waits for the actuator's stop: the screen says so, the
-  // stopwatch stays at the press, and ①/② give way to the status instead of sitting there disabled.
+  // G2-10: after ② (or at the end of a half run) the backend waits for the actuator's stop: the screen says so and the
+  // stopwatch stays at the press. L-119: the bar stays as it is, its buttons off (Stop follows the motor); the stop in
+  // progress is said above it.
   const stopping = (seconds) => {
-    if (seconds != null) { const [label, value] = splitLabel(fill(t("wiz_T257"), { seconds: n.fixed(seconds) })); screen.stopwatch = { label, value }; }
-    else screen.stopwatch = null;
-    screen.actions = [{ id: "stopping", label: t("wiz_T459"), kind: "status" }];
+    if (seconds !== undefined) {
+      if (seconds != null) { const [label, value] = splitLabel(fill(t("wiz_T257"), { seconds: n.fixed(seconds) })); screen.stopwatch = { label, value }; }
+      else screen.stopwatch = null;
+    }
+    screen.actions = screen.actions.map((action) => (action.id === "stop" || action.id === "stopped" ? action : { ...action, disabled: true }));
+    screen.notices.push({ tone: "info", text: t("wiz_T459") });
   };
   // U-9: once the run to an end stop is over (the stop frame, or its full time and a margin gone by: a timed actuator
   // stops by itself without a frame) Stop gives way to the state, «La corsa è finita: la tapparella è ferma».
