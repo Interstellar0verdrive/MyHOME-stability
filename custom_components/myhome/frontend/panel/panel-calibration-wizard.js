@@ -1258,8 +1258,8 @@ export class CalibrationWizard {
     this._closeFullRun(view);
     this._queuedRepeat(view);
     // L-119 «same step, same bar»: how the step's run starts (by itself after a press, or from its own button) is
-    // decided once per step and keeps its bar for the whole step.
-    if ((view?.step ?? null) !== local.barStep) Object.assign(local, { barStep: view?.step ?? null, autoStart: null, manualStart: null });
+    // decided once per step and keeps its bar for the whole step; a view read from another device decides it anew.
+    if ((view?.step ?? null) !== local.barStep || view?.read_only) Object.assign(local, { barStep: view?.step ?? null, autoStart: null, manualStart: null });
     this._autoNext(view);
     this._unloadGuard(this._liveOpen());
     this._render();

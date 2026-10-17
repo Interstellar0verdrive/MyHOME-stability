@@ -46,8 +46,6 @@ export const stopVerdict = (seconds) => seconds >= TIMER_STOP_SECONDS[0] && seco
  */
 const STOPPED_BEFORE_PRESS = (view, local) => MOTOR_STOPPED(view) && view.stopped_elapsed != null && !local?.fullRun?.pressed;
 const invalidNotice = (t, reason) => ({ tone: "error", result: true, text: t(reason === "timer" ? "wiz_T445" : "wiz_T444") });
-/** Stop is offered while the motor runs; once it has stopped by itself only the confirmation is left. */
-const whileRunning = (view, stop) => MOTOR_STOPPED(view) ? [] : [stop];
 
 /** L-24: a time left as minutes and seconds («1:43»), rounded up to the second. */
 export const clock = (ms) => { const total = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`; };
@@ -407,10 +405,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
   // L-14: a return before a tape reading (the user is there to read the tape) never goes on by itself: its end stop is
   // confirmed by the user, enabled once the motor stopped by itself or its estimated time has run; the run to the next
   // reading then starts from that press.
-  const returnEnd = (label, running, seconds) => {
-    const ready = MOTOR_STOPPED(view) || !(seconds > 0) || (elapsed ?? 0) >= seconds;
-    return [{ id: "endpoint", label: t(label), kind: "primary", disabled: phase !== running || !ready, settling: phase === running && !ready }, ...whileRunning(view, stop)];
-  };
+  const arrivedBy = (seconds) => MOTOR_STOPPED(view) || !(seconds > 0) || (elapsed ?? 0) >= seconds;
   // L-119 «same step, same bar»: a run Home Assistant starts by itself after a press (a return to an end stop, the
   // runs of the tape readings, the check's legs) draws its whole bar, off, from the briefing that precedes it. When
   // nothing starts it (a session reopened or claimed there) its own start goes first and stays, off, once pressed.
@@ -491,7 +486,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     // The same Stop rule as A-05; no T033 here, a stop would discard the lift-off.
     // L-119: one bar from the briefing to the end stop: the end stop (on while the cover closes, as before: the eye may
     // confirm it; a return before a repeated reading only once it has arrived), Stop last or the finished line.
-    const ready = MOTOR_STOPPED(view) || !(closingTime > 0) || (elapsed ?? 0) >= closingTime;
+    const ready = arrivedBy(closingTime);
     const bar = withStart([{ id: "endpoint", label: t("wiz_T032"), kind: "primary", disabled: phase !== "closing" || (local.ackReadings && !ready),
       settling: ["starting_close", "closing"].includes(phase) && (phase !== "closing" || (local.ackReadings && !ready)) }, ...stopOrState(closingTime)]);
     if (phase === "closing" && !positioningRun(closingTime)) {
@@ -575,9 +570,11 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     return Object.assign(screen, { code: p("17"), title: t("wiz_T027"),
       wait: { text: tx(path === "C" ? "wiz_T205" : "wiz_T080", values), stages: [{ text: tx("wiz_T079", { seconds: n(seconds, 0) }), state: "current" }],
         progress: waitBar(view, elapsed, seconds) },
-      // Normally started by the wizard itself; if that did not happen the run can be started here.
-      actions: phase === "briefing" ? [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop] : phase === "geometry_wait_stop"
-        ? [{ id: "stopping", label: t("wiz_T459"), kind: "status" }] : [stop] });
+      // Normally started by the wizard itself; if that did not happen the run can be started here (L-119: its start
+      // then stays, off). Stop keeps its slot to the end of the run.
+      actions: withStart([pinnedStop]) });
+    if (phase === "geometry_wait_stop") stopping();
+    return screen;
   }
   // L-54: the return to the top before the half-descent reading is the readings' two-leg wait (A-19), known from the
   // session itself (the half-ascent reading is in): never A-09's one leg, whatever this tab's own acknowledgements.
@@ -614,20 +611,22 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
         // seconds rounded up as the time left is, so «circa 23 s» never shows «circa 24 s» left.
         { text: tx("wiz_T084", { seconds: n(Math.ceil((topTime ?? view.values?.opening_time ?? 0) - 0.001), 0) }), state: first ? "current" : "done" },
         { text: tx("wiz_T085", { seconds: n(Math.ceil(down - 0.001), 0) }), state: first ? "future" : "current" }],
-      progress: waitBar(view, elapsed, first ? topTime : down) }, actions: phase === "geometry_wait_stop" ? [{ id: "stopping", label: t("wiz_T459"), kind: "status" }] : [stop] });
-    // The return to the top is a positioning run: Home Assistant needs its end stop confirmed.
-    if (first && ["starting_open", "opening"].includes(phase)) screen.actions = returnEnd("wiz_T432", "opening", topTime);
+      progress: waitBar(view, elapsed, first ? topTime : down) } });
+    // The return to the top is a positioning run: Home Assistant needs its end stop confirmed (L-14: once it has
+    // arrived). L-119: one bar for both legs: that end stop (off in the second leg, already confirmed), Stop last,
+    // replaced in place by the finished line once the run to the top is over.
+    const ready = arrivedBy(topTime);
+    screen.actions = withStart([{ id: "endpoint", label: t("wiz_T432"), kind: "primary", disabled: !first || phase !== "opening" || !ready,
+      settling: first && (phase === "starting_open" || (phase === "opening" && !ready)) }, ...(first ? stopOrState(topTime) : [pinnedStop])]);
+    if (phase === "geometry_wait_stop") stopping();
     // L-37: the return to the top before the check run says so (not the half descent's stages).
     // L-44: the check's first leg, as the half readings': to the top (its bar), then the run to its target (second
     // stage), which starts on the confirmation of the top.
     if (first && view.check) {
       screen.code = p("30"); screen.phase = "check";
       screen.wait = { text: t("wiz_T553"), stages: checkStages(tx, n, view, topTime ?? view.values?.opening_time, true), progress: waitBar(view, elapsed, topTime) };
-      if (phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }];
     }
-    // Started by the wizard itself; if that did not happen (a reopened session, a claim) it starts here. Stop only while
-    // something moves.
-    if (phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }];
+    // Started by the wizard itself; if that did not happen (a reopened session, a claim) it starts here (withStart).
     return screen;
   }
   if (step === "check") {
@@ -641,12 +640,13 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     if (phase === "reading") return Object.assign(screen, { code: p("31"), title: t("wiz_T138"), body: t("wiz_T139"), notices: [...screen.notices],
       field: { label: t("wiz_T064"), hint: expectedCheck != null ? tx("wiz_T558", { cm: n(expectedCheck, 0) }) : t("wiz_T491"), min: 0.1, max: view.travel_cm ?? 10000, kind: "height" },
       actions: [{ id: "reading", label: t("wiz_T051"), kind: "primary" }, { id: "repeat", label: t("wiz_T033"), kind: "secondary" }] });
-    // L-44: the second leg, the timed run to the target: its own bar; Stop only while it moves.
+    // L-44: the second leg, the timed run to the target: its own bar. L-119: the first leg's bar (A-30 is one step):
+    // the end stop of the top, off (already confirmed), and Stop in its slot to the end of the run.
     const planned = view.check?.planned_seconds;
     Object.assign(screen, { code: p("30"), title: t("wiz_T027"),
       wait: { text: t(view.check?.direction === "opening" ? "wiz_T554" : "wiz_T553"), stages: checkStages(tx, n, view, view.values?.opening_time, false), progress: waitBar(view, elapsed, planned) },
-      actions: phase === "briefing" ? [{ id: "next", label: t("wiz_T060"), kind: "primary" }]
-        : phase === "geometry_wait_stop" ? [{ id: "stopping", label: t("wiz_T459"), kind: "status" }] : [stop] });
+      actions: withStart([{ id: "endpoint", label: t("wiz_T432"), kind: "primary", disabled: true }, pinnedStop]) });
+    if (phase === "geometry_wait_stop") stopping();
     return screen;
   }
   if (phase === "geometry_wait_stop") return positioning("04", "");

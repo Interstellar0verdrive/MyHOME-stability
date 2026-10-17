@@ -1794,10 +1794,12 @@ test("a check run is shown like an intermediate run, two stages and its own bar,
   assert.equal(running.code, "A-30");
   assert.equal(running.stopwatch, null, "Home Assistant stops the check run: no elapsed time");
   assert.equal(running.illustration, null, "a wait has no drawing");
-  assert.deepEqual(running.actions.map((action) => action.id), ["stop"]);
+  // L-119: A-30 is one step: the first leg's bar, its end stop off (already confirmed), Stop last.
+  assert.deepEqual(running.actions.map((action) => [action.id, !!action.disabled]), [["endpoint", true], ["stop", false]]);
   assert.deepEqual(running.wait.stages.map((stage) => [stage.text, stage.state]), [["1/2 Down to the bottom — about 22 s", "done"], ["2/2 Rises to half the travel — about 13 s", "current"]]);
   assert.equal(running.wait.progress.value != null, true, "a determinate bar for the planned run");
-  assert.deepEqual(screen({ phase: "briefing" }).actions.map((action) => action.id), ["next"], "no Stop while nothing moves");
+  assert.deepEqual(screen({ phase: "briefing" }).actions.map((action) => [action.id, !!action.disabled]), [["next", false], ["endpoint", true], ["stop", true]],
+    "not started by itself: its start first; no Stop to press while nothing moves");
   assert.equal(screen({ phase: "geometry_wait_stop" }).stopwatch, null);
   const reading = screen({ phase: "reading", reading_kind: "check" });
   assert.equal(reading.code, "A-31");
@@ -2186,7 +2188,7 @@ test("a half run that did not start by itself can be started from its screen, an
     readings: { gap: 3 }, geometry: {}, travel_cm: 198, slats: true, owner: true, sequence: 4 };
   const screen = buildScreen({ t, stage: "session", path: "A", view, local: { ackDescent: true, ackReadings: true }, cover: { name: "Living room shutter 1" } });
   assert.equal(screen.code, "A-17");
-  assert.deepEqual(screen.actions.map((action) => action.id), ["next"], "L-77: at rest before the run, no Stop");
+  assert.deepEqual(screen.actions.map((action) => [action.id, !!action.disabled]), [["next", false], ["stop", true]], "L-77: at rest before the run, no Stop to press (L-119: its slot is kept)");
   const context = await mount({ stageMs: 30 });
   const { wiz, code, press, backend } = context;
   await runToSaved(context);
@@ -2328,7 +2330,8 @@ test("full runs and the return to the top: once the motor stopped the stopwatch 
   assert.deepEqual(ids(screen({ step: "top", phase: "opening", motor_stopped: false }, { ackReadings: true }, 23)), ["endpoint", "stop"],
     "past its measured time the end stop is asked, Stop stays while the motor runs");
   const topStopped = screen({ step: "top", phase: "opening", motor_stopped: true, stopped_elapsed: 9.1 }, { ackReadings: true }, 9.5);
-  assert.deepEqual([ids(topStopped), topStopped.wait.progress, topStopped.wait.remaining], [["endpoint"], { value: 1, remaining: null }, ""]);
+  assert.deepEqual([ids(topStopped), topStopped.wait.progress, topStopped.wait.remaining], [["endpoint", "stopped"], { value: 1, remaining: null }, ""],
+    "L-119: the finished line in Stop's slot");
   assert.deepEqual(ids(screen({ step: "top", phase: "opening", motor_stopped: true, stopped_elapsed: 9.1 })), ["endpoint", "misbehaved", "stopped"],
     "the return before a repeated descent too, with the stopped state in place of its wait (D-12)");
   // The lift-off run is unchanged: a stop there still ends the session, so it keeps Stop.
@@ -4381,7 +4384,7 @@ test("V-1: A-19 asks to confirm the top only on its first leg, and each leg says
   assert.equal(first.wait.remaining, "About 23 s remaining", "1 s run of 23.3");
   const second = at({ step: "half_close", phase: "closing" });
   assert.equal(second.code, "A-19");
-  assert.equal(second.actions.some((action) => action.id === "endpoint"), false, "never on the way down to half");
+  assert.equal(second.actions.find((action) => action.id === "endpoint").disabled, true, "never on the way down to half (L-119: off, in its place)");
 });
 
 test("D-33: the result tiles show times with one decimal too", () => {

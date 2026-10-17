@@ -75,6 +75,41 @@ export const FAMILIES = {
     ["motor stopped", { view: { step: "top", phase: "opening", motor_stopped: true, stopped_elapsed: 21, ...timed }, local: { ackLift: true, ackAscent: true, autoStart: "top" }, elapsed: 22 }],
     ["Stop pressed", { view: { step: "top", phase: "geometry_wait_stop", ...timed }, local: { ackLift: true, ackAscent: true, autoStart: "top" }, elapsed: 6 }],
   ],
+  // A-17: the run to half the travel before the half-ascent reading, started by itself after «Ho capito».
+  "A-17 run to half the travel": [
+    ["after the press", { view: { step: "half_open", phase: "briefing", ...timed }, local: { ...acks, autoStart: "half_open" } }],
+    ["starting", { view: { step: "half_open", phase: "starting_open", ...timed }, local: { ...acks, autoStart: "half_open" }, elapsed: 0 }],
+    ["moving", { view: { step: "half_open", phase: "opening", ...timed }, local: { ...acks, autoStart: "half_open" }, elapsed: 5 }],
+    ["stopping", { view: { step: "half_open", phase: "geometry_wait_stop", ...timed }, local: { ...acks, autoStart: "half_open" }, elapsed: 11 }],
+  ],
+  "A-17 started from its button": [
+    ["reopened", { view: { step: "half_open", phase: "briefing", ...timed }, local: acks }],
+    ["start pressed", { view: { step: "half_open", phase: "starting_open", ...timed }, local: { ...acks, manualStart: "half_open" }, elapsed: 0 }],
+    ["moving", { view: { step: "half_open", phase: "opening", ...timed }, local: { ...acks, manualStart: "half_open" }, elapsed: 5 }],
+    ["stopping", { view: { step: "half_open", phase: "geometry_wait_stop", ...timed }, local: { ...acks, manualStart: "half_open" }, elapsed: 11 }],
+  ],
+  // A-19: the readings' two legs (to the top, confirmed; then down to half), one card, one bar.
+  "A-19 to the top, then down to half": [
+    ["after the reading", { view: { step: "top", phase: "briefing", ...halfRead }, local: { ...acks, autoStart: "top" } }],
+    ["starting", { view: { step: "top", phase: "starting_open", ...halfRead }, local: { ...acks, autoStart: "top" }, elapsed: 0 }],
+    ["opening", { view: { step: "top", phase: "opening", ...halfRead }, local: { ...acks, autoStart: "top" }, elapsed: 5 }],
+    ["arrived", { view: { step: "top", phase: "opening", ...halfRead }, local: { ...acks, autoStart: "top" }, elapsed: 23 }],
+    ["run over", { view: { step: "top", phase: "opening", ...halfRead }, local: { ...acks, autoStart: "top" }, elapsed: 40 }],
+    ["motor stopped", { view: { step: "top", phase: "opening", motor_stopped: true, stopped_elapsed: 21, ...halfRead }, local: { ...acks, autoStart: "top" }, elapsed: 22 }],
+    ["top confirmed", { view: { step: "half_close", phase: "briefing", ...halfRead }, local: { ...acks, autoStart: "half_close" } }],
+    ["down to half", { view: { step: "half_close", phase: "closing", ...halfRead }, local: { ...acks, autoStart: "half_close" }, elapsed: 3 }],
+    ["stopping", { view: { step: "half_close", phase: "geometry_wait_stop", ...halfRead }, local: { ...acks, autoStart: "half_close" }, elapsed: 9 }],
+  ],
+  // A-30: the check's legs (to the top, confirmed; then the timed run to its target).
+  "A-30 check legs": [
+    ["check started", { view: { step: "top", phase: "briefing", ...halfRead, check: { direction: "closing", planned_seconds: 9 } }, local: { ...acks, autoStart: "top" } }],
+    ["opening", { view: { step: "top", phase: "opening", ...halfRead, check: { direction: "closing", planned_seconds: 9 } }, local: { ...acks, autoStart: "top" }, elapsed: 5 }],
+    ["motor stopped", { view: { step: "top", phase: "opening", motor_stopped: true, stopped_elapsed: 21, ...halfRead, check: { direction: "closing", planned_seconds: 9 } },
+      local: { ...acks, autoStart: "top" }, elapsed: 22 }],
+    ["top confirmed", { view: { step: "check", phase: "briefing", ...halfRead, check: { direction: "closing", planned_seconds: 9 } }, local: { ...acks, autoStart: "check" } }],
+    ["to its target", { view: { step: "check", phase: "closing", ...halfRead, check: { direction: "closing", planned_seconds: 9 } }, local: { ...acks, autoStart: "check" }, elapsed: 3 }],
+    ["stopping", { view: { step: "check", phase: "geometry_wait_stop", ...halfRead, check: { direction: "closing", planned_seconds: 9 } }, local: { ...acks, autoStart: "check" }, elapsed: 9 }],
+  ],
   // A-07, A-11, A-14: ① · ② · Stop from the briefing to the stop that follows ② (G2-10's wait included).
   "A-07 lift-off run": [
     ["briefing", { view: { step: "lift", phase: "briefing" }, local: { ackLift: true } }],
@@ -96,6 +131,17 @@ export const FAMILIES = {
     ["starting", { view: { step: "closing", phase: "starting_close", ...timed }, local: { ackLift: true, ackAscent: true }, elapsed: 0 }],
     ["moving", { view: { step: "closing", phase: "closing", ...timed }, local: { ackLift: true, ackAscent: true }, elapsed: 10 }],
     ["② pressed, stopping", { view: { step: "closing", phase: "geometry_wait_stop", ...timed }, local: { ackLift: true, ackAscent: true, fullRun: { step: "closing", pressed: true } }, elapsed: 22 }],
+  ],
+  // Path C (times and rolls) runs the same steps on its own codes.
+  "C-04/C-05 first closing": [
+    ["session started", { path: "C", scope: "times_and_rolls", view: { step: "home", phase: "briefing" }, local: { autoStart: "home" } }],
+    ["closing 5 s", { path: "C", scope: "times_and_rolls", view: { step: "home", phase: "closing" }, local: { autoStart: "home" }, elapsed: 5 }],
+    ["run over", { path: "C", scope: "times_and_rolls", view: { step: "home", phase: "closing" }, local: { autoStart: "home" }, elapsed: 30 }],
+  ],
+  "C-19 to the top, then down to half": [
+    ["opening", { path: "C", scope: "times_and_rolls", view: { step: "top", phase: "opening", ...halfRead }, local: { ...acks, autoStart: "top" }, elapsed: 5 }],
+    ["motor stopped", { path: "C", scope: "times_and_rolls", view: { step: "top", phase: "opening", motor_stopped: true, stopped_elapsed: 21, ...halfRead }, local: { ...acks, autoStart: "top" }, elapsed: 22 }],
+    ["down to half", { path: "C", scope: "times_and_rolls", view: { step: "half_close", phase: "closing", ...halfRead }, local: { ...acks, autoStart: "half_close" }, elapsed: 3 }],
   ],
   "C-11 guided ascent": [
     ["ready", { path: "C", scope: "times_only", view: { mode: "guided", phase: "confirm_closed" } }],
