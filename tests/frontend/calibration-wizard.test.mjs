@@ -249,7 +249,7 @@ test("path A runs the live geometry session from the first close to Save, one me
   assert.equal(wiz().querySelector(".wiz-stopwatch-label").textContent, "Motor");
   assert.equal(wiz().querySelector(".wiz-stopwatch").getAttribute("style"), "--wiz-stopwatch-width: 560px", "as wide as the drawing under it");
   assert.match(wiz().querySelector(".wiz-stopwatch-value").textContent, /^moving for \d+(\.\d)? s$/);
-  assert.equal(wiz().querySelector('[data-wiz="next"]').disabled, true);
+  assert.equal(wiz().querySelector('[data-wiz="next"]'), null, "review P4: ① gone once it started the run");
   await press("lift");
   backend.stopped(); await tick();
   assert.equal(code(), "A-08");
@@ -1345,6 +1345,27 @@ test("L-112: the calibration's buttons ease their paint (200 ms, ease-out) betwe
   assert.ok(recolouring < 0 || css.indexOf(eased[0]) < recolouring, "with the generic button rules, not in L-95's block (revertable alone)");
 });
 
+test("review P4: a stop control is always in view and never next to a timing confirm: it heads the bar, 20 px and a hairline away", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.wiz-actions > \.wiz-action\.stop:not\(:last-child\) \{ position: relative; margin-bottom: 8px; \}/, "8 px on top of the bar's 12 px gap");
+  assert.match(css, /\.wiz-actions > \.wiz-action\.stop:not\(:last-child\)::after \{ content: ""; position: absolute; inset-inline: 0; bottom: -11px; height: 1px;\s*background: var\(--panel-border\); pointer-events: none; \}/,
+    "a hairline in the middle of the gap");
+  assert.match(css, /\.wiz-actions \{ display: grid; grid-template-columns: minmax\(0, 1fr\); gap: 12px;/, "the bar's own gap");
+  // A-07 once ① has started the run: ① gone, Stop first, ② (the timing confirm) alone at the bottom.
+  const { backend, wiz, press, startFor } = await mount();
+  await startFor("cover.living_one");
+  await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  await press("ack:lift"); await press("next"); backend.started(); backend.emit(); await tick(6);
+  const bar = [...wiz().querySelector(".wiz-actions").children].map((item) => item.dataset.wiz);
+  assert.deepEqual(bar, ["stop", "lift"], "Stop heads the bar, ② is the bottom action");
+  // Every screen of the walk with a Stop: it is the first of the bar's actions, or alone.
+  for (const screen of [{ step: "opening", phase: "opening" }, { step: "closing", phase: "closing" }, { step: "reset", phase: "closing" }]) {
+    backend.session.step = screen.step; backend.session.phase = screen.phase; backend.emit(); await tick(4);
+    const ids = [...wiz().querySelectorAll(".wiz-actions > .wiz-action")].map((item) => item.dataset.wiz);
+    if (ids.includes("stop")) assert.equal(ids[0], "stop", `${screen.step}/${screen.phase}: ${ids}`);
+  }
+});
+
 test("R-8: what the tab hangs on the window is removed when it is cleared, and added once when it shows again", async () => {
   const view = dom.window;
   const active = new Map();
@@ -1942,7 +1963,7 @@ test("Stop alone in a wait is the red filled button; beside a step's buttons it 
   assert.deepEqual(kinds({ step: "home", phase: "starting_close" }), ["endpoint:primary", "stop:stop"], "A-04");
   assert.deepEqual(kinds({ step: "reset", phase: "closing" }), ["endpoint:primary", "stop:stop"], "A-09 (no time known: A-10 at once)");
   assert.deepEqual(kinds({ step: "half_open", phase: "opening" }, { ackDescent: true, ackReadings: true }), ["stop:stop"], "A-17: Stop alone, outlined red as everywhere (L-47)");
-  assert.deepEqual(kinds({ step: "lift", phase: "opening" }, { ackLift: true }), ["next:primary", "lift:primary", "stop:stop"], "A-07 keeps the link");
+  assert.deepEqual(kinds({ step: "lift", phase: "opening" }, { ackLift: true }), ["lift:primary", "stop:stop"], "A-07 keeps Stop; review P4: ① gone once used");
   assert.deepEqual(kinds({ step: "top", phase: "opening" }, { ackReadings: true }), ["endpoint:primary", "stop:stop"], "A-19 while it positions");
   const starting = buildScreen({ t, stage: "session", path: "A", view: { ...view, step: "home", phase: "starting_close" }, elapsed: null, cover: { name: "K" } });
   assert.equal(starting.actions[0].disabled, true, "until the motor runs Home Assistant would refuse the end stop");
@@ -2192,7 +2213,7 @@ test("full runs and the return to the top: once the motor stopped the stopwatch 
   assert.deepEqual(ids(screen({ step: "top", phase: "opening", motor_stopped: true, stopped_elapsed: 9.1 })), ["endpoint", "misbehaved", "stopped"],
     "the return before a repeated descent too, with the stopped state in place of its wait (D-12)");
   // The lift-off run is unchanged: a stop there still ends the session, so it keeps Stop.
-  assert.deepEqual(ids(screen({ step: "lift", phase: "opening" }, { ackLift: true })), ["next", "lift", "stop"]);
+  assert.deepEqual(ids(screen({ step: "lift", phase: "opening" }, { ackLift: true })), ["lift", "stop"]);
   // The guided runs of path C (times only).
   const guided = screen({ phase: "closing", values: { opening_time: 12.6 }, motor_stopped: true, stopped_elapsed: 12.24 }, { fullRun: { step: "closing", pressed: true } }, 14, "guided");
   assert.deepEqual([guided.code, ids(guided), guided.stopwatch.value], ["C-14", ["run:close", "endpoint"], "stopped at 12.2 s"]);
@@ -2769,7 +2790,7 @@ test("A-04 lasts the whole positioning; A-05 then offers the end stop and T033 a
   await press("begin");
   backend.started(); backend.tick(5); backend.emit(); await tick();
   assert.equal(code(), "A-04", "5 s into a 21.7 s closing: still positioning");
-  assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => item.dataset.wiz), ["endpoint", "stop"]);
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => item.dataset.wiz), ["stop", "endpoint"], "review P4: Stop heads the bar");
   assert.match(wiz().querySelector(".wiz-wait-remaining").textContent, /17 s/, "the time left counts down over the closing time");
   backend.tick(16); backend.emit(); await tick();
   assert.equal(code(), "A-04", "21 s in: still positioning");
@@ -2780,7 +2801,7 @@ test("A-04 lasts the whole positioning; A-05 then offers the end stop and T033 a
   assert.equal(code(), "A-05", "past the closing time, drawn whole by the clock's tick");
   const kinds = () => [...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => [item.dataset.wiz, item.className.replace("wiz-action ", "")]);
   const misbehaved = () => wiz().querySelector('[data-wiz="misbehaved"]');
-  assert.deepEqual(kinds(), [["endpoint", "primary"], ["misbehaved", "secondary"], ["stop", "stop"]], "outlined, with the red Stop link while moving");
+  assert.deepEqual(kinds(), [["stop", "stop"], ["endpoint", "primary"], ["misbehaved", "secondary"]], "Stop while moving, at the head of the bar (review P4)");
   assert.equal(misbehaved().textContent, "It did not do what it should");
   assert.equal(misbehaved().disabled, false, "active at once");
   assert.equal(misbehaved().hasAttribute("aria-disabled"), false);

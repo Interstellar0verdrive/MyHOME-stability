@@ -454,7 +454,8 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     const moving = /^(starting_)?(open|clos)ing$/.test(phase);
     Object.assign(screen, { code: p("07"), title: t("wiz_T042"), body: moving ? t("wiz_T520") : path === "C" ? t("wiz_T202") : t("wiz_T043"),
       stopwatch: runWatch(t, n, view, elapsed),
-      actions: [{ id: "next", label: t("wiz_T045"), kind: "primary", disabled: phase !== "briefing" },
+      // Review P4: once ① has started the run it goes away (no disabled slot left at the top of the bar).
+      actions: [...(phase === "briefing" ? [{ id: "next", label: t("wiz_T045"), kind: "primary" }] : []),
         { id: "lift", label: t("wiz_T046"), kind: "primary", disabled: phase !== "opening" }, stop] });
     if ((resting || view.still_resting) && phase === "briefing") screen.notices.push(liftRepeated());
     if (phase === "geometry_wait_stop") stopping(view.samples?.lift);
