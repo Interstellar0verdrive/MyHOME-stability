@@ -1466,10 +1466,12 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-action.stop, .wiz-action.danger-outline { min-height: 44px; border: 1px solid var(--panel-error); color: var(--panel-error); background: transparent; box-shadow: none; }
 .wiz-action.link { min-height: 44px; border: 0; background: transparent; box-shadow: none; color: var(--panel-accent); }
 /* L-116: the emergency Stop is the last of the actions (outlined ways out may follow), always drawn in a bar with the
-   ①/② pair, and set apart from the action before it by 20 px with a hairline in the middle (the bar's own gap plus
-   8 px): never next to a timing confirm, in every layout (phone bar, landscape column, desktop column). */
-.wiz-actions > .wiz-action.stop:not(:first-child) { position: relative; margin-top: 8px; }
-.wiz-actions > .wiz-action.stop:not(:first-child)::before { content: ""; position: absolute; inset-inline: 0; top: -11px; height: 1px;
+   ①/② pair, never next to a timing confirm, in every layout (phone bar, landscape column, desktop column).
+   L-116b: the space before it is 70 % of an action's height (44 px: about 31 px), a separation and not the bar's
+   ordinary 12 px, with a hairline in its middle. */
+.wiz-actions { --wiz-action-height: 44px; --cal-stop-gap: calc(0.7 * var(--wiz-action-height)); }
+.wiz-actions > .wiz-action.stop:not(:first-child) { position: relative; margin-top: calc(var(--cal-stop-gap) - 12px); }
+.wiz-actions > .wiz-action.stop:not(:first-child)::before { content: ""; position: absolute; inset-inline: 0; top: calc(var(--cal-stop-gap) / -2 - 0.5px); height: 1px;
   background: var(--panel-border); pointer-events: none; }
 @media (hover: hover) { :is(.wiz-action.stop, .wiz-action.danger-outline, .wiz-action.danger):hover:not(:disabled) { background: color-mix(in srgb, var(--panel-error) 8%, transparent); } }
 :is(.wiz-action.stop, .wiz-action.danger-outline, .wiz-action.danger):active:not(:disabled) { background: color-mix(in srgb, var(--panel-error) 12%, transparent); }

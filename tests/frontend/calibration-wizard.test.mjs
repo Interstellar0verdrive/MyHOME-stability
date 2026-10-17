@@ -1356,11 +1356,14 @@ test("L-112: the calibration's buttons ease their paint (200 ms, ease-out) betwe
   assert.ok(recolouring < 0 || css.indexOf(eased[0]) < recolouring, "with the generic button rules, not in L-95's block (revertable alone)");
 });
 
-test("L-116: an emergency Stop is the last action, always drawn with the ①/② pair, 20 px and a hairline after the action before it", async () => {
+test("L-116: an emergency Stop is the last action, always drawn with the ①/② pair, 70 % of an action's height and a hairline after the action before it", async () => {
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
-  assert.match(css, /\.wiz-actions > \.wiz-action\.stop:not\(:first-child\) \{ position: relative; margin-top: 8px; \}/, "8 px on top of the bar's 12 px gap");
-  assert.match(css, /\.wiz-actions > \.wiz-action\.stop:not\(:first-child\)::before \{ content: ""; position: absolute; inset-inline: 0; top: -11px; height: 1px;\s*background: var\(--panel-border\); pointer-events: none; \}/,
-    "a hairline in the middle of the gap");
+  // L-116b: the space before Stop is 70 % of an action's height (the bar's 12 px gap plus the rest), the hairline in its middle.
+  assert.match(css, /\.wiz-actions \{ --wiz-action-height: 44px; --cal-stop-gap: calc\(0\.7 \* var\(--wiz-action-height\)\); \}/, "0.7 × the action's height");
+  assert.match(css, /\.wiz-action \{ width: 100%; min-height: 44px;/, "the action's height it is computed from");
+  assert.match(css, /\.wiz-actions > \.wiz-action\.stop:not\(:first-child\) \{ position: relative; margin-top: calc\(var\(--cal-stop-gap\) - 12px\); \}/);
+  assert.match(css, /\.wiz-actions > \.wiz-action\.stop:not\(:first-child\)::before \{ content: ""; position: absolute; inset-inline: 0; top: calc\(var\(--cal-stop-gap\) \/ -2 - 0\.5px\); height: 1px;\s*background: var\(--panel-border\); pointer-events: none; \}/,
+    "a hairline in the middle of the space");
   assert.match(css, /\.wiz-actions \{ display: grid; grid-template-columns: minmax\(0, 1fr\); gap: 12px;/, "the bar's own gap");
   assert.doesNotMatch(css, /\.wiz-action\.stop:not\(:last-child\)/, "never ahead of the actions (P4's layout is gone)");
   const { backend, wiz, press, startFor } = await mount();
