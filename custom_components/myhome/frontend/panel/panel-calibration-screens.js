@@ -790,6 +790,10 @@ function summaryScreen(screen, ctx, tx, n, values) {
   const precision = view.check && !liveCheck ? tx(Number(checkGap(view.check)) < 1 ? "wiz_T513" : "wiz_T151", { gap: checkGap(view.check), seconds: n(view.check.check_seconds) }) : null;
   const saveInfo = (key) => ({ title: t("wiz_T280"), body: counted(t, key, cover?.followers?.length ?? 0, values) });
   const save = { id: "save", label: t("wiz_T102"), kind: "primary" };
+  // Review P5: Save says what it saves, and follows the choices made under it (a new profile and its name, the
+  // profile followed, or this cover only).
+  const saveAs = (target, name) => ({ ...save, target, label: target === "profile_new" ? tx("wiz_T587", { name })
+    : target === "profile_update" ? tx("wiz_T588", { name: cover?.profile?.name ?? "" }) : t("wiz_T589") });
   // L-46: a preview's summary (path B, tape readings only, fine-tuning) saves nothing in this version: no Save, no
   // profile switch, no «what happens when I save?»: one notice, then «Chiudi» (or another cover).
   if (view.preview) {
@@ -808,7 +812,7 @@ function summaryScreen(screen, ctx, tx, n, values) {
   }
   if (timesOnly) {
     Object.assign(screen, { code: "C-36", title: t("wiz_T179"), body: follows ? tx("wiz_T233", values) : t("wiz_T092"),
-      saveInfo: follows ? saveInfo("wiz_T287") : saveInfo("wizSaveCoverOnly"), actions: [{ ...save, target: "cover_only" }] });
+      saveInfo: follows ? saveInfo("wiz_T287") : saveInfo("wizSaveCoverOnly"), actions: [saveAs("cover_only")] });
     return withSupport(screen, ctx, "cover_only");
   }
   if (points) {
@@ -817,7 +821,7 @@ function summaryScreen(screen, ctx, tx, n, values) {
     screen.table.mutedBefore = true;
     screen.table.rows = [...screen.table.rows, ...rolls];
     Object.assign(screen, { code: "C-38", title: t("wiz_T149"), body: t("wiz_T238"), precision,
-      saveInfo: follows ? saveInfo("wiz_T288") : saveInfo("wizSaveCoverOnly"), actions: [{ ...save, target: "cover_only" }] });
+      saveInfo: follows ? saveInfo("wiz_T288") : saveInfo("wizSaveCoverOnly"), actions: [saveAs("cover_only")] });
     return screen;
   }
   // A and C (times and rolls): one Save, with the reusable-profile switch.
@@ -835,7 +839,7 @@ function summaryScreen(screen, ctx, tx, n, values) {
       : target === "profile_update" ? { title: t("wiz_T280"), body: tx("wiz_T567", { ...values, profile: cover?.profile?.name ?? "" }) }
       : saveInfo("wizSaveCoverOnly"),
     // Fine-tuning is offered once this is saved (A-34), not here. L-45: above the threshold the check can be repeated.
-    actions: [{ ...save, target }, ...(liveCheck && !liveCheck.passed ? [{ id: "check-start", label: t("wiz_T143"), kind: "secondary" }] : [])] });
+    actions: [saveAs(target, block.name?.value ?? ""), ...(liveCheck && !liveCheck.passed ? [{ id: "check-start", label: t("wiz_T143"), kind: "secondary" }] : [])] });
   withSupport(screen, ctx, target);
   // After the notices that matter more (D-16: what cannot be saved comes first).
   if (liveCheck) screen.results = [...(screen.results || []), liveCheck.tile];

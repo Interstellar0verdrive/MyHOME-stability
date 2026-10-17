@@ -1366,6 +1366,56 @@ test("review P4: a stop control is always in view and never next to a timing con
   }
 });
 
+test("review P5: Save says what it saves and follows the choices; a reading above the travel is refused while typing", async () => {
+  const t = (key) => translations.it[key] || key;
+  const review = { mode: "geometry", phase: "review", values: { opening_time: 22, closing_time: 21 }, geometry: {}, travel_cm: 198, owner: true, sequence: 2,
+    check: { deviation_cm: 1, passed: true, check_seconds: 10.5, measured_cm: 99, expected_cm: 98 } };
+  const label = (cover, local = {}) => buildScreen({ t, language: "it", stage: "session", path: "A", cover, view: review, local })
+    .actions.find((action) => action.id === "save").label;
+  const first = { name: "Bagno", entity_id: "cover.bath", effective: {} };
+  assert.equal(label(first), "Salva come «bagno»", "a new profile, by the name proposed");
+  assert.equal(label(first, { profileName: "bagno_grande" }), "Salva come «bagno_grande»", "the name typed");
+  assert.equal(label(first, { saveProfile: false }), "Salva solo per questa tapparella");
+  const follower = { name: "Bagno", entity_id: "cover.bath", effective: {}, followers: [], profile: { name: "alte", provenance: { opening: { origin_entity_id: "cover.bath" } } } };
+  assert.equal(label(follower, { saveProfile: true, saveChoice: "update" }), "Salva nel profilo «alte»");
+  assert.equal(label(follower, { saveProfile: true, saveChoice: "new", profileName: "alte_2" }), "Salva come «alte_2»");
+  assert.equal(buildScreen({ t, language: "it", stage: "session", path: "C", scope: "times_only", cover: first,
+    view: { ...review, mode: "guided" }, local: { ackAscent: true, ackDescent: true } }).actions.find((action) => action.id === "save").label, "Salva solo per questa tapparella", "times only");
+  // Live, as the far warning: a reading above the travel is refused while typing, the button off, nothing sent.
+  const { backend, wiz, press, type, actions, startFor, code } = await mount();
+  await startFor("cover.living_one");
+  await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  await press("ack:lift"); await press("next"); await move(backend, { seconds: 4.4 }); await press("lift"); backend.stopped(); await tick();
+  await type("3"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  await press("next"); await move(backend, { seconds: 22.2 }); await press("endpoint"); backend.stopped(); await tick();
+  await type("198"); await press("ack:ascent");
+  await press("next"); await move(backend, { seconds: 21.7 }); await press("endpoint"); backend.stopped(); await tick();
+  await press("ack:descent"); await press("ack:readings"); await move(backend, { auto: true, stop: true });
+  assert.equal(code(), "A-18");
+  const input = wiz().querySelector('[name="reading_cm"]'), button = () => wiz().querySelector('.wiz-actions [data-wiz="reading"]');
+  const sent = actions().length;
+  input.value = "205"; input.dispatchEvent(new Event("input", { bubbles: true })); await tick();
+  assert.equal(wiz().querySelector("#wiz-field-error").hidden, false, "said while typing");
+  assert.match(wiz().querySelector("#wiz-field-error").textContent, /more than the curtain travel/);
+  assert.equal(button().disabled, true, "«Done, continue» waits");
+  input.value = "97"; input.dispatchEvent(new Event("input", { bubbles: true })); await tick();
+  assert.deepEqual([wiz().querySelector("#wiz-field-error").hidden, button().disabled], [true, false]);
+  assert.equal(actions().length, sent, "nothing sent while typing");
+  // On A-21 the label follows the name as it is typed, and the switch.
+  await type("97"); await move(backend, { seconds: 24 }); await press("endpoint"); backend.stopped(); await tick();
+  await move(backend, { auto: true, stop: true }); await type("101"); await press("check-start");
+  assert.equal(code(), "A-21");
+  const save = () => wiz().querySelector('.wiz-actions [data-wiz="save"]').textContent;
+  assert.equal(save(), 'Save as "living_room_shutter_1"');
+  const name = wiz().querySelector('[name="profile_name"]');
+  name.value = "living_big"; name.dispatchEvent(new Event("input", { bubbles: true })); await tick();
+  assert.equal(save(), 'Save as "living_big"');
+  assert.equal(wiz().querySelector('.wiz-actions [data-wiz="save"]').disabled, false, "typing holds nothing back");
+  const toggle = wiz().querySelector('[name="save_profile"]');
+  toggle.checked = false; toggle.dispatchEvent(new Event("change", { bubbles: true })); await tick();
+  assert.equal(save(), "Save for this cover only");
+});
+
 test("R-8: what the tab hangs on the window is removed when it is cleared, and added once when it shows again", async () => {
   const view = dom.window;
   const active = new Map();

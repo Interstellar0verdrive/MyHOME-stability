@@ -515,7 +515,8 @@ export class CalibrationWizard {
     if (actions !== this._actionsSignature) {
       // The hold protects a tap from landing on a button that just appeared or changed. A button that only goes away
       // (Stop when the motor stops by itself) holds nothing back: the end stop never flickers disabled.
-      const ids = screen.actions.map((action) => `${action.id}|${action.label}|${action.kind}`);
+      // Review P5: Save's label follows the name being typed: the same button, nothing to hold back.
+      const ids = screen.actions.map((action) => `${action.id}|${action.id === "save" ? "" : action.label}|${action.kind}`);
       const readOnly = JSON.stringify(readOnlyKey);
       if (!this._actionIds || readOnly !== this._readOnlySignature || ids.some((id) => !this._actionIds.includes(id))) this._guardIfTouched();
       this._actionIds = ids;
@@ -684,8 +685,11 @@ export class CalibrationWizard {
   _input(event) {
     if (event.target.name === "profile_name") { this._local.profileName = event.target.value.trim(); this._patch(this._screen()); }
     if (event.target.name === "reading_cm") {
-      // Z-2: a refused value stays marked until what is typed is accepted; then the message goes and the button comes on.
-      if (this._local.fieldError != null && accepted(event.target)) { this._local.fieldError = null; event.target.removeAttribute("aria-invalid"); }
+      // Review P5: a value above what the field accepts (more than the curtain travel) is said while typing, as the far
+      // warning is, and the button waits; Z-2: once what is typed is accepted the message goes and the button comes on.
+      const value = parseReading(event.target.value);
+      if (Number.isFinite(value) && value > Number(event.target.dataset.max)) this._local.fieldError = value;
+      else if (this._local.fieldError != null && accepted(event.target)) { this._local.fieldError = null; event.target.removeAttribute("aria-invalid"); }
       // N-06: the button follows the field (typing never redraws the field itself).
       this._patch(this._screen());
     }

@@ -49,6 +49,8 @@ export async function mount(options = {}) {
     const input = wiz().querySelector('.wiz-frame [name="reading_cm"]');
     input.value = value;
     input.dispatchEvent(new Event("input", { bubbles: true }));
+    // Review P5: a value above what the field accepts is refused while typing: the button is off, there is nothing to press.
+    if (button("reading")?.disabled && wiz().querySelector("#wiz-field-error:not([hidden])")) { await tick(); return; }
     await press("reading");
   };
   const actions = () => backend.calls.filter((message) => message.type === "myhome/cover_calibration/action" && !["heartbeat", "show"].includes(message.action)).map((message) => message.action);
