@@ -1470,9 +1470,18 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
    L-116b/c: the space before it is 85 % of an action's height (44 px: about 37 px), a separation and not the bar's
    ordinary 12 px, with a hairline in its middle. */
 .wiz-actions { --wiz-action-height: 44px; --cal-stop-gap: calc(0.85 * var(--wiz-action-height)); }
-.wiz-actions > .wiz-action.stop:not(:first-child) { position: relative; margin-top: calc(var(--cal-stop-gap) - 12px); }
-.wiz-actions > .wiz-action.stop:not(:first-child)::before { content: ""; position: absolute; inset-inline: 0; top: calc(var(--cal-stop-gap) / -2 - 0.5px); height: 1px;
+/* L-119b: Stop lives in a slot of its own, the action's height whatever it holds: «Ferma la tapparella» or, once the run
+   is over, «La corsa è finita: la tapparella è ferma» (centred, the state's colour). The gap and the hairline belong to
+   the slot, so the swap moves nothing in the bar. */
+.wiz-actions > .wiz-stop-slot { position: relative; box-sizing: border-box; display: grid; height: var(--wiz-action-height); min-width: 0; }
+.wiz-actions > .wiz-stop-slot:not(:first-child) { margin-top: calc(var(--cal-stop-gap) - 12px); }
+.wiz-actions > .wiz-stop-slot:not(:first-child)::before { content: ""; position: absolute; inset-inline: 0; top: calc(var(--cal-stop-gap) / -2 - 0.5px); height: 1px;
   background: var(--panel-border); pointer-events: none; }
+.wiz-actions > .wiz-stop-slot > .wiz-action { box-sizing: border-box; width: 100%; max-width: none; height: 100%; min-height: 0; margin: 0; }
+.wiz-actions > .wiz-stop-slot > .wiz-action.status { padding-block: 0; }
+/* L-119b: «Riprendi» after a lost connection sits in its notice, in the content, not in the bar. */
+.wiz-notice-action { min-height: 0; margin-inline-start: 4px; padding: 0; border: 0; background: none; box-shadow: none; color: inherit; font: inherit;
+  font-weight: 600; text-decoration: underline; cursor: pointer; }
 @media (hover: hover) { :is(.wiz-action.stop, .wiz-action.danger-outline, .wiz-action.danger):hover:not(:disabled) { background: color-mix(in srgb, var(--panel-error) 8%, transparent); } }
 :is(.wiz-action.stop, .wiz-action.danger-outline, .wiz-action.danger):active:not(:disabled) { background: color-mix(in srgb, var(--panel-error) 12%, transparent); }
 @media (hover: hover) { .wiz-action.link:hover:not(:disabled) { background: transparent; text-decoration: underline; color: color-mix(in srgb, var(--panel-accent) 80%, #000); } }

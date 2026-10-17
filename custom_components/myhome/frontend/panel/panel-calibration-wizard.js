@@ -245,6 +245,9 @@ export class CalibrationWizard {
       screen.field && { ...screen.field, disabled: undefined, error: undefined }, screen.box, screen.table, screen.technical, screen.precision,
       screen.profileBlock && { ...screen.profileBlock, name: screen.profileBlock.name && { label: screen.profileBlock.name.label, hint: screen.profileBlock.name.hint } },
       screen.saveInfo, screen.status, screen.preview, screen.illustration, screen.wait && screen.wait.text, screen.discard, !!screen.readOnly, screen.back, !!screen.picker, screen.results, screen.note, screen.help]);
+    // L-119: the step the bar belongs to (one bar per step, whatever its screens).
+    const barView = this._gateway?.view;
+    const barStep = barView ? JSON.stringify([barView.session_id ?? null, barView.mode ?? null, barView.step ?? null, !!barView.read_only]) : null;
     if (signature !== this._signature) {
       // L-117b: a screen is new when its step changes, not when only its variant does: the summary is A-21, A-21c or
       // A-21d by the profile switch under it (`family`), and toggling the switch is the same screen.
@@ -275,6 +278,8 @@ export class CalibrationWizard {
       this._root.toggleAttribute("data-preview", screen.preview);
       // L-61 (review nit): a reader's ✕ only stops following, and says so.
       const xLabel = !screen.discard ? t("wiz_T158") : screen.readOnly ? t("wiz_T573") : t("wizDiscard");
+      const oldBar = this._frame.querySelector(".wiz-actions");
+      const keptBar = oldBar && barStep === this._barStep && this._actionsSignature === barParts(screen).signature ? oldBar : null;
       this._frame.innerHTML = `
         <header class="wiz-head">
           ${screen.back ? `<button type="button" class="icon-button wiz-back" data-wiz="back" aria-label="${esc(t("wiz_T403"))}" title="${esc(t("wiz_T403"))}"><ha-icon icon="mdi:arrow-left" aria-hidden="true"></ha-icon></button>` : ""}
@@ -332,8 +337,10 @@ export class CalibrationWizard {
           <div class="actions"><button type="button" class="wiz-leave" data-wiz="nav-discard">${esc(t("wiz_T411"))}</button>
             <button type="button" data-wiz="nav-later">${esc(t("wiz_T410"))}</button>
             <button type="button" class="primary" data-wiz="nav-stay">${esc(t("wiz_T269"))}</button></div></div></div>`;
-      this._actionsSignature = null;
-      this._actionIds = null;
+      // L-119b: within one step the bar is the same nodes from screen to screen (A-04 → A-05, A-09 → A-10, …): the
+      // frame is new, the bar is moved into it as it was.
+      if (keptBar) this._frame.querySelector(".wiz-actions").replaceWith(keptBar);
+      else { this._actionsSignature = null; this._actionIds = null; this._enabledIds = null; }
       this._pickerHtml = null;
       this._watchMore();
       if (radio) this._frame.querySelector(`.wiz-radios input[name="${radio}"]:checked`)?.focus({ preventScroll: true });
@@ -357,6 +364,7 @@ export class CalibrationWizard {
         if (inline) this._reveal();
       });
     }
+    this._barStep = barStep;
     this._patch(screen);
   }
 
@@ -499,7 +507,8 @@ export class CalibrationWizard {
     // L-24: a countdown keeps its own text node, updated every second by `_tick` (the rest is not redrawn).
     const markup = (list) => list.map((notice) => notice.countdown
       ? `<p class="notice wiz-notice" data-tone="${notice.tone}" data-expires="${notice.countdown.expires}" data-template="${esc(notice.countdown.template)}">${esc(notice.text)}</p>`
-      : `<p class="notice wiz-notice" data-tone="${notice.tone}" ${notice.tone === "error" ? 'role="alert"' : ""}>${text.units(esc(notice.text))}</p>`).join("");
+      : `<p class="notice wiz-notice" data-tone="${notice.tone}" ${notice.tone === "error" ? 'role="alert"' : ""}>${text.units(esc(notice.text))}${notice.action
+        ? ` <button type="button" class="wiz-notice-action" data-wiz="${esc(notice.action.id)}">${esc(notice.action.label)}</button>` : ""}</p>`).join("");
     const top = root.querySelector(".wiz-result-notices");
     const notices = markup(screen.notices.filter((notice) => !(top && notice.result)));
     const box = root.querySelector(".wiz-notices");
@@ -534,9 +543,12 @@ export class CalibrationWizard {
     if (nameError) { nameError.textContent = block?.error || ""; nameError.hidden = !block?.error; }
     // L-58b: the countdown of an armed «Conferma presa di controllo» only rewrites the button's label below: redrawing
     // the bar every second would hold the button back (the guard) and could swallow a tap.
-    const readOnlyKey = screen.readOnly && { ...screen.readOnly, left: undefined };
-    const actions = JSON.stringify([screen.actions.map((action) => [action.id, action.label, action.kind, action.note]), readOnlyKey]);
+    const { readOnlyKey, slotAction, barActions, signature: actions } = barParts(screen);
     const column = root.querySelector(".wiz-actions");
+    const one = (action) => action.kind === "status" || action.kind === "state"
+      ? `<p class="wiz-action status${action.kind === "state" ? " is-still" : ""}" data-wiz="${esc(action.id)}" role="status">${action.kind === "status" ? '<span class="wiz-spinner" aria-hidden="true"></span>' : ""}${esc(action.label)}</p>`
+      : `<button type="button" class="wiz-action ${action.kind}" data-wiz="${esc(action.id)}"${action.note ? ` aria-describedby="wiz-note-${esc(action.id.replace(/\W/g, "-"))}"` : ""}>${esc(action.label)}</button>${action.note
+      ? `<p class="wiz-action-note muted" id="wiz-note-${esc(action.id.replace(/\W/g, "-"))}">${esc(action.note)}</p>` : ""}`;
     if (actions !== this._actionsSignature) {
       // The hold protects a tap from landing on a button that just appeared or changed. A button that only goes away
       // (Stop when the motor stops by itself) holds nothing back: the end stop never flickers disabled.
@@ -554,22 +566,34 @@ export class CalibrationWizard {
           ${screen.readOnly.take ? `<button type="button" class="wiz-take primary" data-wiz="take">${esc(takeLabel(screen.readOnly))}</button>` : ""}
           ${screen.readOnly.consequence ? `<p class="muted">${esc(screen.readOnly.consequence)}</p>` : ""}</div>` : ""}
         ${(() => {
-          const one = (action) => action.kind === "status" || action.kind === "state"
-            ? `<p class="wiz-action status${action.kind === "state" ? " is-still" : ""}" data-wiz="${esc(action.id)}" role="status">${action.kind === "status" ? '<span class="wiz-spinner" aria-hidden="true"></span>' : ""}${esc(action.label)}</p>`
-            : `<button type="button" class="wiz-action ${action.kind}" data-wiz="${esc(action.id)}"${action.note ? ` aria-describedby="wiz-note-${esc(action.id.replace(/\W/g, "-"))}"` : ""}>${esc(action.label)}</button>${action.note
-            ? `<p class="wiz-action-note muted" id="wiz-note-${esc(action.id.replace(/\W/g, "-"))}">${esc(action.note)}</p>` : ""}`;
-          const { shown, more, red } = overflow(screen.actions);
+          // L-119b: the slot stays out of the count of «Altre opzioni»: Stop or its finished line, the same bar.
+          const { shown, more, red } = overflow(barActions);
           // L-116: the emergency Stop is the last of the actions, after a gap and a hairline (CSS), never next to ②;
           // leaving a process (outlined) follows it.
-          const stops = red.filter((action) => action.kind === "stop"), leaving = red.filter((action) => action.kind !== "stop");
           return `${shown.map(one).join("")}${more.length ? `<div class="wiz-more"><button type="button" class="wiz-more-toggle" data-wiz="more" aria-expanded="false" aria-controls="wiz-more-list">${esc(t("wiz_T529"))}<ha-icon icon="mdi:chevron-down" aria-hidden="true"></ha-icon></button>
-            <div class="wiz-more-list" id="wiz-more-list">${more.map(one).join("")}</div></div>` : ""}${stops.map(one).join("")}${leaving.map(one).join("")}`;
+            <div class="wiz-more-list" id="wiz-more-list">${more.map(one).join("")}</div></div>` : ""}${slotAction ? '<div class="wiz-stop-slot"></div>' : ""}${red.map(one).join("")}`;
         })()}`;
       if (focused) column.querySelector(`[data-wiz="${focused}"]`)?.focus({ preventScroll: true });
+    }
+    // L-119b: the slot's content follows the step (Stop ↔ «La corsa è finita»); the slot itself is never redrawn.
+    const slot = column.querySelector(".wiz-stop-slot");
+    if (slot && slotAction) {
+      const shownSlot = slot.firstElementChild;
+      if (shownSlot?.dataset.wiz !== slotAction.id || shownSlot.textContent !== slotAction.label) {
+        const focusedStop = shownSlot && root.getRootNode().activeElement === shownSlot;
+        slot.classList.toggle("is-finished", slotAction.id === "stopped");
+        slot.innerHTML = one(slotAction);
+        if (focusedStop) slot.firstElementChild.focus?.({ preventScroll: true });
+      }
     }
     // L-1: the other ways on stack under the actions; in the phone's bar they wait behind «Altre opzioni».
     const more = column.querySelector(".wiz-more");
     if (more) { more.classList.toggle("is-open", !!this._local.moreOpen); more.querySelector(".wiz-more-toggle").setAttribute("aria-expanded", String(!!this._local.moreOpen)); }
+    // L-119b: within a step the bar keeps its buttons, so one that turns on (② once the motor runs, the end stop once
+    // the cover arrives) is what may now sit under a finger: it is held as a new one was (L-108).
+    const enabledIds = screen.actions.filter((action) => !action.disabled && action.kind !== "state" && action.id !== "stop").map((action) => action.id);
+    if (this._enabledIds && enabledIds.some((id) => !this._enabledIds.includes(id))) this._guardIfTouched();
+    this._enabledIds = enabledIds;
     const guarded = this._guarded();
     // L-78: from the click until Home Assistant answers the buttons are held too (one press, one message), with the
     // passing look; Stop never waits.
@@ -1564,6 +1588,21 @@ function scrollParents(element) {
 
 /** The red actions: the emergency (Stop, filled) and abandoning a process (Cancel the measurement, Exit without saving: outlined). */
 const RED_KINDS = ["danger", "danger-outline", "stop"];
+/**
+ * The bar of a screen: its actions, Stop's slot apart, and what decides that it must be drawn again. L-119b: Stop and
+ * the finished line that replaces it share one slot (`.wiz-stop-slot`, the action's height, the gap and the hairline
+ * above it): the swap changes the slot's content only, never the bar's layout. L-58b: an armed «Conferma presa di
+ * controllo» counts down without redrawing the bar.
+ */
+function barParts(screen) {
+  const readOnlyKey = screen.readOnly && { ...screen.readOnly, left: undefined };
+  const slotAction = screen.actions.find((action) => STOP_SLOT.includes(action.id));
+  const barActions = screen.actions.filter((action) => !STOP_SLOT.includes(action.id));
+  return { readOnlyKey, slotAction, barActions,
+    signature: JSON.stringify([barActions.map((action) => [action.id, action.label, action.kind, action.note]), !!slotAction, readOnlyKey]) };
+}
+/** L-119b: the ids drawn in the bar's one Stop slot. */
+const STOP_SLOT = ["stop", "stopped"];
 /**
  * L-47 (revised), the rule of every wizard bar of one column: at most three actions in view, the primary and up to two
  * secondaries; with more, the primary alone and the others under «Altre opzioni ▾» (blue links, the only text-style

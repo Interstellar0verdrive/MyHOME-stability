@@ -1292,8 +1292,9 @@ function finalize(screen, ctx) {
   if (status.lost && !status.expired && view && !ENDED.includes(view.phase)) {
     // A missed heartbeat (the phone put the page aside, the connection dropped for a moment) is a calm status while the
     // panel reconnects; a lost presence for any other reason stays an error.
-    screen.notices.push(status.connection === "interrupted" ? { tone: "info", text: t("wiz_T446") } : { tone: "error", text: t("calVisual_disconnected") });
-    if (view.recoverable) screen.actions.push({ id: "reconnect", label: t("calResume"), kind: "secondary" });
+    // L-119b: «Riprendi» belongs to that notice, in the content: the bar of the step stays as it is.
+    screen.notices.push({ ...(status.connection === "interrupted" ? { tone: "info", text: t("wiz_T446") } : { tone: "error", text: t("calVisual_disconnected") }),
+      ...(view.recoverable ? { action: { id: "reconnect", label: t("calResume") } } : {}) });
   }
   if (status.notice) screen.notices.push({ tone: "warning", text: t(status.notice) });
   if (status.cancelPending) screen.notices.push({ tone: "error", text: t("calCancelFailed") });

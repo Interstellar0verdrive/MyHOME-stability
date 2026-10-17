@@ -1361,23 +1361,31 @@ test("L-116: an emergency Stop is the last action, always drawn with the ①/②
   // L-116b/c: the space before Stop is 85 % of an action's height (the bar's 12 px gap plus the rest), the hairline in its middle.
   assert.match(css, /\.wiz-actions \{ --wiz-action-height: 44px; --cal-stop-gap: calc\(0\.85 \* var\(--wiz-action-height\)\); \}/, "0.85 × the action's height");
   assert.match(css, /\.wiz-action \{ width: 100%; min-height: 44px;/, "the action's height it is computed from");
-  assert.match(css, /\.wiz-actions > \.wiz-action\.stop:not\(:first-child\) \{ position: relative; margin-top: calc\(var\(--cal-stop-gap\) - 12px\); \}/);
-  assert.match(css, /\.wiz-actions > \.wiz-action\.stop:not\(:first-child\)::before \{ content: ""; position: absolute; inset-inline: 0; top: calc\(var\(--cal-stop-gap\) \/ -2 - 0\.5px\); height: 1px;\s*background: var\(--panel-border\); pointer-events: none; \}/,
+  // L-119b: the gap and the hairline belong to Stop's slot, whatever it holds (Stop or the finished line).
+  assert.match(css, /\.wiz-actions > \.wiz-stop-slot \{ position: relative; box-sizing: border-box; display: grid; height: var\(--wiz-action-height\); min-width: 0; \}/,
+    "the slot is the action's height in both states");
+  assert.match(css, /\.wiz-actions > \.wiz-stop-slot:not\(:first-child\) \{ margin-top: calc\(var\(--cal-stop-gap\) - 12px\); \}/);
+  assert.match(css, /\.wiz-actions > \.wiz-stop-slot:not\(:first-child\)::before \{ content: ""; position: absolute; inset-inline: 0; top: calc\(var\(--cal-stop-gap\) \/ -2 - 0\.5px\); height: 1px;\s*background: var\(--panel-border\); pointer-events: none; \}/,
     "a hairline in the middle of the space");
+  assert.match(css, /\.wiz-actions > \.wiz-stop-slot > \.wiz-action \{ box-sizing: border-box; width: 100%; max-width: none; height: 100%; min-height: 0; margin: 0; \}/,
+    "Stop and the finished line fill the slot");
+  assert.doesNotMatch(css, /wiz-stop-slot[^{]*:has|wiz-stop-slot\.is-finished[^{]*\{[^}]*(height|margin)|wiz-action\.stop:not\(:first-child\)/,
+    "the slot's height, gap and hairline never depend on what it holds");
   assert.match(css, /\.wiz-actions \{ display: grid; grid-template-columns: minmax\(0, 1fr\); gap: 12px;/, "the bar's own gap");
   assert.doesNotMatch(css, /\.wiz-action\.stop:not\(:last-child\)/, "never ahead of the actions (P4's layout is gone)");
   const { backend, wiz, press, startFor } = await mount();
   await startFor("cover.living_one");
   await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
   await press("ack:lift");
-  const bar = () => [...wiz().querySelector(".wiz-actions").children].map((item) => [item.dataset.wiz, item.disabled]);
+  const bar = () => [...wiz().querySelector(".wiz-actions").children].map((item) => item.firstElementChild?.dataset.wiz ? item.firstElementChild : item)
+    .map((item) => [item.dataset.wiz, item.disabled]);
   assert.deepEqual(bar(), [["next", false], ["lift", true], ["stop", true]], "A-07 at the start: ① on, ② and Stop off");
   await press("next"); backend.started(); backend.emit(); await tick(6);
   assert.deepEqual(bar(), [["next", true], ["lift", false], ["stop", false]], "after ①: ① off, ② and Stop on");
   // Every bar with a Stop: Stop is the last of the actions (an outlined way out may follow, never a timing confirm).
   for (const screen of [{ step: "opening", phase: "opening" }, { step: "closing", phase: "closing" }, { step: "reset", phase: "closing" }]) {
     backend.session.step = screen.step; backend.session.phase = screen.phase; backend.emit(); await tick(4);
-    const ids = [...wiz().querySelectorAll(".wiz-actions > .wiz-action")].map((item) => item.dataset.wiz).filter((id) => id !== "abort");
+    const ids = [...wiz().querySelectorAll(".wiz-actions > .wiz-action, .wiz-actions > .wiz-stop-slot > .wiz-action")].map((item) => item.dataset.wiz).filter((id) => id !== "abort");
     if (ids.includes("stop")) assert.equal(ids.at(-1), "stop", `${screen.step}/${screen.phase}: ${ids}`);
   }
 });
@@ -3700,16 +3708,21 @@ test("a missed heartbeat is a calm status, and the panel reconnects when the pag
     if (message.action === "heartbeat") throw Object.assign(new Error("Connection lost"), { code: 3 });
     return callWS(message);
   };
+  const bar = () => [...wiz().querySelectorAll(".wiz-actions [data-wiz]")].map((item) => (item.dataset.wiz === "stopped" ? "stop" : item.dataset.wiz));
+  const before = bar();
   await gateway._engine._perform("heartbeat"); await tick();
-  assert.equal(notices().textContent, translations.en.wiz_T446);
+  assert.equal(notices().querySelector(".wiz-notice").firstChild.textContent.trim(), translations.en.wiz_T446);
   assert.ok(notices().querySelector(".notice.info, [data-tone='info'], .info"), "the interruption is told as information");
+  // L-119b: «Resume session» is in its notice, in the content; the step's bar is untouched.
+  assert.equal(notices().querySelector('.wiz-notice > button.wiz-notice-action[data-wiz="reconnect"]').textContent, translations.en.calResume);
+  assert.deepEqual(bar(), before);
   assert.doesNotMatch(notices().textContent, /Connection or command failed/);
   // The page comes back: the panel resumes the session on its own and the status goes away.
   backend.hass.callWS = callWS;
   const resumes = () => backend.subscriptions.filter((message) => message.type === "myhome/cover_calibration/resume").length;
-  const before = resumes();
+  const resumed = resumes();
   document.dispatchEvent(new window.Event("visibilitychange")); await settle();
-  assert.equal(resumes(), before + 1);
+  assert.equal(resumes(), resumed + 1);
   assert.equal(notices().textContent, "");
   assert.equal(code(), screenCode);
   // A command that really fails still says so.

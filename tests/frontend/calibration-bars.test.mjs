@@ -258,3 +258,29 @@ test("L-119: a return reopened at its briefing keeps its own start, off, once pr
   backend.started(); backend.tick(3); backend.emit(); await tick();
   assert.deepEqual(bar(), [["next", true], ["endpoint", false], ["stop", false]]);
 });
+
+test("L-119b: Stop and the finished line are one slot of the bar: the same node, its class toggled, the other actions untouched", async () => {
+  const { backend, wiz, code, press, startFor } = await mount();
+  await startFor("cover.living_one");
+  await press("begin");
+  backend.started(); backend.tick(10); backend.emit(); await tick();
+  assert.equal(code(), "A-04");
+  const column = wiz().querySelector(".wiz-actions");
+  const slot = column.querySelector(":scope > .wiz-stop-slot");
+  const ctas = [...column.children].filter((item) => item !== slot);
+  assert.deepEqual([slot.className, slot.children.length, slot.firstElementChild.dataset.wiz, column.lastElementChild === slot], ["wiz-stop-slot", 1, "stop", true]);
+  backend.session.motor_stopped = true; backend.emit(); await tick();
+  assert.equal(code(), "A-05");
+  assert.equal(column.querySelector(":scope > .wiz-stop-slot"), slot, "the same slot node");
+  assert.deepEqual([slot.className, slot.children.length, slot.firstElementChild.dataset.wiz, slot.firstElementChild.getAttribute("role")], ["wiz-stop-slot is-finished", 1, "stopped", "status"]);
+  assert.deepEqual([...column.children].filter((item) => item !== slot), ctas, "the actions above are the same nodes, in the same places");
+  // A reader keeps the slot too.
+  const view = backend.view;
+  backend.view = (extra = {}) => view({ owner: false, read_only: true, ...extra });
+  backend.emit(); await tick();
+  const reader = wiz().querySelector(".wiz-actions > .wiz-stop-slot");
+  assert.deepEqual([reader.className, reader.firstElementChild.dataset.wiz, reader.previousElementSibling.className], ["wiz-stop-slot is-finished", "stopped", "wiz-readonly"]);
+  backend.session.motor_stopped = false; backend.session._started = null; backend.started(); backend.tick(1); backend.emit(); await tick();
+  assert.equal(wiz().querySelector(".wiz-actions > .wiz-stop-slot"), reader, "back to Stop in the same slot");
+  assert.deepEqual([reader.className, reader.firstElementChild.dataset.wiz], ["wiz-stop-slot", "stop"]);
+});
