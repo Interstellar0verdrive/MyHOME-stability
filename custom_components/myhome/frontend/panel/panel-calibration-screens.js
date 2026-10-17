@@ -831,7 +831,9 @@ function summaryScreen(screen, ctx, tx, n, values) {
   const c = path === "C";
   const block = profileBlock(ctx, tx, c);
   const target = block.target;
-  Object.assign(screen, { code: c ? (refine ? "C-33" : "C-21") : refine ? (follows ? "A-33c" : "A-33") : follows ? (block.choice ? "A-21d" : "A-21c") : "A-21",
+  // L-117b: one screen whatever the profile switch makes its code (A-21, A-21c, A-21d): toggling it keeps the place.
+  Object.assign(screen, { family: `summary:${path}:${refine ? "refine" : "base"}`,
+    code: c ? (refine ? "C-33" : "C-21") : refine ? (follows ? "A-33c" : "A-33") : follows ? (block.choice ? "A-21d" : "A-21c") : "A-21",
     title: t(refine ? "wiz_T149" : "wiz_T091"),
     body: c ? (follows ? tx(refine ? "wiz_T226" : "wiz_T210", values) : t(refine ? "wiz_T150" : "wiz_T092"))
       : t(refine ? (follows ? "wiz_T152" : "wiz_T150") : (follows ? "wiz_T107" : "wiz_T092")),

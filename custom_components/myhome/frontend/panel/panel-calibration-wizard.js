@@ -246,7 +246,10 @@ export class CalibrationWizard {
       screen.profileBlock && { ...screen.profileBlock, name: screen.profileBlock.name && { label: screen.profileBlock.name.label, hint: screen.profileBlock.name.hint } },
       screen.saveInfo, screen.status, screen.preview, screen.illustration, screen.wait && screen.wait.text, screen.discard, !!screen.readOnly, screen.back, !!screen.picker, screen.results, screen.note, screen.help]);
     if (signature !== this._signature) {
-      const codeChanged = this._renderedCode !== screen.code;
+      // L-117b: a screen is new when its step changes, not when only its variant does: the summary is A-21, A-21c or
+      // A-21d by the profile switch under it (`family`), and toggling the switch is the same screen.
+      const family = screen.family || screen.code;
+      const codeChanged = this._renderedFamily !== family;
       // "What happens when I save?" opens with the summary; a reader's choice is kept while it stays on screen.
       const info = this._frame.querySelector(".wiz-save-info");
       this._local.saveInfoOpen = info ? info.open : true;
@@ -267,6 +270,7 @@ export class CalibrationWizard {
       };
       this._signature = signature;
       this._renderedCode = screen.code;
+      this._renderedFamily = family;
       this._root.dataset.code = screen.code;
       this._root.toggleAttribute("data-preview", screen.preview);
       // L-61 (review nit): a reader's ✕ only stops following, and says so.
@@ -335,9 +339,15 @@ export class CalibrationWizard {
       if (radio) this._frame.querySelector(`.wiz-radios input[name="${radio}"]:checked`)?.focus({ preventScroll: true });
       if (kept) {
         if (kept.focus) this._frame.querySelector(kept.focus)?.focus({ preventScroll: true });
-        const main = this._frame.querySelector(".wiz-main");
-        if (main && main.scrollTop !== kept.main) main.scrollTop = kept.main;
-        for (const [element, top] of kept.around) if (element.scrollTop !== top) element.scrollTop = top;
+        const restore = () => {
+          const main = this._frame?.querySelector(".wiz-main");
+          if (main && main.scrollTop !== kept.main) main.scrollTop = kept.main;
+          for (const [element, top] of kept.around) if (element.scrollTop !== top) element.scrollTop = top;
+        };
+        // At once (before the frame is painted), and once more on the next frame in case a layout pass moved it.
+        restore();
+        const frame = this._frame;
+        (globalThis.requestAnimationFrame || ((callback) => setTimeout(callback, 16)))(() => { if (this._frame === frame && this._renderedFamily === family) restore(); });
       }
       // L-8: in the page's inline layouts the page is scrolled by `revealHead` (the head at the top on opening, kept in
       // view at every step), never by the focus; full screen, the focus scrolls the wizard's own content.

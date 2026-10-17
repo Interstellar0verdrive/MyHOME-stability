@@ -1431,45 +1431,55 @@ test("review P5: Save says what it saves and follows the choices; a reading abov
   assert.equal(save(), "Save for this cover only");
 });
 
-test("L-117: the same screen drawn again keeps its scroll and the field in use; a new screen starts from the top", async () => {
-  // jsdom has no layout: scrollTop is kept per element for this test, as a browser does.
-  const tops = new WeakMap(), proto = dom.window.HTMLElement.prototype, original = Object.getOwnPropertyDescriptor(dom.window.Element.prototype, "scrollTop");
-  Object.defineProperty(proto, "scrollTop", { configurable: true, get() { return tops.get(this) ?? 0; }, set(value) { tops.set(this, value); } });
-  try {
-    const { backend, wiz, press, type, startFor, code } = await mount();
-    await startFor("cover.living_one");
-    await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
-    await press("ack:lift"); await press("next"); await move(backend, { seconds: 4.4 }); await press("lift"); backend.stopped(); await tick();
-    await type("3"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
-    await press("next"); await move(backend, { seconds: 22.2 }); await press("endpoint"); backend.stopped(); await tick();
-    await type("198"); await press("ack:ascent");
-    await press("next"); await move(backend, { seconds: 21.7 }); await press("endpoint"); backend.stopped(); await tick();
-    await press("ack:descent"); await press("ack:readings"); await move(backend, { auto: true, stop: true });
-    await type("97"); await move(backend, { seconds: 24 }); await press("endpoint"); backend.stopped(); await tick();
-    await move(backend, { auto: true, stop: true }); await type("101"); await press("check-start");
-    assert.equal(code(), "A-21");
-    const host = wiz().parentElement;
-    wiz().querySelector(".wiz-main").scrollTop = 420; host.scrollTop = 150;
-    // The switch «Salva anche come profilo»: the screen is drawn again, same place, the switch still in use.
-    const toggle = wiz().querySelector('[name="save_profile"]');
-    toggle.focus(); toggle.checked = false; toggle.dispatchEvent(new Event("change", { bubbles: true })); await tick();
-    assert.equal(wiz().querySelector('.wiz-frame [name="profile_name"]'), null, "drawn again (the name field went)");
-    assert.deepEqual([wiz().querySelector(".wiz-main").scrollTop, host.scrollTop], [420, 150], "the scroll stays");
-    assert.equal(wiz().getRootNode().activeElement?.name, "save_profile", "the switch keeps the focus");
-    // A view of Home Assistant that changes a part of the same screen (a value of its table): the scroll stays too.
-    backend.session.values.opening_time += 0.1; backend.emit(); await tick(6);
-    assert.equal(code(), "A-21");
-    assert.deepEqual([wiz().querySelector(".wiz-main").scrollTop, host.scrollTop], [420, 150], "same screen, same scroll");
-    // A new screen starts from the top of its content.
-    wiz().querySelector('[name="save_profile"]').checked = true; wiz().querySelector('[name="save_profile"]').dispatchEvent(new Event("change", { bubbles: true })); await tick();
-    await press("save"); await tick(6);
-    assert.equal(code(), "A-34");
-    assert.equal(wiz().querySelector(".wiz-main").scrollTop, 0, "a new screen: from the top");
-  } finally {
-    if (original) Object.defineProperty(proto, "scrollTop", original); else delete proto.scrollTop;
-  }
-});
-
+for (const [entity, variant] of [["cover.living_one", "A-21 throughout"], ["cover.kitchen_two", "A-21c ↔ A-21d: the switch changes the code"]]) {
+  test(`L-117/L-117b: the same screen drawn again keeps its scroll and the field in use; a new screen starts from the top (${variant})`, async () => {
+    // jsdom has no layout: each element keeps the scrollTop it is given, as a browser does; the wizard finds the scrolling
+    // elements itself (its content, and every composed parent up to the page, through the panel's shadow root).
+    const tops = new WeakMap(), proto = dom.window.HTMLElement.prototype, original = Object.getOwnPropertyDescriptor(dom.window.Element.prototype, "scrollTop");
+    Object.defineProperty(proto, "scrollTop", { configurable: true, get() { return tops.get(this) ?? 0; }, set(value) { tops.set(this, value); } });
+    try {
+      const { backend, wiz, press, type, startFor, code, panel } = await mount();
+      await startFor(entity);
+      await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+      await press("ack:lift"); await press("next"); await move(backend, { seconds: 4.4 }); await press("lift"); backend.stopped(); await tick();
+      await type("3"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+      await press("next"); await move(backend, { seconds: 22.2 }); await press("endpoint"); backend.stopped(); await tick();
+      await type("198"); await press("ack:ascent");
+      await press("next"); await move(backend, { seconds: 21.7 }); await press("endpoint"); backend.stopped(); await tick();
+      await press("ack:descent"); await press("ack:readings"); await move(backend, { auto: true, stop: true });
+      await type("97"); await move(backend, { seconds: 24 }); await press("endpoint"); backend.stopped(); await tick();
+      await move(backend, { auto: true, stop: true }); await type("101"); await press("check-start");
+      assert.match(code(), /^A-21[cd]?$/);
+      const first = code();
+      // The scrolling elements: the wizard's content and a composed parent (the panel, host of the shadow root).
+      wiz().querySelector(".wiz-main").scrollTop = 420; panel.scrollTop = 150;
+      const toggle = wiz().querySelector('[name="save_profile"]');
+      toggle.focus(); toggle.checked = !toggle.checked; toggle.dispatchEvent(new Event("change", { bubbles: true })); await tick();
+      if (entity === "cover.kitchen_two") assert.notEqual(code(), first, "the switch changed the screen's code…");
+      assert.deepEqual([wiz().querySelector(".wiz-main").scrollTop, panel.scrollTop], [420, 150], "…and the place stays");
+      assert.equal(wiz().getRootNode().activeElement?.name, "save_profile", "the switch keeps the focus, the title does not take it");
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      assert.deepEqual([wiz().querySelector(".wiz-main").scrollTop, panel.scrollTop], [420, 150], "still there a frame later");
+      // A view of Home Assistant that changes a part of the same screen (a value of its table): the scroll stays too.
+      backend.session.values.opening_time += 0.1; backend.emit(); await tick(6);
+      assert.match(code(), /^A-21[cd]?$/);
+      assert.deepEqual([wiz().querySelector(".wiz-main").scrollTop, panel.scrollTop], [420, 150], "same screen, same scroll");
+      // A new screen starts from the top of its content, its title focused.
+      const sw = wiz().querySelector('[name="save_profile"]');
+      if (!sw.checked) { sw.checked = true; sw.dispatchEvent(new Event("change", { bubbles: true })); await tick(); }
+      if (wiz().querySelector('[name="save_choice"][value="new"]')) { const nw = wiz().querySelector('[name="save_choice"][value="new"]'); nw.checked = true; nw.dispatchEvent(new Event("change", { bubbles: true })); await tick(); }
+      const name = wiz().querySelector('.wiz-frame [name="profile_name"]');
+      if (name) { name.value = `l117_${entity.slice(6)}`; name.dispatchEvent(new Event("input", { bubbles: true })); await tick(); }
+      await press("save"); await tick(6);
+      assert.equal(code(), "A-34");
+      assert.equal(wiz().querySelector(".wiz-main").scrollTop, 0, "a new screen: from the top");
+      await tick(2);
+      assert.match(wiz().getRootNode().activeElement?.className || "", /wiz-title/);
+    } finally {
+      if (original) Object.defineProperty(proto, "scrollTop", original); else delete proto.scrollTop;
+    }
+  });
+}
 test("R-8: what the tab hangs on the window is removed when it is cleared, and added once when it shows again", async () => {
   const view = dom.window;
   const active = new Map();
