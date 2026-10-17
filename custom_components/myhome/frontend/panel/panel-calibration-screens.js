@@ -13,14 +13,15 @@ const PHASES = {
 };
 
 /** The phases each path shows, in order (C depends on what is remeasured). */
-export function phasesFor(path, scope, refining) {
+export function phasesFor(path, scope, refining, previews = true) {
   if (path === "B") return ["intro", "readings", "summary"];
   if (path === "C" && scope === "times_only") return ["intro", "prep", "ascent", "descent", "summary"];
   if (path === "C" && scope === "points_only") return ["intro", "prep", "readings", "summary"];
   // N-10: fine-tuning's own summary is part of «Perfezionamento» (the last step), «Riepilogo» once. L-43: the base
   // calibration's check is a step of its own, between the readings and the summary (fine-tuning has its own check).
   if (refining) return ["intro", "prep", "ascent", "descent", "readings", "summary", "finetune"];
-  return ["intro", "prep", "ascent", "descent", "readings", "check", "summary", "finetune"];
+  // Review P2: fine-tuning is a step only while it can be run (the preview paths on).
+  return ["intro", "prep", "ascent", "descent", "readings", "check", "summary", ...(previews ? ["finetune"] : [])];
 }
 
 const MEASURED_RUN = (view) => view && ((view.mode === "geometry" && ["opening", "closing"].includes(view.phase) && ["lift", "opening", "closing"].includes(view.step))
@@ -924,8 +925,8 @@ function savedScreen(screen, ctx, tx, values) {
     actions: [close()] });
   const body = saved.target === "profile_new" ? tx("wiz_T155", { name: saved.name ?? "" })
     : path === "C" && ctx.cover?.profile ? tx("wiz_T228", values) : tx("wizSavedCover", values);
-  // A-34: the base calibration is saved; fine-tuning (path C on the same cover) is the primary next step, explained
-  // by the body's second paragraph (T319).
+  // Review P2: A-34's primary is «Torna all'elenco»; fine-tuning (path C on the same cover) is a secondary offered only
+  // while it can be run, and only then the body's second paragraph (T319) says the cover will move.
   // A profile was created or updated: it can be given to similar covers at once (the maintainer's Assign dialog).
   const assign = ["profile_new", "profile_update"].includes(saved.target) ? [{ id: "assign-profile", label: t("wiz_T426"), kind: "secondary" }] : [];
   // A new profile left the previous one without covers: it can be deleted from the Profiles tab (never by itself).
@@ -934,12 +935,13 @@ function savedScreen(screen, ctx, tx, values) {
   // L-49: whatever the other device does next (fine-tuning is a preview with no session), nothing more to follow here.
   if (saved.reader) return Object.assign(screen, { code: path === "C" ? "C-34" : "A-34", title: t("wiz_T154"), body: `${body}\n\n${t("wiz_T569")}`,
     actions: [close()], links: [] });
-  // L-28 (final): fine-tuning first, then giving the new profile to other covers, another cover, this cover's details,
-  // and «Chiudi» in red, last. Where the bar is one column (phone, single column) the wizard keeps the first and the
-  // red one visible and puts the others under «Altre opzioni ▾» (the rule of every bar: at most three visible).
-  if (path !== "C") return Object.assign(screen, { code: "A-34", title: t("wiz_T154"), body: `${body}\n\n${t("wiz_T319")}`,
-    actions: [{ id: "refine", label: t("wiz_T103"), kind: "primary" }, ...assign, { id: "another", label: t("wiz_T156"), kind: "secondary" },
-      { id: "open-cover", label: t("wiz_T157"), kind: "secondary" }, close("secondary")] });
+  // Review P2: «Torna all'elenco» first (the primary), then giving the profile to other covers, another cover, this
+  // cover's details, and fine-tuning last when it can be run. Where the bar is one column (phone, single column) the
+  // wizard keeps the primary visible and puts the others under «Altre opzioni ▾» when they are more than three.
+  const fineTune = ctx.previews !== false;
+  if (path !== "C") return Object.assign(screen, { code: "A-34", title: t("wiz_T154"), body: fineTune ? `${body}\n\n${t("wiz_T319")}` : body,
+    actions: [close(), ...assign, { id: "another", label: t("wiz_T156"), kind: "secondary" }, { id: "open-cover", label: t("wiz_T157"), kind: "secondary" },
+      ...(fineTune ? [{ id: "refine", label: t("wiz_T103"), kind: "secondary" }] : [])] });
   return Object.assign(screen, { code: "C-34", title: t("wiz_T154"), body,
     actions: [close(), { id: "another", label: t("wiz_T156"), kind: "secondary" }, { id: "open-cover", label: t("wiz_T157"), kind: "secondary" }] });
 }
@@ -1167,7 +1169,7 @@ function finalize(screen, ctx) {
   // choice; only A-02 with fine-tuning ticked, before any case, shows the introduction alone (D-21).
   const presetCase = (screen.stepPath || path) === "C" && ["current", "case"].includes(ctx.stage) ? (screen.stepScope ?? scope ?? (ctx.previews === false ? null : "points_only")) : null;
   const unknownCase = (screen.stepPath || path) === "C" && !(screen.stepScope ?? scope) && !presetCase && !refining && ["path", "current"].includes(ctx.stage);
-  const phases = unknownCase ? ["intro"] : phasesFor(screen.stepPath || path, presetCase ?? screen.stepScope ?? scope, refining);
+  const phases = unknownCase ? ["intro"] : phasesFor(screen.stepPath || path, presetCase ?? screen.stepScope ?? scope, refining, ctx.previews !== false);
   let current = phases.indexOf(screen.phase);
   if (refining && screen.phase === "summary") current = phases.length - 1;
   // Y-d: the end of a preview saved nothing: its summary step stays the current one, not ticked as done.

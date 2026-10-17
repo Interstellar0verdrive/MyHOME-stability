@@ -1456,16 +1456,16 @@ test("A-34 offers fine-tuning once the calibration is saved: path C on the same 
   assert.equal(wiz().querySelector('[data-wiz="refine"]'), null, "the summary only saves");
   await press("save");
   assert.equal(code(), "A-34");
-  // L-28/L-47: fine-tuning, the new profile to other covers, another cover, this cover's details, «Back to the list»
-  // (a secondary: never red, never «Close»).
+  // Review P2: «Back to the list» the primary, then the new profile to other covers, another cover, this cover's details,
+  // and fine-tuning last, a secondary (the previews on here).
   const kinds = [...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => [item.dataset.wiz, item.className.replace("wiz-action ", "")]);
-  assert.deepEqual(kinds, [["refine", "primary"], ["assign-profile", "secondary"], ["another", "secondary"], ["open-cover", "secondary"], ["close", "secondary"]]);
+  assert.deepEqual(kinds, [["close", "primary"], ["assign-profile", "secondary"], ["another", "secondary"], ["open-cover", "secondary"], ["refine", "secondary"]]);
   assert.equal(wiz().querySelector('.wiz-actions [data-wiz="close"]').textContent, "Back to the list");
   // In a one-column bar the four secondaries are under «Other options ▾» (CSS hides them there).
   assert.equal(wiz().querySelector(".wiz-main .wiz-action"), null, "nothing in the text column");
-  assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-more .wiz-more-list .wiz-action")].map((item) => item.dataset.wiz), ["assign-profile", "another", "open-cover", "close"]);
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-more .wiz-more-list .wiz-action")].map((item) => item.dataset.wiz), ["assign-profile", "another", "open-cover", "refine"]);
   const order = [...wiz().querySelector(".wiz-actions").children].map((item) => item.dataset.wiz || item.className);
-  assert.deepEqual(order, ["refine", "wiz-more"], "the primary, then the disclosure");
+  assert.deepEqual(order, ["close", "wiz-more"], "the primary, then the disclosure");
   const toggle = wiz().querySelector(".wiz-actions .wiz-more-toggle");
   assert.deepEqual([toggle.textContent.trim(), toggle.getAttribute("aria-expanded")], ["Other options", "false"]);
   toggle.click(); await tick();
@@ -2118,13 +2118,34 @@ test("the screen behind an open Discard dialog is not rebuilt until the dialog c
   assert.equal(code(), "S-01");
 });
 
+test("review P2: after a real save A-34's primary is «Back to the list»; fine-tuning and T319 only while it can be run", async () => {
+  const t = (key) => translations.it[key] || key;
+  const saved = (previews, target = "profile_new") => buildScreen({ t, language: "it", stage: "saved", path: "A", cover: { name: "Kitchen 2" },
+    local: { saved: { target, name: "kitchen_2" } }, previews });
+  const off = saved(false), on = saved(true);
+  assert.deepEqual(off.actions.map((action) => [action.id, action.kind, action.label]), [["close", "primary", "Torna all'elenco"],
+    ["assign-profile", "secondary", "Assegna questo profilo ad altre tapparelle"], ["another", "secondary", "Calibra un'altra tapparella"],
+    ["open-cover", "secondary", "Apri la scheda della tapparella"]]);
+  assert.equal(off.body, translations.it.wiz_T155.replace("{name}", "kitchen_2"), "no «la tapparella si muoverà» without fine-tuning");
+  assert.equal(off.stepper.phases.some((phase) => phase.key === "finetune"), false, "no fine-tuning step either");
+  assert.deepEqual(on.actions.map((action) => [action.id, action.kind]).at(-1), ["refine", "secondary"], "on: a secondary, never the primary");
+  assert.ok(on.body.endsWith(translations.it.wiz_T319));
+  // Phone (one column): the primary, and the rest under «Altre opzioni ▾» once they are more than three.
+  const { overflow } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-wizard.js");
+  assert.deepEqual([overflow(off.actions).shown.map((action) => action.id), overflow(off.actions).more.map((action) => action.id)],
+    [["close"], ["assign-profile", "another", "open-cover"]]);
+  const coverOnly = saved(false, "cover_only");
+  assert.deepEqual([overflow(coverOnly.actions).shown.map((action) => action.id), overflow(coverOnly.actions).more.length], [["close", "another", "open-cover"], 0],
+    "three at most: all in view");
+});
+
 test("L-47: a completed flow ends on «Back to the list», the primary (a secondary on S-06 beside Start over); never red", () => {
   const t = (key) => translations.it[key] || key;
   const close = (screen) => [screen.code, screen.actions.find((action) => action.id === "close")?.kind ?? (screen.links.some((link) => link.id === "close") ? "link" : null)];
   const saved = (path, preview = false) => buildScreen({ t, language: "it", stage: "saved", path, scope: path === "C" ? "times_only" : null,
     cover: { name: "Kitchen 2", followProfile: "alta" }, local: { saved: { target: path === "B" ? "follow_profile" : "cover_only", preview } } });
   assert.deepEqual(close(saved("B")), ["B-09", "primary"]);
-  assert.deepEqual(close(saved("A")), ["A-34", "secondary"], "after fine-tuning is offered");
+  assert.deepEqual(close(saved("A")), ["A-34", "primary"], "review P2: the primary, fine-tuning a secondary");
   assert.deepEqual(close(saved("C")), ["C-34", "primary"]);
   assert.deepEqual([close(saved("B", true)), close(saved("A", true)), close(saved("C", true))],
     [["B-09", "primary"], ["A-34", "primary"], ["C-34", "primary"]], "U-8: at the end of a preview it is the primary");
@@ -3260,8 +3281,8 @@ test("the preview is announced before it starts and its end never says that some
   assert.equal(real.actions.find((action) => action.id === "refine").note, undefined, "no note under the button");
   assert.equal(real.body, `${translations.it.wiz_T155.replace("{name}", "kitchen_2")}\n\n**Vuoi perfezionare la calibrazione?** Quattro letture col metro a un quarto e a tre quarti della corsa, più una verifica finale, renderanno la stima della posizione più precisa lungo tutta la corsa. Qualche minuto; la tapparella si muoverà.`,
     "T319 is the body's second paragraph");
-  assert.deepEqual(real.actions.map((action) => [action.id, action.kind]), [["refine", "primary"], ["assign-profile", "secondary"], ["another", "secondary"],
-    ["open-cover", "secondary"], ["close", "secondary"]], "L-28/L-47");
+  assert.deepEqual(real.actions.map((action) => [action.id, action.kind]), [["close", "primary"], ["assign-profile", "secondary"], ["another", "secondary"],
+    ["open-cover", "secondary"], ["refine", "secondary"]], "review P2");
   const coverOnly = buildScreen({ t, language: "it", stage: "saved", path: "A", cover: { name: "Kitchen 2" }, local: { saved: { target: "cover_only" } } });
   assert.equal(coverOnly.actions.some((action) => action.id === "assign-profile"), false, "no profile written, nothing to assign");
   assert.deepEqual(real.stepper.phases.map((phase) => [phase.key, phase.state]).slice(-2), [["summary", "done"], ["finetune", "future"]]);
