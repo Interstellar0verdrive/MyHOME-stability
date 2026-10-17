@@ -224,7 +224,8 @@ export function buildScreen(ctx) {
     return finish();
   }
   if (stage === "profile") {
-    const chosen = ctx.profiles?.find((item) => item.id === local.profileId) || ctx.profiles?.[0];
+    // Review P3: the profile chosen (preselected: the closest by travel, A-02's); without one, nothing until a choice.
+    const chosen = ctx.profiles?.find((item) => item.id === local.profileId) || null;
     // One radio row per profile: "tall_two_leaf · measured on Living room shutter 1", then who follows it by name.
     const about = (item) => fill(t("wiz_T165").split(" · ")[0], { cover: item.measuredOn || "—" });
     // Y-c: path B runs only as a preview: B-01 says so under its button, as B-02 does.

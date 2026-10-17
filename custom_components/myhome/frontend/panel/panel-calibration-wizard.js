@@ -761,10 +761,15 @@ export class CalibrationWizard {
       if (!["A", "B", "C"].includes(path) || (path === "B" && !this._previews)) return;
       local.path = path;
       local.stage = local.path === "A" ? "before" : local.path === "B" ? "profile" : "current";
-      if (local.path === "B") local.profileId = this._profiles()[0]?.id;
+      // Review P3: B-01 preselects the profile A-02 named as the closest by travel; none when no profile is close.
+      if (local.path === "B") local.profileId = screens.pathAdvice(this._cover(), this._profiles()).similar[0]?.id ?? null;
       return this._render();
     }
-    if (id === "profile") { local.profileId = this._value("profile") || local.profileId; local.stage = "before"; return this._render(); }
+    if (id === "profile") {
+      local.profileId = this._value("profile") || local.profileId;
+      if (!local.profileId) return;
+      local.stage = "before"; return this._render();
+    }
     if (id === "current") { local.stage = "case"; return this._render(); }
     if (id === "case") {
       const scope = this._value("case") || local.scope || (this._previews ? "points_only" : null);

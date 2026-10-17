@@ -8,6 +8,12 @@ import { dom, mount, reset, settle, tick, waitFor } from "./wizard-harness.mjs";
 afterEach(reset);
 after(() => dom.window.close());
 
+/** Review P3: a cover with no travel has no closest profile: B-01 preselects none, the profile is ticked by hand. */
+const tickProfile = async (wiz, value = "tall") => {
+  const radio = wiz().querySelector(`input[name="profile"][value="${value}"]`);
+  radio.checked = true; radio.dispatchEvent(new Event("change", { bubbles: true })); await tick();
+};
+
 const calibrationTraffic = (backend) => [...backend.calls, ...backend.subscriptions].filter((message) => message.type.startsWith("myhome/cover_calibration/"));
 
 test("B-01 offers the gateway's profiles with where they were measured and who follows them", async () => {
@@ -33,13 +39,37 @@ test("B-01 offers the gateway's profiles with where they were measured and who f
   assert.match(wiz().querySelector(".wiz-body").innerHTML, /<strong>the curtain travel<\/strong>/);
 });
 
+test("review P3: B-01 preselects the profile A-02 named as the closest by travel, not the first; none when none is close", async () => {
+  // Two profiles: the first in the list far from the cover's travel, the second within 5 %: A-02 names the second.
+  const overview = sampleOverview();
+  overview.profiles.unshift({ ...structuredClone(overview.profiles[0]), id: "first", name: "aaa_first", reference_travel_cm: 120, assigned_to: [] });
+  overview.covers.find((cover) => cover.entity_id === "cover.living_one").travel_cm = 195;
+  const { wiz, code, press, startFor } = await mount({ overview });
+  await startFor("cover.living_one", "B");
+  assert.equal(code(), "B-01");
+  const checked = () => [...wiz().querySelectorAll('input[name="profile"]')].filter((input) => input.checked).map((input) => input.value);
+  assert.equal(wiz().querySelector('input[name="profile"]').value, "first", "the first in the list is another one");
+  assert.deepEqual(checked(), ["tall"], "the closest by travel (198 cm for 195 cm) is the one ticked");
+  // No profile close to the cover's travel: nothing ticked, Continue waits for a choice.
+  reset();
+  const far = sampleOverview();
+  far.covers.find((cover) => cover.entity_id === "cover.living_one").travel_cm = null;
+  const none = await mount({ overview: far });
+  await none.startFor("cover.living_one", "B");
+  assert.deepEqual([...none.wiz().querySelectorAll('input[name="profile"]')].filter((input) => input.checked).length, 0);
+  assert.equal(none.wiz().querySelector('[data-wiz="profile"]').disabled, true);
+  await tickProfile(none.wiz);
+  assert.equal(none.wiz().querySelector('[data-wiz="profile"]').disabled, false);
+  void press;
+});
+
 test("path B runs as a preview from the travel to the check and the summary, without any calibration message", async () => {
   // A cover without a saved travel: B measures it first.
   const overview = sampleOverview();
   overview.covers.find((cover) => cover.entity_id === "cover.living_one").travel_cm = null;
   const { backend, wiz, code, press, type, startFor, title } = await mount({ stageMs: 40, overview });
   await startFor("cover.living_one", "B");
-  await press("profile");
+  await tickProfile(wiz); await press("profile");
   await press("begin");
   assert.equal(wiz().querySelector(".wiz-preview").textContent, translations.en.wizPreview);
   assert.equal(code(), "B-03");
@@ -169,7 +199,7 @@ test("a preview reading beyond the travel + 50 cm shows why it is refused, in th
   overview.covers.find((cover) => cover.entity_id === "cover.living_one").travel_cm = null;
   const { wiz, code, press, type, startFor } = await mount({ stageMs: 0, overview });
   await startFor("cover.living_one", "B");
-  await press("profile");
+  await tickProfile(wiz); await press("profile");
   await press("begin");
   await waitFor(() => code() === "B-04", "B-04");
   await type("196");
@@ -184,9 +214,9 @@ test("a preview reading beyond the travel + 50 cm shows why it is refused, in th
 test("Y-b: a preview's positioning is passed with «Continue», nothing to wait for", async () => {
   const overview = sampleOverview();
   overview.covers.find((cover) => cover.entity_id === "cover.living_one").travel_cm = null;
-  const { code, press, startFor } = await mount({ stageMs: 60000, overview });
+  const { code, press, startFor, wiz } = await mount({ stageMs: 60000, overview });
   await startFor("cover.living_one", "B");
-  await press("profile"); await press("begin");
+  await tickProfile(wiz); await press("profile"); await press("begin");
   assert.equal(code(), "B-03");
   await press("skip");
   assert.equal(code(), "B-04", "straight to the reading");
