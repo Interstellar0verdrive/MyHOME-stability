@@ -319,3 +319,19 @@ test("L-120: every «arrived» confirm comes on at the earliest of the stop stat
   const running = screenAt({ view: { step: "opening", phase: "opening", ...timed, values: {} }, local: { ackLift: true }, elapsed: 1 });
   assert.equal(!!running.actions.find((action) => action.id === "endpoint").disabled, false, "② on at once while the motor runs");
 });
+
+test("L-121: A-04/A-05 with a position Home Assistant does not know, or shows 0 on an open cover: the end stop at the full closing time", async () => {
+  for (const [label, entity, at, expected] of [["position 0 on an open cover", { state: "open", attributes: { current_position: 0 } }, 21.6, 21.7],
+    ["no position", { state: "open", attributes: { current_position: null } }, 21.6, 21.7], ["position 50", { state: "open", attributes: { current_position: 50 } }, 10.8, 10.85]]) {
+    reset();
+    const { backend, wiz, code, press, startFor } = await mount();
+    backend.hass.states["cover.living_one"] = entity;
+    await startFor("cover.living_one");
+    await press("begin");
+    backend.started(); backend.tick(at); backend.emit(); await tick();
+    assert.equal(code(), "A-04", `${label}: still positioning at ${at} s`);
+    assert.equal(wiz().querySelector('[data-wiz="endpoint"]').disabled, true, `${label}: off before ${expected} s`);
+    backend.tick(expected - at + 0.05); backend.emit(); await tick();
+    assert.equal(wiz().querySelector('[data-wiz="endpoint"]').disabled, false, `${label}: on at ${expected} s`);
+  }
+});

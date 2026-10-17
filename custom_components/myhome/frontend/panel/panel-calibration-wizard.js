@@ -1116,7 +1116,7 @@ export class CalibrationWizard {
 
   /**
    * L-38: the positioning before a times-only measurement: Home Assistant closes the cover (its own close), the step
-   * waits for it to be closed and still (or for its closing time with a margin), then the session starts on its
+   * waits for it to be closed and still (or for its full closing time with a margin, L-121), then the session starts on its
    * confirmation screen («Check that it is fully closed»). Returns false when the cover is already closed and still.
    */
   _home(item) {
@@ -1124,8 +1124,13 @@ export class CalibrationWizard {
     // Only a cover Home Assistant reports closed at a known 0 skips it: an unknown position (after a restart Home
     // Assistant discards a modelled cover's position) is positioned first, whatever its state says.
     if (state?.state === "closed" && state.attributes?.current_position === 0) return false;
-    const position = state?.attributes?.current_position, closing = item.cover.effective?.closing?.value;
-    const seconds = closing > 0 ? closing * (Number.isFinite(position) ? position / 100 : 1) : null;
+    // L-121 THE RULE for every Stop the panel writes by itself (today only this one: the returns and the positionings
+    // of the sessions are confirmed by the user, the previews move nothing): it is timed on the FULL run of its
+    // direction (the time in use) plus its margin, never on Home Assistant's position, unless the stop status comes
+    // first. A Stop after the end stop is harmless; an early one leaves the cover short of it and blocks the process.
+    // (A position Home Assistant cannot know, after a restart, has been published as 0 on an open cover.)
+    const closing = item.cover.effective?.closing?.value;
+    const seconds = closing > 0 ? closing : null;
     this._local.homing = { entity, started: Date.now(), seconds, moved: state?.state !== "closed" };
     Promise.resolve(hass.callService?.("cover", "close_cover", { entity_id: entity })).catch(() => {});
     clearInterval(this._homeTimer);
@@ -1149,7 +1154,7 @@ export class CalibrationWizard {
     // the estimate keeps a margin (`homeStopAt`, L-120c: max(4 s, 25 %)).
     // N-3: no closing time to wait for (none known): two minutes, then the session starts on «check that it is fully
     // closed», where the user confirms it, rather than a positioning that never ends for a cover that never moves.
-    const estimated = homing.seconds != null && elapsed >= screens.homeStopAt(homing.seconds);
+    const estimated = homing.seconds > 0 && elapsed >= screens.homeStopAt(homing.seconds);
     if (estimated && state && !still && !homing.stopSent) {
       homing.stopSent = true;
       Promise.resolve(this._context.hass.callService?.("cover", "stop_cover", { entity_id: homing.entity })).catch(() => {});
@@ -1309,9 +1314,11 @@ export class CalibrationWizard {
       && ["starting_close", "starting_open", "closing", "opening"].includes(view.phase);
     if (!run) { local.run = null; return; }
     if (local.run?.step === view.step) return;
-    const position = this._context.hass.states?.[this._item()?.cover.entity_id]?.attributes?.current_position;
+    // L-121: the position counts only when Home Assistant knows it and it agrees with the state; otherwise (unknown,
+    // or 0 on an open cover, 100 on a closed one) the run lasts its full time.
+    const position = knownPosition(this._context.hass.states?.[this._item()?.cover.entity_id]);
     // Who owned the run when it started, and on which subscription: an automatic end stop needs both unchanged.
-    local.run = { step: view.step, position: Number.isFinite(position) ? position : null, attachment: view.attachment ?? null,
+    local.run = { step: view.step, position, attachment: view.attachment ?? null,
       owned: !!view.owner && !view.read_only, sent: false };
   }
 
@@ -1610,6 +1617,16 @@ function barParts(screen) {
   const barActions = screen.actions.filter((action) => !STOP_SLOT.includes(action.id));
   return { readOnlyKey, slotAction, barActions,
     signature: JSON.stringify([barActions.map((action) => [action.id, action.label, action.kind, action.note]), !!slotAction, readOnlyKey]) };
+}
+/**
+ * L-121: the cover's position from Home Assistant, only when it is a number from 0 to 100 that agrees with the state;
+ * null otherwise (unknown after a restart, or 0 on an open cover and 100 on a closed one): never taken as 0.
+ */
+export function knownPosition(state) {
+  const position = state?.attributes?.current_position;
+  if (typeof position !== "number" || !Number.isFinite(position) || position < 0 || position > 100) return null;
+  if ((position === 0 && state.state === "open") || (position === 100 && state.state === "closed")) return null;
+  return position;
 }
 /** L-119b: the ids drawn in the bar's one Stop slot. */
 const STOP_SLOT = ["stop", "stopped"];

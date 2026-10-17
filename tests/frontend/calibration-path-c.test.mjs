@@ -352,6 +352,44 @@ test("L-120/L-120c: the close before times only is over at its estimated closing
   assert.deepEqual(wiz().querySelector('[data-wiz="run:open"]').disabled, false, "nothing moves before the user's ①");
 });
 
+test("L-121: the automatic Stop before times only is timed on the full closing time, whatever position Home Assistant shows", async () => {
+  // The live failure: after a restart an open cover at half height, its position published as 0 (or unknown).
+  for (const [label, attributes, state] of [["position 0 on an open cover", { current_position: 0 }, "open"], ["no position", { current_position: null }, "open"],
+    ["no attribute", {}, "open"], ["position 50", { current_position: 50 }, "open"]]) {
+    reset();
+    const context = await mount();
+    const { backend, wiz, code, press, panel } = context;
+    await toCase(context, "times_only");
+    backend.hass.states["cover.kitchen_two"] = { state, attributes };
+    await press("begin");
+    assert.equal(code(), "C-04", label);
+    assert.deepEqual(backend.hass.services.at(-1), { domain: "cover", service: "close_cover", data: { entity_id: "cover.kitchen_two" } }, `${label}: the close`);
+    const wizard = panel._calibrationTab._wizard, homing = wizard._local.homing;
+    assert.equal(homing.seconds, 12.1, `${label}: the full closing time in use, no share of the travel`);
+    const stops = () => backend.hass.services.filter((call) => call.service === "stop_cover").length;
+    // Home Assistant shows it closing (a MyHOMEServer1 reports the stop only at the actuator's timer).
+    backend.hass.states["cover.kitchen_two"] = { state: "closing", attributes: { current_position: 0 } };
+    wizard.updateHass(backend.hass); await tick(4);
+    assert.equal(stops(), 0, `${label}: no Stop at once`);
+    assert.match(wiz().querySelector(".wiz-wait-remaining").textContent, /17 s/, `${label}: the bar counts the full run and its margin (16.1 s)`);
+    homing.started = Date.now() - 16000;
+    wizard.updateHass(backend.hass); await tick(4);
+    assert.equal(stops(), 0, `${label}: none before 12.1 s + 4 s`);
+    homing.started = Date.now() - 16200;
+    wizard.updateHass(backend.hass); await tick(4);
+    assert.equal(stops(), 1, `${label}: the Stop after the full run and its margin`);
+  }
+});
+
+test("L-121: Home Assistant's position counts for a positioning only when it is known and agrees with the state", async () => {
+  const { knownPosition } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-wizard.js");
+  assert.deepEqual([{ state: "open", attributes: { current_position: 0 } }, { state: "closed", attributes: { current_position: 100 } },
+    { state: "open", attributes: { current_position: null } }, { state: "open", attributes: {} }, { state: "open", attributes: { current_position: "50" } }, undefined]
+    .map(knownPosition), [null, null, null, null, null, null], "never 0 for an unknown or incoherent position");
+  assert.deepEqual([{ state: "open", attributes: { current_position: 50 } }, { state: "closed", attributes: { current_position: 0 } }, { state: "open", attributes: { current_position: 100 } }]
+    .map(knownPosition), [50, 0, 100]);
+});
+
 test("D-20: in C-01 a value not known is «—» without its unit", async () => {
   const { buildScreen } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-screens.js");
   const { translations } = await import("../../custom_components/myhome/frontend/panel/panel-translations.js");
