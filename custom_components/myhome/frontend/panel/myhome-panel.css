@@ -1353,7 +1353,10 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-radio small { display: block; margin-top: 1px; }
 .wiz-radio small + small { margin-top: 4px; }
 .wiz-radio-explain { display: block; margin-top: 1px; }
-.wiz-radio.is-disabled { cursor: not-allowed; opacity: .6; }
+/* L-115: a disabled option is dimmed, but its yellow note (why it cannot be chosen) stays at full strength. */
+.wiz-radio.is-disabled { cursor: not-allowed; }
+.wiz-radio.is-disabled > input, .wiz-radio.is-disabled .wiz-radio-text > :not(.wiz-radio-notice, .wiz-radio-warning) { opacity: .6; }
+.wiz-radio-notice { display: block; margin-block: 6px 2px; }
 /* D-29: on «Nessun profilo» of the cover a profile was measured on, only the choice is off: its note, which says why,
    stays readable in the secondary colour. */
 .cal-assign-none.is-disabled { opacity: 1; }

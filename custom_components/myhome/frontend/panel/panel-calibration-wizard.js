@@ -628,7 +628,9 @@ export class CalibrationWizard {
     };
     return `<fieldset class="wiz-choice wiz-radios"><legend${choice.legendHidden ? ' class="visually-hidden"' : ""}>${esc(choice.label)}</legend>${choice.help ? this._helpMarkup(choice.help) : ""}${choice.options.map((option) =>
       `<label class="wiz-radio${option.disabled ? " is-disabled" : ""}"><input type="radio" name="${esc(choice.name)}" value="${esc(option.value)}" ${option.value === choice.value ? "checked" : ""} ${option.disabled ? "disabled" : ""}><span class="wiz-radio-text"><span class="wiz-radio-label">${parts(option)[0]}${option.badge
-        ? ` <span class="badge wiz-recommended">${esc(option.badge)}</span>` : ""}</span>${parts(option)[1]}${[].concat(option.note || []).map((line) => `<small class="muted">${text.units(esc(line))}</small>`).join("")}${option.warning
+        ? ` <span class="badge wiz-recommended">${esc(option.badge)}</span>` : ""}</span>${option.notice
+        // L-115: why an option cannot be chosen yet, a yellow note right under its title, before what it does.
+        ? `<span class="cal-note is-warning wiz-radio-notice">${text.units(esc(option.notice))}</span>` : ""}${parts(option)[1]}${[].concat(option.note || []).map((line) => `<small class="muted">${text.units(esc(line))}</small>`).join("")}${option.warning
         ? `<span class="cal-note is-warning wiz-radio-warning">${text.units(esc(option.warning))}</span>` : ""}</span></label>`).join("")}</fieldset>`;
   }
 
@@ -655,7 +657,7 @@ export class CalibrationWizard {
       <label class="wiz-switch"><input type="checkbox" role="switch" name="save_profile" ${block.on ? "checked" : ""}><span>${esc(block.switchLabel)}</span></label>
       <p class="muted">${esc(block.explanation)}</p>
       ${block.choice ? `<fieldset class="wiz-radios">${block.choice.options.map((option) => `<label class="wiz-radio${option.disabled ? " is-disabled" : ""}"><input type="radio" name="save_choice" value="${esc(option.value)}" ${option.value === block.choice.value ? "checked" : ""} ${option.disabled ? "disabled" : ""}>
-        <span>${esc(option.label)}${option.warning ? `<span class="cal-note is-warning wiz-radio-warning wiz-option-note">${esc(option.warning)}</span>` : ""}${option.description ? `<small class="muted">${esc(option.description)}</small>` : ""}</span></label>`).join("")}</fieldset>` : ""}
+        <span class="wiz-radio-text"><span class="wiz-radio-label">${esc(option.label)}</span>${option.warning ? `<span class="cal-note is-warning wiz-radio-notice wiz-option-note">${esc(option.warning)}</span>` : ""}${option.description ? `<small class="muted">${esc(option.description)}</small>` : ""}</span></label>`).join("")}</fieldset>` : ""}
       ${block.name ? `<label>${esc(block.name.label)}<input class="wiz-name-input" name="profile_name" maxlength="64" autocomplete="off" value="${esc(block.name.value)}" aria-describedby="wiz-name-error wiz-name-hint"></label>
         <p id="wiz-name-error" class="wiz-name-error" role="alert" hidden></p>
         <p id="wiz-name-hint" class="muted">${esc(block.name.hint)}</p><p class="wiz-name-line">${esc(block.name.line)}</p>` : ""}</div>`;
