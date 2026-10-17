@@ -317,6 +317,36 @@ test("L-38: times only first closes an open cover, as path A does, then starts o
   assert.equal(third.backend.hass.services.at(-1).service, "close_cover");
 });
 
+test("L-120: the close before times only is over at its estimated closing time, not at a stop status that comes at the actuator's timer", async () => {
+  const context = await mount();
+  const { backend, wiz, code, press, panel } = context;
+  await toCase(context, "times_only");
+  backend.hass.states["cover.kitchen_two"] = { state: "open", attributes: { current_position: 100 } };
+  await press("begin");
+  assert.equal(code(), "C-04");
+  const wizard = panel._calibrationTab._wizard, homing = wizard._local.homing;
+  assert.equal(homing.seconds, 12.1, "its closing time in use, from fully open");
+  const started = () => backend.subscriptions.some((message) => message.type === "myhome/cover_calibration/start");
+  const stops = () => backend.hass.services.filter((call) => call.service === "stop_cover").length;
+  // A MyHOMEServer1: Home Assistant keeps showing it closing until the actuator's timer (about 60 s).
+  backend.hass.states["cover.kitchen_two"] = { state: "closing", attributes: { current_position: 20 } };
+  homing.started = Date.now() - 11900;
+  wizard.updateHass(backend.hass); await tick(4);
+  assert.deepEqual([started(), stops(), code()], [false, 0, "C-04"], "before its closing time: still closing");
+  assert.match(wiz().querySelector(".wiz-wait-remaining").textContent, /1 s/);
+  // Its closing time is over (no margin): the Stop is written, as path A's confirmed end stop…
+  homing.started = Date.now() - 12150;
+  wizard.updateHass(backend.hass); await tick(4);
+  assert.deepEqual([stops(), started()], [1, false], "the Stop, once; no session on a cover Home Assistant still sees moving");
+  assert.equal(backend.hass.services.at(-1).data.entity_id, "cover.kitchen_two");
+  // …and once Home Assistant shows it still the session starts on «check that it is fully closed», long before 60 s.
+  backend.hass.states["cover.kitchen_two"] = { state: "closed", attributes: { current_position: 0 } };
+  homing.moved = false;
+  wizard.updateHass(backend.hass); await tick(6);
+  assert.deepEqual([started(), stops(), code()], [true, 1, "C-11"]);
+  assert.deepEqual(wiz().querySelector('[data-wiz="run:open"]').disabled, false, "nothing moves before the user's ①");
+});
+
 test("D-20: in C-01 a value not known is «—» without its unit", async () => {
   const { buildScreen } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-screens.js");
   const { translations } = await import("../../custom_components/myhome/frontend/panel/panel-translations.js");

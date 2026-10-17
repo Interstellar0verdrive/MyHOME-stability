@@ -307,7 +307,8 @@ export function buildScreen(ctx) {
   if (local.homing && !view) {
     const seconds = local.homing.seconds, done = Math.min(seconds ?? 0, Math.max(0, ((ctx.now ?? Date.now()) - local.homing.started) / 1000));
     Object.assign(screen, { code: "C-04", phase: "prep", title: t("wiz_T027"),
-      wait: { text: tx("wiz_T029", values), stages: [], progress: seconds > 0 ? { value: done / seconds, remaining: Math.max(1, Math.ceil(seconds - done - 0.001)) } : { value: null, remaining: null } },
+      // L-120: the bar ends at the estimated closing time, when the close counts as done.
+      wait: { text: tx("wiz_T029", values), stages: [], progress: seconds > 0 ? { value: done / seconds, remaining: done >= seconds ? null : Math.max(1, Math.ceil(seconds - done - 0.001)) } : { value: null, remaining: null } },
       actions: [{ id: "stop", label: t("wiz_T028"), kind: "stop" }] });
     return finish();
   }
