@@ -3327,6 +3327,57 @@ test("A-02 advises a path from the cover and the gateway's profiles, and presele
     'Follows the profile "tall_two_leaf": the values are the profile\'s, without travel scaling, since the travel has not been measured.', "no measured travel (G2-1)");
 });
 
+test("review P1: with the previews off, A-02 never advises nor preselects a preview path; C-02 the same; on, as before", async () => {
+  const t = (key) => translations.en[key] || key;
+  const tall = { id: "tall", name: "tall_two_leaf", slat: 4.4, referenceTravel: 198 }, close = { id: "close", name: "near", slat: 0, referenceTravel: 109 };
+  const cover = { name: "Kitchen 2", status: "to_measure", travel_cm: 110 };
+  const option = (screen, value) => screen.choice.options.find((item) => item.value === value);
+  // Off: Ⓑ visible, disabled, «Available in a future version» under it, the close profile still said; Ⓐ advised and chosen.
+  const off = buildScreen({ t, stage: "path", profiles: [tall, close], cover, previews: false });
+  assert.deepEqual([option(off, "B").disabled, option(off, "B").badge, option(off, "A").badge, off.choice.value], [true, "", "Recommended", "A"]);
+  assert.deepEqual(option(off, "B").note.slice(-2), ['Travel similar to the profile "near" (110 cm vs 109 cm)', "Available in a future version"]);
+  assert.match(off.body, /"First cover of its type" is the recommended option because the cover has never been measured: checking a similar profile will be available in a future version\. If in doubt, choose this option\.$/);
+  // On: as before, Ⓑ advised and preselected.
+  const on = buildScreen({ t, stage: "path", profiles: [tall, close], cover, previews: true });
+  assert.deepEqual([option(on, "B").disabled, option(on, "B").badge, on.choice.value], [false, "Recommended", "B"]);
+  // A-01 and A-02 show the step without a total, which the path decides.
+  assert.equal(off.stepper.line, "Introduction · step 1");
+  assert.equal(buildScreen({ t, stage: "choose", covers: [], cover: null, previews: false }).stepper.line, "Introduction · step 1");
+  assert.match(buildScreen({ t, stage: "before", path: "A", cover }).stepper.line, / of \d+$/, "with the path fixed, the total");
+  // C-02 off: the tape readings only disabled with the same caption, no badge, nothing chosen, Continue waits.
+  const caseOff = buildScreen({ t, stage: "case", path: "C", cover: { ...cover, status: "calibrated" }, previews: false });
+  assert.deepEqual([option(caseOff, "points_only").disabled, option(caseOff, "points_only").badge ?? "", caseOff.choice.value, caseOff.actions[0].disabled],
+    [true, "", "", true]);
+  assert.deepEqual(option(caseOff, "points_only").note, ["Available in a future version"]);
+  assert.equal(caseOff.body, translations.en.wiz_T190, "no sentence advising the tape readings");
+  const caseOn = buildScreen({ t, stage: "case", path: "C", cover: { ...cover, status: "calibrated" }, previews: true });
+  assert.deepEqual([option(caseOn, "points_only").disabled ?? false, caseOn.choice.value], [false, "points_only"]);
+  // Mounted with the previews off (the panel's default): Ⓑ cannot be chosen, even pressed by other means.
+  const { tab, wiz, press, pickCover, code, panel } = await mount({ previews: false });
+  tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
+  await pickCover();
+  await press("choose");
+  const b = wiz().querySelector('input[name="path"][value="B"]');
+  assert.equal(b.disabled, true);
+  assert.match(b.closest(".wiz-radio").textContent, /Available in a future version/);
+  await panel._calibrationTab._wizard._act("path:B"); await tick();
+  assert.equal(code(), "A-02", "path B does not start");
+});
+
+test("review P1: the flag is off by default and switched on for development by a query parameter or a local storage key", async () => {
+  const { PREVIEW_PATHS, previewPathsEnabled } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-screens.js");
+  assert.equal(PREVIEW_PATHS, false);
+  const location = globalThis.location, storage = globalThis.localStorage;
+  try {
+    globalThis.location = { search: "" }; globalThis.localStorage = { getItem: () => null };
+    assert.equal(previewPathsEnabled(), false);
+    globalThis.location = { search: "?entry_id=one&calibration_preview=1" };
+    assert.equal(previewPathsEnabled(), true);
+    globalThis.location = { search: "" }; globalThis.localStorage = { getItem: (key) => (key === "myhome-calibration-preview" ? "1" : null) };
+    assert.equal(previewPathsEnabled(), true);
+  } finally { globalThis.location = location; globalThis.localStorage = storage; }
+});
+
 test("A-21d defaults to updating the profile on the cover it was measured on, and A-34 says when a profile is left alone", () => {
   const t = (key) => translations.en[key] || key;
   const view = { mode: "geometry", phase: "review", values: { opening_time: 22, closing_time: 21 }, geometry: {}, travel_cm: 110, owner: true, sequence: 2, check: { gap_cm: 1, passed: true, check_seconds: 10.5 } };

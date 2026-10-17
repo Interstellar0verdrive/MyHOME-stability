@@ -95,6 +95,20 @@ function pathContext(t, cover, language) {
   return t("wiz_T418");
 }
 
+/**
+ * The paths that only run as previews until their backend lands: path B (a profile verified with the tape), path C's
+ * «tape readings only» and the fine-tuning offered after a base calibration. Off: they stay visible on A-02 and C-02,
+ * disabled with «Disponibile in una prossima versione», never advised nor preselected, and A-34 offers no fine-tuning.
+ * For development they can be switched on in one browser, until it is reloaded without it, with the query parameter
+ * `calibration_preview=1` on the panel's address or the local storage key `myhome-calibration-preview` set to "1".
+ */
+export const PREVIEW_PATHS = false;
+export function previewPathsEnabled() {
+  try { if (new URLSearchParams(globalThis.location?.search || "").get("calibration_preview") === "1") return true; } catch { /* no address */ }
+  try { if (globalThis.localStorage?.getItem("myhome-calibration-preview") === "1") return true; } catch { /* storage off */ }
+  return PREVIEW_PATHS;
+}
+
 /** Profiles whose reference travel is within this share of the cover's saved travel count as "the same size". */
 export const SIMILAR_TRAVEL = 0.05;
 
@@ -103,20 +117,22 @@ export const SIMILAR_TRAVEL = 0.05;
  * cover's saved travel (the closest first), otherwise Ⓐ, with a badge only when no profile exists (with profiles the
  * user judges the similarity from the list under Ⓑ). The "if unsure" line always names the advised path.
  */
-export function pathAdvice(cover, profiles = []) {
+export function pathAdvice(cover, profiles = [], previews = true) {
   const measured = !!cover?.status && cover.status !== "to_measure";
   if (measured) return { badge: "C", hint: "C", similar: [] };
   const travel = cover?.travel_cm;
   const similar = travel > 0 ? profiles.filter((profile) => profile.referenceTravel > 0 && Math.abs(profile.referenceTravel - travel) <= travel * SIMILAR_TRAVEL)
     .sort((a, b) => Math.abs(a.referenceTravel - travel) - Math.abs(b.referenceTravel - travel)) : [];
-  if (similar.length) return { badge: "B", hint: "B", similar };
+  // Review P1: without the previews Ⓑ is never advised; the similar profiles stay as information under it.
+  if (similar.length) return previews ? { badge: "B", hint: "B", similar } : { badge: "A", hint: "A", similar };
   // G4-2 (replaces R4-9b): there is always exactly one advised option, badge and preselection included.
   return { badge: "A", hint: "A", similar: [] };
 }
 
 /** The wizard's whole state as one screen. */
 export function buildScreen(ctx) {
-  const { t, language = "en", path = "A", scope = null, stage, local = {}, cover, view, status = {}, preview = false } = ctx;
+  // `previews` (review P1): the wizard passes `previewPathsEnabled()`; a screen built alone shows them.
+  const { t, language = "en", path = "A", scope = null, stage, local = {}, cover, view, status = {}, preview = false, previews = true } = ctx;
   const n = (value, digits = 1) => number(value, language, digits);
   n.fixed = (value, digits = 1) => fixed(value, language, digits);
   const tx = (key, values) => fill(t(key), values);
@@ -125,7 +141,7 @@ export function buildScreen(ctx) {
   // D-21: before the case is confirmed (C-01, C-02) the stepper and its caption follow the case chosen so far, the
   // preselected «tape readings only» at first.
   // D-21 (Y): on C-01 the case is not chosen yet: the stepper shows only the introduction under «Perfezionamento».
-  const stepScope = scope ?? (path === "C" && stage === "case" ? "points_only" : null);
+  const stepScope = scope ?? (path === "C" && stage === "case" && previews ? "points_only" : null);
   const screen = {
     code: "", header: { title: name || t("wiz_T001"), subtitle: cover?.address || "", units: cover?.units || null }, discard: true, preview,
     title: "", subline: "", body: "", help: null, note: null, results: null, stopwatch: null, wait: null, illustration: null, choice: null, picker: null, field: null, box: null, table: null,
@@ -161,7 +177,7 @@ export function buildScreen(ctx) {
   if (stage === "path") {
     // A radio list (A-02 Section A) with Continue in the actions; the advised path carries a badge.
     const list = ctx.profiles || [], profiles = list.length, measured = !!cover?.status && cover.status !== "to_measure";
-    const advice = pathAdvice(cover, list);
+    const advice = pathAdvice(cover, list, previews);
     // G2-4: a path is named by its option's own label, never by a letter.
     const label = { A: t("wiz_T017"), B: t("wiz_T018"), C: t("wiz_T019") };
     // Under Ⓑ: how many profiles exist, then why it is advised (similar travel) or, on a never measured cover, each
@@ -174,7 +190,8 @@ export function buildScreen(ctx) {
         : measured ? [] : list.map(describe))];
     const options = [
       { value: "A", label: label.A, note: [t("wiz_T452")] },
-      { value: "B", label: label.B, disabled: !profiles, note: bNote },
+      // Review P1: a preview stays visible, disabled, saying when it comes.
+      { value: "B", label: label.B, disabled: !profiles || !previews, note: previews ? bNote : [...bNote, t("wiz_T584")] },
       // Fine-tuning corrects values a cover already has: never on a cover never measured.
       { value: "C", label: label.C, note: [t("wiz_T454"), ...(measured ? [] : [t("wiz_T423")])], ...(measured ? {} : { disabled: true }) },
     ].map((option) => ({ ...option, badge: option.value === advice.badge && !option.disabled ? t("wiz_T400") : "" }));
@@ -192,6 +209,8 @@ export function buildScreen(ctx) {
     const closest = advice.similar[0];
     const reason = measured ? fill(t(cover?.profile?.name ? "wiz_T464" : "wiz_T463"), { option: label.C, profile: cover?.profile?.name ?? "" })
       : advice.badge === "B" && closest ? fill(t("wiz_T467"), { option: label.B, travel: n(cover.travel_cm, 0), reference: n(closest.referenceTravel, 0), profile: closest.name })
+        // Review P1: Ⓑ off, a close profile still said (under Ⓑ, as information); the advice is Ⓐ.
+        : closest ? fill(t("wiz_T586"), { option: label.A })
         : !profiles ? fill(t("wiz_T466"), { option: label.A })
           : !(cover?.travel_cm > 0) ? fill(t("wiz_T465"), { option: label.A }) : fill(t("wiz_T476"), { option: label.A, travel: n(cover.travel_cm, 0) });
     // G4-2: the reason ends with «If in doubt, choose this option.»; no separate «If unsure» line.
@@ -235,10 +254,13 @@ export function buildScreen(ctx) {
     // L-34: the tape readings only (the fine-tuning offered at the end of a base calibration) are recommended and
     // preselected, with a line saying why. No cover is fine-tuned yet (fine-tuning is a preview until its backend lot),
     // so the line always applies.
-    Object.assign(screen, { code: "C-02", phase: "intro", title: t("wiz_T189"), body: `${t("wiz_T190")}\n\n${t("wiz_T548")}`,
-      choice: { name: "case", kind: "radio", label: t("wiz_T191"), value: local.scope || "points_only",
-        options: [{ value: "points_only", label: t("wiz_T193"), badge: t("wiz_T400") }, { value: "times_only", label: t("wiz_T194") }, { value: "times_and_rolls", label: t("wiz_T196") }] },
-      actions: [{ id: "case", label: t("wiz_T006"), kind: "primary" }] });
+    // Review P1: without the previews the tape readings only stay visible, disabled, and nothing is advised or chosen.
+    const value = previews ? local.scope || "points_only" : local.scope && local.scope !== "points_only" ? local.scope : "";
+    Object.assign(screen, { code: "C-02", phase: "intro", title: t("wiz_T189"), body: previews ? `${t("wiz_T190")}\n\n${t("wiz_T548")}` : t("wiz_T190"),
+      choice: { name: "case", kind: "radio", label: t("wiz_T191"), value,
+        options: [previews ? { value: "points_only", label: t("wiz_T193"), badge: t("wiz_T400") } : { value: "points_only", label: t("wiz_T193"), disabled: true, note: [t("wiz_T584")] },
+          { value: "times_only", label: t("wiz_T194") }, { value: "times_and_rolls", label: t("wiz_T196") }] },
+      actions: [{ id: "case", label: t("wiz_T006"), kind: "primary", disabled: !value }] });
     return finish();
   }
   if (stage === "before") {
@@ -1143,7 +1165,7 @@ function finalize(screen, ctx) {
   // D-21: fine-tuning before its case is chosen (A-02 with it ticked, C-01): only the introduction, no count.
   // L-11: on C-01 and C-02 the steps of the case preselected (the tape readings only) are shown at once, and follow the
   // choice; only A-02 with fine-tuning ticked, before any case, shows the introduction alone (D-21).
-  const presetCase = (screen.stepPath || path) === "C" && ["current", "case"].includes(ctx.stage) ? (screen.stepScope ?? scope ?? "points_only") : null;
+  const presetCase = (screen.stepPath || path) === "C" && ["current", "case"].includes(ctx.stage) ? (screen.stepScope ?? scope ?? (ctx.previews === false ? null : "points_only")) : null;
   const unknownCase = (screen.stepPath || path) === "C" && !(screen.stepScope ?? scope) && !presetCase && !refining && ["path", "current"].includes(ctx.stage);
   const phases = unknownCase ? ["intro"] : phasesFor(screen.stepPath || path, presetCase ?? screen.stepScope ?? scope, refining);
   let current = phases.indexOf(screen.phase);
@@ -1180,7 +1202,10 @@ function finalize(screen, ctx) {
   const finetuneLabel = refining ? t("wiz_T114") : t("wiz_T013");
   screen.stepper = {
     interrupted: !!screen.interrupted,
-    line: previewEnd ? t("wiz_T517") : screen.phase === "done" ? t("wiz_T153") : unknownCase ? t(PHASES.intro) : fill(t(screen.interrupted ? "wiz_T461" : "wizPhaseLine"), { phase: screen.phase === "finetune" ? t("wiz_T114") : t(PHASES[screen.phase] || "wiz_T007"),
+    // Review: before the path is fixed (A-01, A-02) the step without a total, which the path will decide.
+    line: previewEnd ? t("wiz_T517") : screen.phase === "done" ? t("wiz_T153") : unknownCase ? t(PHASES.intro)
+      : ["choose", "path"].includes(ctx.stage) ? fill(t("wiz_T585"), { phase: t(PHASES[screen.phase] || "wiz_T007"), n: current + 1 })
+      : fill(t(screen.interrupted ? "wiz_T461" : "wizPhaseLine"), { phase: screen.phase === "finetune" ? t("wiz_T114") : t(PHASES[screen.phase] || "wiz_T007"),
       n: current + 1, total: phases.length }),
     phases: phases.map((key, index) => ({ key, label: key === "finetune" ? finetuneLabel : t(PHASES[key]),
       // A-34 after a real save: fine-tuning (optional) is still ahead, so it is not ticked.

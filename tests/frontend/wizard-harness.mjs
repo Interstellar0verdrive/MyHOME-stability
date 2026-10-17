@@ -33,7 +33,7 @@ export async function mount(options = {}) {
   const root = panel.shadowRoot;
   root.querySelector('[data-action="cover-view"][data-id="calibration"]').click();
   await tick(8);
-  panel._calibrationTab.useWizard(new CalibrationWizard({ stageMs: options.stageMs ?? 0, guardMs: options.guardMs ?? 0 }));
+  panel._calibrationTab.useWizard(new CalibrationWizard({ stageMs: options.stageMs ?? 0, guardMs: options.guardMs ?? 0, previews: options.previews ?? true }));
   const tab = () => root.getElementById("cover-calibration-tab");
   const wiz = () => tab().querySelector(".wiz");
   const code = () => wiz()?.dataset.code;

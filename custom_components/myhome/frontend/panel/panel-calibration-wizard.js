@@ -59,7 +59,10 @@ export const TIMER_STOP_SECONDS = screens.TIMER_STOP_SECONDS;
 const TRANSIT = ["starting_open", "starting_close", "opening", "closing", "geometry_wait_stop"];
 
 export class CalibrationWizard {
-  constructor({ stageMs, guardMs = CONFIRM_GUARD_MS } = {}) { this._stageMs = stageMs; this._guardMs = guardMs; this._generation = 0; }
+  /** `previews` (review P1): the preview paths, off unless switched on for development (`previewPathsEnabled`). */
+  constructor({ stageMs, guardMs = CONFIRM_GUARD_MS, previews = screens.previewPathsEnabled() } = {}) {
+    this._stageMs = stageMs; this._guardMs = guardMs; this._previews = !!previews; this._generation = 0;
+  }
 
   /** L-4: its own sessions, geometry and guided («solo tempi», marked `origin: "wizard"`); the rest is the maintainer's. */
   handles(session) { return !!session && !session.batch && (session.mode === "geometry" || (session.mode === "guided" && session.origin === "wizard" && !session.direction)); }
@@ -216,7 +219,7 @@ export class CalibrationWizard {
       covers: this._covers().map((item) => ({ key: key(item), label: this._coverLabel(item), status: item.status, detail: item.detail, last: item.last })),
       profiles: this._profiles(), followed, followerNames: cover ? names(cover.followers, language) : "",
       view: gateway?.view || null, status: gateway?.status || {}, elapsed: gateway?.elapsed() ?? null, runPosition: local.run?.position ?? null, now: Date.now(),
-      preview: !!gateway?.preview, supports: (target) => gateway ? gateway.supports(target) : false });
+      preview: !!gateway?.preview, previews: this._previews, supports: (target) => gateway ? gateway.supports(target) : false });
     // M3-3: the step reached by a live session, so that its end shows where it stopped.
     if (local.stage === "session" && gateway?.view && !screen.interrupted && !/^(S-|loading|paused|unknown)/.test(screen.code)) local.reachedPhase = screen.phase;
     return screen;
@@ -755,7 +758,7 @@ export class CalibrationWizard {
     if (id === "choose") { if (!local.coverPicked) return; local.pathChoice = null; local.stage = "path"; return this._render(); }
     if (id === "path" || id.startsWith("path:")) {
       const path = id === "path" ? this._value("path") || local.pathChoice : id.slice(5);
-      if (!["A", "B", "C"].includes(path)) return;
+      if (!["A", "B", "C"].includes(path) || (path === "B" && !this._previews)) return;
       local.path = path;
       local.stage = local.path === "A" ? "before" : local.path === "B" ? "profile" : "current";
       if (local.path === "B") local.profileId = this._profiles()[0]?.id;
@@ -763,7 +766,11 @@ export class CalibrationWizard {
     }
     if (id === "profile") { local.profileId = this._value("profile") || local.profileId; local.stage = "before"; return this._render(); }
     if (id === "current") { local.stage = "case"; return this._render(); }
-    if (id === "case") { local.scope = this._value("case") || local.scope || "points_only"; local.stage = "before"; return this._render(); }
+    if (id === "case") {
+      const scope = this._value("case") || local.scope || (this._previews ? "points_only" : null);
+      if (!scope || (scope === "points_only" && !this._previews)) return;
+      local.scope = scope; local.stage = "before"; return this._render();
+    }
     if (id === "begin") { if (local.stage === "before") local.slats = (this._value("slats") ?? (local.slats === false ? "no" : "yes")) !== "no"; return this._begin(); }
     if (id === "ack:ascent" && local.travelTyped != null) {
       const travel = local.travelTyped;
@@ -824,7 +831,7 @@ export class CalibrationWizard {
     if (id === "take") { local.arm = null; return gateway?.claim(); }
     if (id === "reconnect") { local.arm = null; return gateway?.reconnect(); }
     if (id === "save") return this._save();
-    if (id === "refine") return this._fineTune();
+    if (id === "refine") return this._previews ? this._fineTune() : undefined;
     if (id === "assign-profile") {
       // The profile just written: by its id when it was updated, by its name when it was created (the id comes with the
       // overview Home Assistant publishes after the save).
