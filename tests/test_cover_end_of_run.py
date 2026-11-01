@@ -27,9 +27,6 @@ CLOSING_S, OPENING_S = 17, 20
 RELAYED_STOP_S, MOTOR_START_S = 0.08, 0.57  # after the write, from the bus traces
 TIMER_S = 60.0  # the actuator's relay timer: its only stop status for a full run
 
-# Reproduction of the reported behaviour; the fix in the next commit removes these marks.
-REPRODUCES = pytest.mark.xfail(strict=True, reason="end of run not settled at the model end (reproduction)")
-
 
 async def settle(rounds=12):
     for _ in range(rounds):
@@ -141,7 +138,6 @@ def commands(m):
 
 # (a) direct open / close.
 
-@REPRODUCES
 @pytest.mark.parametrize("known", [True, False], ids=["from_known", "from_unknown"])
 async def test_direct_close_settles_at_the_model_end_not_at_the_timer(modelled, known):
     m = modelled
@@ -158,7 +154,6 @@ async def test_direct_close_settles_at_the_model_end_not_at_the_timer(modelled, 
     assert m.cover._stop_task is None
 
 
-@REPRODUCES
 async def test_direct_open_settles_at_the_model_end(modelled):
     m = modelled
     at_end(m, 0)
@@ -169,7 +164,6 @@ async def test_direct_open_settles_at_the_model_end(modelled):
     assert commands(m) == [OPEN]
 
 
-@REPRODUCES
 async def test_direct_close_from_mid_travel_settles_at_the_remaining_model_time(modelled):
     m = modelled
     at_end(m, 100)
@@ -186,7 +180,6 @@ async def test_direct_close_from_mid_travel_settles_at_the_remaining_model_time(
 
 # (b) set_cover_position 0 / 100.
 
-@REPRODUCES
 @pytest.mark.parametrize("known", [True, False], ids=["from_known", "from_unknown"])
 async def test_position_zero_is_a_full_run_that_settles_at_the_model_end(modelled, known):
     m = modelled
@@ -199,7 +192,6 @@ async def test_position_zero_is_a_full_run_that_settles_at_the_model_end(modelle
     assert commands(m) == [CLOSE]
 
 
-@REPRODUCES
 @pytest.mark.parametrize("known", [True, False], ids=["from_known", "from_unknown"])
 async def test_position_hundred_is_a_full_run_that_settles_at_the_model_end(modelled, known):
     m = modelled
@@ -214,7 +206,6 @@ async def test_position_hundred_is_a_full_run_that_settles_at_the_model_end(mode
 
 # (c) wall commands.
 
-@REPRODUCES
 @pytest.mark.parametrize("known", [True, False], ids=["from_known", "from_unknown"])
 async def test_wall_close_settles_at_the_model_end(modelled, known):
     m = modelled
@@ -227,18 +218,29 @@ async def test_wall_close_settles_at_the_model_end(modelled, known):
     assert m.sent == []
 
 
-@REPRODUCES
 async def test_wall_open_settles_and_a_reversal_rearms_for_the_new_direction(modelled):
     m = modelled
     at_end(m, 0)
     start = await wall_run(m, OPEN)
+    opening_settle = m.cover._stop_task
     await until(m, start, 5)
     reversal = await wall_run(m, CLOSE)  # an opposite press while the first run is under way
-    await until(m, start, OPENING_S + END_SETTLE_MARGIN + 0.1)
-    assert m.cover.state == "closing"  # the opening run's settle is gone
+    assert opening_settle.done() and m.cover._stop_task is not opening_settle
     expected = m.cover._motion.model.duration(m.cover._motion.position, MotionPosition(0, 0), opening=False)
+    await until(m, reversal, expected + END_SETTLE_MARGIN - 0.2)
+    assert m.cover.state == "closing"
     await until(m, reversal, expected + END_SETTLE_MARGIN + 0.1)
     assert state(m) == ("closed", 0)
+    await until(m, start, OPENING_S + END_SETTLE_MARGIN + 1)
+    assert state(m) == ("closed", 0)  # the opening run's settle never fires
+
+
+async def test_wall_open_settles_at_the_model_end(modelled):
+    m = modelled
+    at_end(m, 0)
+    start = await wall_run(m, OPEN)
+    await until(m, start, OPENING_S + END_SETTLE_MARGIN + 0.1)
+    assert state(m) == ("open", 100)
 
 
 # (d) a stop before the end.
@@ -262,7 +264,6 @@ async def test_early_stop_freezes_the_model_position_and_never_settles(modelled,
     assert m.cover._stop_task is None
 
 
-@REPRODUCES
 async def test_early_stop_from_an_unknown_position_stays_unknown(modelled):
     m = modelled
     await m.cover.async_close_cover()
@@ -276,11 +277,7 @@ async def test_early_stop_from_an_unknown_position_stays_unknown(modelled):
 
 # (e) the actuator's late timer stop.
 
-@pytest.mark.parametrize("command", [
-    pytest.param("direct", marks=REPRODUCES),
-    "position",  # passes before the fix too: the auto-stop writes a Stop at the model time
-    pytest.param("wall", marks=REPRODUCES),
-])
+@pytest.mark.parametrize("command", ["direct", "position", "wall"])
 async def test_late_timer_stop_after_the_settle_changes_nothing(modelled, command):
     m = modelled
     at_end(m, 100)
@@ -301,7 +298,6 @@ async def test_late_timer_stop_after_the_settle_changes_nothing(modelled, comman
     assert state(m) == ("closed", 0) and m.cover._stop_task is None
 
 
-@REPRODUCES
 async def test_settle_writes_the_final_state_once(modelled):
     m = modelled
     at_end(m, 100)
@@ -313,7 +309,6 @@ async def test_settle_writes_the_final_state_once(modelled):
     assert m.cover.async_schedule_update_ha_state.call_count + m.cover.async_write_ha_state.call_count == writes + 1
 
 
-@REPRODUCES
 async def test_removal_cancels_a_pending_settle(modelled):
     m = modelled
     at_end(m, 100)
@@ -325,7 +320,7 @@ async def test_removal_cancels_a_pending_settle(modelled):
     except Exception:  # noqa: BLE001 - the base-class teardown of an entity built without a platform
         pass
     await settle()
-    assert task.cancelled() and m.cover._stop_task is None
+    assert task.done() and m.cover._stop_task is None
     await until(m, start, CLOSING_S + END_SETTLE_MARGIN + 1)
     assert m.cover.state == "closing"
 
@@ -361,7 +356,6 @@ async def session(modelled):
     calibration.close()
 
 
-@REPRODUCES
 async def test_a_settled_run_leaves_the_cover_ready_for_a_session(modelled):
     m = modelled
     await m.cover.async_close_cover()
@@ -389,3 +383,27 @@ async def test_guided_session_runs_are_never_settled(session, action, frame, run
     await act(cal, "endpoint")
     assert m.cover.current_cover_position == (100 if action == "open" else 0)
     assert m.cover._stop_task is None
+
+
+async def test_a_calibration_taking_the_motor_over_cancels_the_settle(modelled):
+    m = modelled
+    at_end(m, 100)
+    start = await wall_run(m, CLOSE)
+    m.cover._calibrating = True  # the legacy calibration owns the motor from here
+    await until(m, start, CLOSING_S + END_SETTLE_MARGIN + 0.1)
+    assert m.cover.state == "closing" and m.cover._stop_task is None
+    m.cover._calibrating = False
+
+
+async def test_a_command_under_an_active_session_is_not_settled(modelled):
+    m = modelled
+    m.cover._calibration = MagicMock(active=True)  # its interrupt() leaves it active
+    try:
+        await m.cover.async_close_cover()
+        start = await written_and_started(m, CLOSE)
+        assert m.cover._stop_task is None and not m.cover._end_run_from_unknown
+        await until(m, start, CLOSING_S + END_SETTLE_MARGIN + 1)
+        assert m.cover.state == "closing"
+    finally:
+        m.cover._calibration = None
+

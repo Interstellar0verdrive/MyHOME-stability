@@ -235,7 +235,7 @@ class MyHOMEScopeCover(MyHOMECover):
         position keep timing the run from it, as for a direct command.
         """
         direction = "open" if opening else "close"
-        followers = [m for m in self._members() if m._runs_to_end_from_unknown(opening)]
+        followers = [m for m in self._members() if m._runs_to_end_on_timer(opening)]
         for member in followers:
             member._begin_run(direction)
         try:

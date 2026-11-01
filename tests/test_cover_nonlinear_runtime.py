@@ -7,7 +7,11 @@ import pytest
 from homeassistant.exceptions import HomeAssistantError
 from OWNd.message import OWNMessage
 
-from custom_components.myhome.cover_motion import CoverMotionModel, MotionPosition
+from custom_components.myhome.cover_motion import (
+    END_SETTLE_MARGIN,
+    CoverMotionModel,
+    MotionPosition,
+)
 from custom_components.myhome.cover_motion_runtime import CoverMotionTracker
 from tests.test_cover_nonlinear_backend import nonlinear
 from tests.test_cover_profiles import plant as plant_fixture
@@ -168,7 +172,8 @@ async def test_failed_direction_keeps_preexisting_motion_and_zero_height_can_sti
             cover._anchor_run(100)
             return 100
         async def wait(seconds):
-            assert seconds == 0.5
+            # A full run to the end stop, settled at the model's remaining time.
+            assert seconds == pytest.approx(0.5 + END_SETTLE_MARGIN)
             cover._motion.stop(100 + seconds)
         with patch.object(cover, '_await_motion_anchor', side_effect=anchor), \
              patch('custom_components.myhome.cover.asyncio.sleep', side_effect=wait):
@@ -200,6 +205,7 @@ async def test_model_removal_is_deferred_and_failed_first_command_does_not_claim
         assert cover._motion.model is None
         assert cover.current_cover_position == round(CoverMotionModel(26, 20, 2, 3, 2).advance(
             MotionPosition.at_height(1), opening=False, motor_seconds=5).height * 100)
+    cover._cancel_stop_task()  # the stop status that froze the run ends its settle too
 
 
 async def test_homing_without_echo_includes_motor_start_delay_and_endpoint_request_stops_running_motor(hass, plant):
